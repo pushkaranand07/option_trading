@@ -30,7 +30,12 @@ import pandas as pd
 from tradingagents.analytics.backfill import load_manifest, raw_path, raw_root
 from tradingagents.analytics.universe import SYMBOLS
 from tradingagents.dataflows.config import get_config
-from tradingagents.dataflows.vendors.nse.derivatives import _unzip_csv, normalize_legacy, normalize_udiff
+from tradingagents.dataflows.vendors.nse.derivatives import (
+    _unzip_csv,
+    derive_legacy_lot_sizes,
+    normalize_legacy,
+    normalize_udiff,
+)
 
 DATASETS = ("fo_summary", "option_chain", "participant", "delivery")
 
@@ -58,19 +63,29 @@ def parse_fo(raw: bytes, filename: str) -> pd.DataFrame:
     return normalize_udiff(table) if filename.startswith("BhavCopy_") else normalize_legacy(table)
 
 
-def parse_participant(raw: bytes) -> pd.DataFrame:
-    """Participant-wise OI: one row per category (Client, DII, FII, Pro, TOTAL)."""
+def parse_participant(raw: bytes, day: date) -> pd.DataFrame:
+    """Participant-wise OI: one row per category (Client, DII, FII, Pro, TOTAL).
+
+    ``day`` comes from the file name: some files have an "as on <date>" title
+    line (month short or in full), some start straight at the header. When the
+    title is there it must agree with ``day``.
+    """
     text = raw.decode("utf-8", errors="replace")
-    match = re.search(r"as on ([A-Za-z]{3} \d{1,2}, \d{4})", text)
-    if not match:
-        raise ValueError("participant OI file without an 'as on <date>' title")
-    day = datetime.strptime(match.group(1), "%b %d, %Y").date()
-    table = pd.read_csv(io.StringIO(text), skiprows=1)
-    table.columns = [c.strip() for c in table.columns]
+    match = re.search(r"as on ([A-Za-z]{3})[A-Za-z]* (\d{1,2}), (\d{4})", text)
+    if match:
+        titled = datetime.strptime(" ".join(match.groups()), "%b %d %Y").date()
+        if titled != day:
+            raise ValueError(f"participant OI file for {day} says it is for {titled}")
+    lines = text.splitlines()
+    header = next((i for i, line in enumerate(lines) if line.strip().lower().startswith("client type")), None)
+    if header is None:
+        raise ValueError(f"participant OI file for {day} has no 'Client Type' header")
+    table = pd.read_csv(io.StringIO("\n".join(lines[header:])))
     table = table.dropna(subset=[table.columns[0]])
     out = pd.DataFrame({"trade_date": day, "category": table.iloc[:, 0].astype(str).str.strip()})
     for i, name in enumerate(PARTICIPANT_COLUMNS, start=1):
-        out[name] = pd.to_numeric(table.iloc[:, i], errors="coerce").astype("Int64")
+        values = pd.to_numeric(table.iloc[:, i].astype(str).str.replace(",", "").str.strip(), errors="coerce")
+        out[name] = values.round().astype("Int64")
     return out.reset_index(drop=True)
 
 
@@ -108,6 +123,7 @@ def fo_summary(fo: pd.DataFrame, symbols: Iterable[str] = SYMBOLS) -> pd.DataFra
         calls, puts = opt[opt["option_type"] == "CE"], opt[opt["option_type"] == "PE"]
         near = fut.iloc[0] if len(fut) else None
         underlying = pd.to_numeric(g["underlying_price"], errors="coerce").dropna()
+        lots = pd.to_numeric(fut["lot_size"], errors="coerce").dropna()
         call_oi, put_oi = float(calls["open_interest"].sum()), float(puts["open_interest"].sum())
         call_vol, put_vol = float(calls["contracts"].sum()), float(puts["contracts"].sum())
         out.append({
@@ -128,6 +144,8 @@ def fo_summary(fo: pd.DataFrame, symbols: Iterable[str] = SYMBOLS) -> pd.DataFra
             "put_contracts": put_vol,
             "pcr_volume": put_vol / call_vol if call_vol else np.nan,
             "opt_turnover": float(opt["turnover"].sum()),
+            # The new format states the lot; for the old one build_year derives it.
+            "lot_size": float(lots.iloc[0]) if len(lots) else np.nan,
         })
     return pd.DataFrame(out)
 
@@ -209,11 +227,14 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
         fo_row = ok[(day, "fo")]
         fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
         summary = fo_summary(fo)
+        if summary["lot_size"].isna().any():
+            derived = derive_legacy_lot_sizes(fo)
+            summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(derived))
         summaries.append(summary)
         chains.append(option_chain(fo, summary))
         if (day, "participant") in ok:
             r = ok[(day, "participant")]
-            participants.append(parse_participant(raw_path(raw, "participant", day, r.url).read_bytes()))
+            participants.append(parse_participant(raw_path(raw, "participant", day, r.url).read_bytes(), day))
         if (day, "mto") in ok:
             r = ok[(day, "mto")]
             mto = parse_mto(raw_path(raw, "mto", day, r.url).read_bytes())

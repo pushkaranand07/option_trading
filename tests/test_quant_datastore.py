@@ -53,11 +53,21 @@ def fo_rows():
 
 @pytest.mark.unit
 def test_participant_file_parses_every_category_and_the_date():
-    df = ds.parse_participant(PARTICIPANT)
+    df = ds.parse_participant(PARTICIPANT, date(2026, 10, 16))
     assert list(df["category"]) == ["Client", "FII"]
     assert (df["trade_date"] == date(2026, 10, 16)).all()
     fii = df.set_index("category").loc["FII"]
     assert fii["fut_idx_short"] == 312965 and fii["total_short"] == 5689753
+
+
+@pytest.mark.unit
+def test_participant_files_without_a_title_or_with_a_full_month_name_parse():
+    untitled = PARTICIPANT.split(b"\n", 1)[1]
+    assert ds.parse_participant(untitled, date(2018, 6, 13))["trade_date"].iloc[0] == date(2018, 6, 13)
+    full_month = PARTICIPANT.replace(b"Oct 16, 2026", b"June 01, 2018")
+    assert len(ds.parse_participant(full_month, date(2018, 6, 1))) == 2
+    with pytest.raises(ValueError):
+        ds.parse_participant(PARTICIPANT, date(2026, 10, 15))   # title disagrees with the file name
 
 
 @pytest.mark.unit
