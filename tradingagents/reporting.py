@@ -90,6 +90,21 @@ def _report_parts(final_state: dict) -> list[tuple[str, str, list[tuple[str, str
     return parts
 
 
+def _quant_part(final_state: dict, ticker: str) -> tuple[str, str, list[tuple[str, str, str]]] | None:
+    """The quant layer's context as known on the run's date; None outside its universe or
+    when its outputs are unavailable. A report is never lost because the quant store is."""
+    try:
+        from tradingagents.analytics.quant_report import quant_signal_text, store_symbol
+
+        trade_date = final_state.get("trade_date")
+        if not trade_date or store_symbol(ticker) is None:
+            return None
+        text = quant_signal_text(ticker, trade_date)
+    except Exception:
+        return None
+    return ("VI. Quant Context", "6_quant", [("Quant Research Layer", "quant.md", text)])
+
+
 def write_report_tree(final_state: dict, ticker: str, save_path, settings: dict | None = None,
                       html: bool = True) -> Path:
     """Save a completed run's reports to ``save_path``; return the complete-report path.
@@ -101,6 +116,9 @@ def write_report_tree(final_state: dict, ticker: str, save_path, settings: dict 
     save_path = Path(save_path)
     save_path.mkdir(parents=True, exist_ok=True)
     parts = _report_parts(final_state)
+    quant = _quant_part(final_state, ticker)
+    if quant:
+        parts.append(quant)
     sections = []
     for heading, folder, written in parts:
         (save_path / folder).mkdir(exist_ok=True)

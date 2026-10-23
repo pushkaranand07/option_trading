@@ -73,3 +73,32 @@ def test_market_analyst_is_offered_the_report_and_the_pm_discounts_unvalidated_s
     assert get_quant_signal_report in market_analyst.TOOLS
     assert "get_quant_signal_report" in inspect.getsource(market_analyst)
     assert "Approved signals" in inspect.getsource(portfolio_manager)
+
+
+@pytest.mark.unit
+def test_complete_report_gets_a_quant_section_only_inside_the_universe(store, tmp_path, monkeypatch):
+    from tradingagents import reporting
+
+    monkeypatch.setattr(qr, "store_root", lambda: store)
+    state = {"trade_date": "2026-10-22", "market_report": "Market looks fine.",
+             "final_trade_decision": "**Rating**: Hold"}
+    path = reporting.write_report_tree(state, "RELIANCE.NS", tmp_path / "r1", html=True)
+    text = path.read_text(encoding="utf-8")
+    assert "## VI. Quant Context" in text and "STRESS since 2026-10-21" in text
+    assert (tmp_path / "r1" / "6_quant" / "quant.md").exists()
+    assert "VI. Quant Context" in (tmp_path / "r1" / "complete_report.html").read_text(encoding="utf-8")
+    other = reporting.write_report_tree(state, "AAPL", tmp_path / "r2", html=False).read_text(encoding="utf-8")
+    assert "Quant Context" not in other
+
+
+@pytest.mark.unit
+def test_a_broken_quant_store_never_breaks_the_report(tmp_path, monkeypatch):
+    from tradingagents import reporting
+
+    def boom(*a, **k):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr(qr, "quant_signal_text", boom)
+    state = {"trade_date": "2026-10-22", "market_report": "ok"}
+    text = reporting.write_report_tree(state, "TCS.NS", tmp_path / "r", html=False).read_text(encoding="utf-8")
+    assert "Quant Context" not in text and "ok" in text

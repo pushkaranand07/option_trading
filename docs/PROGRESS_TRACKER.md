@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `██████████████░░░░░░░░░░░` 56% (40/71 tasks)
+**Overall:** `██████████████░░░░░░░░░░░` 58% (41/71 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `███████████████░░░░░░░░░░` 62% (5,659/9,196 files)
+**NSE history download:** `████████████████░░░░░░░░░` 63% (5,755/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 15:25_
+_Last updated: 2026-10-23 15:28_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -125,11 +125,11 @@ _Last updated: 2026-10-23 15:25_
 
 ## Phase 9 — Agent integration
 <!-- progress:phase -->
-`████████████░░░░░░░░░░░░░` 50% (2/4)
+`███████████████████░░░░░░` 75% (3/4)
 <!-- /progress:phase -->
 - [x] `get_quant_signal_report` tool (regime, vol forecasts, IV vs forecast, gate verdicts; only data known before the date)
 - [x] Market analyst told to quote it; portfolio manager discounts any unvalidated quant signal
-- [ ] Report in the HTML output
+- [x] "VI. Quant Context" section in the Markdown and HTML reports (skipped outside the universe; never breaks a report)
 - [ ] Exit gate: 50-date replay, no invented numbers (needs LLM runs — your call on cost)
 
 ## Phase 10 — Paper trading
