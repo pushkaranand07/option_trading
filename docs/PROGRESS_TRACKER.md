@@ -12,18 +12,18 @@
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:31_
+_Last updated: 2026-10-23 17:32_
 
-| Branch | Phase | Status |
-|---|---|---|
-| `quant/phase-0-1-foundation` | 0–1 Foundation | code done; waiting on full data build + contract-note check |
-| `quant/phase-2-harness` | 2 Harness | **exit gate passed** |
-| `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; part 2 waiting on data |
-| `quant/phase-4-regime` | 4 Regime (HMM) | built and run; exit gate pending NSE VIX re-run |
-| `quant/phase-6-lgbm` | 6 LightGBM | pipeline built and verified; price-only model has no edge; derivatives features next |
-| `quant/phase-9-agent-tool` | 9 Agent integration | tool + prompts done; main merged in, full suite green (1517) |
-| `fix/windows-test-portability` | Bug fix | done, full suite green on Windows (1423 passed) |
-| `fix/option-backtester-exits` | Bug fix | done, 3 regression tests (fail before / pass after) |
+| Branch | Phase | Status | In GitHub `main`? |
+|---|---|---|---|
+| `quant/phase-0-1-foundation` | 0–1 Foundation | data complete and verified; only the contract-note check left | merged (PR #2) |
+| `quant/phase-2-harness` | 2 Harness | **exit gate passed** | merged (PR #3) |
+| `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; condor test **running** | merged (PR #4) |
+| `quant/phase-4-regime` | 4 Regime (HMM) | **exit gate passed** (as a risk input) | merged (PR #7) |
+| `quant/phase-6-lgbm` | 6 LightGBM | price-only: no edge; store-feature run next | not yet |
+| `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | **current working branch**; full suite 1536 passed, ruff-clean | not yet |
+| `fix/windows-test-portability` | Bug fix | done | merged (PR #5) |
+| `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
 
 ---
 
@@ -173,12 +173,12 @@ _Last updated: 2026-10-23 17:31_
 
 ---
 
-## Runs queued for when the download finishes
-1. Download NSE index files — **done**
-2. Build the store (F&O, option chain, participant, delivery) — **done**; then index_close + prices + quality report
+## Runs after the download
+1. Download NSE index files — **done** (2,173 files)
+2. Build the store, index data, prices, quality report — **done**
 3. Re-run regimes on NSE's VIX — **done**
-4. VRP iron condor test on NIFTY / BANKNIFTY (`quant_vrp_condor.py`) — **running**
-5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`)
+4. VRP iron condor test on NIFTY / BANKNIFTY — **running** (first NIFTY run: 19 OOS trades, OOS Sharpe 0.04 vs IS 1.29, beats random 64% → heading for *rejected*; re-run with corrected gates in progress)
+5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`) — next
 
 ## Open items needing you
 - Numbers from one Dhan contract note (segment, quantity, buy/sell price, each charge line)
@@ -189,4 +189,5 @@ _Last updated: 2026-10-23 17:31_
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
 - 2026-10-23 — Main NSE download finished; logic-review fixes merged into the branch; store build started.
 - 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
+- 2026-10-23 — All NSE data downloaded, built and verified (0 missing sessions; exact lot sizes). Regimes re-run on NSE VIX: Phase 4 passes as a risk input. Condor test started; fixed its gates (returns on capital, parameter stability).
 - 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.
