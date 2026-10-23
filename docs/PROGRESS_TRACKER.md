@@ -5,20 +5,20 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `██████████████████░░░░░░░` 72% (56/78 tasks)
+**Overall:** `███████████████████░░░░░░` 74% (58/78 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:33_
+_Last updated: 2026-10-23 17:34_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
 | `quant/phase-0-1-foundation` | 0–1 Foundation | data complete and verified; only the contract-note check left | merged (PR #2) |
 | `quant/phase-2-harness` | 2 Harness | **exit gate passed** | merged (PR #3) |
-| `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; condor test **running** | merged (PR #4) |
+| `quant/phase-3-garch` | 3 Volatility / VRP condor | GARCH passed; VRP condor **rejected** (too few trades to prove) | merged (PR #4) |
 | `quant/phase-4-regime` | 4 Regime (HMM) | **exit gate passed** (as a risk input) | merged (PR #7) |
 | `quant/phase-6-lgbm` | 6 LightGBM | price-only: no edge; store-feature run next | not yet |
 | `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | **current working branch**; full suite 1536 passed, ruff-clean | not yet |
@@ -63,15 +63,15 @@ _Last updated: 2026-10-23 17:33_
 
 ## Phase 3 — Volatility engine (GARCH) and VRP condor
 <!-- progress:phase -->
-`██████████████████░░░░░░░` 71% (5/7)
+`█████████████████████████` 100% (7/7)
 <!-- /progress:phase -->
 - [x] GARCH / GJR / EGARCH forecasts, expanding window, weekly refit, causal (tested)
 - [x] Exit check 1: GARCH beats historical vol out of sample (31/31 symbols)
 - [x] ATM and 30-day IV from option closes (tracks India VIX)
 - [x] End-of-day iron condor simulator (your rules: monthly, 50% TP, 2× SL)
 - [x] VRP signal + walk-forward with "enter always" and "random days" baselines
-- [ ] VRP condor run on NIFTY and BANKNIFTY with real data
-- [ ] Exit check 2: VRP condor passes the gates after costs (or a written reason why not)
+- [x] VRP condor run on NIFTY and BANKNIFTY with real data (2021-04 → 2026-05 out of sample, 18 settings, costs + slippage)
+- [x] Exit check 2: **rejected on both** — NIFTY 19 trades, OOS Sharpe 0.04 (IS 1.29), beats random 64%; BANKNIFTY 15 trades, +7.45%/trade on risk, OOS Sharpe 0.30, beats random 94%. **Why:** a monthly condor allows ≤12 trades/year and the VRP filter keeps ~3–4, so 5 years give 15–19 trades — the 100-trade gate cannot be met. BANKNIFTY hint: trades in *choppy* regimes averaged +49% of risk, calm −1.8% (too few to trust)
 
 ## Phase 4 — Regime detection (HMM)
 <!-- progress:phase -->
@@ -177,10 +177,11 @@ _Last updated: 2026-10-23 17:33_
 1. Download NSE index files — **done** (2,173 files)
 2. Build the store, index data, prices, quality report — **done**
 3. Re-run regimes on NSE's VIX — **done**
-4. VRP iron condor test on NIFTY / BANKNIFTY — **running** (first NIFTY run: 19 OOS trades, OOS Sharpe 0.04 vs IS 1.29, beats random 64% → heading for *rejected*; re-run with corrected gates in progress)
+4. VRP iron condor test on NIFTY / BANKNIFTY — **done: rejected** (see Phase 3)
 5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`) — **running**
 
 ## Open items needing you
+- **Phase 3 decision:** test more condor trades so the evidence can count — pool both indices, add the 29 stocks' options, enter weekly into monthly expiries, or use weekly expiries (you chose monthly indices; each option changes that)
 - Numbers from one Dhan contract note (segment, quantity, buy/sell price, each charge line)
 - Your own trading idea for Phase 5 (use the template in the plan, section 6)
 
@@ -189,5 +190,6 @@ _Last updated: 2026-10-23 17:33_
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
 - 2026-10-23 — Main NSE download finished; logic-review fixes merged into the branch; store build started.
 - 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
+- 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19) to prove an edge; BANKNIFTY closest (beats random 94%).
 - 2026-10-23 — All NSE data downloaded, built and verified (0 missing sessions; exact lot sizes). Regimes re-run on NSE VIX: Phase 4 passes as a risk input. Condor test started; fixed its gates (returns on capital, parameter stability).
 - 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.
