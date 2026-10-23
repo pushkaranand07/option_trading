@@ -78,3 +78,17 @@ def test_trades_are_tagged_with_the_regime_known_on_their_entry_day():
     got = vp.regime_expectancy([trade(date(2026, 1, 5), 20.0), trade(date(2026, 1, 6), 40.0),
                                 trade(date(2026, 1, 12), -50.0)], regimes)
     assert got == {"calm": pytest.approx(0.30), "stress": pytest.approx(-0.50)}
+
+
+@pytest.mark.unit
+def test_condor_gates_see_returns_on_capital_and_parameter_stability():
+    chain, spot, lots, idx = rolling_market()
+    vrp = pd.Series(np.random.default_rng(1).normal(0.02, 0.01, len(idx)), index=idx)
+    grid = [{"z": z, "short_delta": d} for z in (0.0, 1.0) for d in (0.15, 0.20)]
+    result = vp.evaluate_condor("vrp-gates", chain, spot, lots, vrp, grid, train=150, test=60, embargo=45,
+                                random_runs=0, risk_fraction=0.02)
+    names = {r.name: r for r in result.gates.results}
+    assert names["parameter stability"].status != "not_evaluated"
+    dd = names["drawdown vs return"]
+    # On capital at 2% risk per trade, daily moves are small: no -100% compounding artefacts.
+    assert dd.status == "not_evaluated" or "max DD" not in dd.detail or "-100" not in dd.detail
