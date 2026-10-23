@@ -390,3 +390,28 @@ def get_india_index_data_health(
     except ValueError as e:
         return str(e)
     return index_health_text(symbol, start_date, end_date)
+
+
+@tool
+def get_quant_signal_report(
+    symbol: Annotated[str, InjectedState("company_of_interest")],
+    curr_date: Annotated[str, "Analysis date, yyyy-mm-dd"],
+    trade_date: Annotated[str, InjectedState("trade_date")] = "",
+) -> str:
+    """
+    Retrieve the quant research layer's numbers for an NSE F&O stock, NIFTY or
+    BANKNIFTY as known before the date's open: market regime (calm / choppy /
+    stress), GARCH and EWMA volatility forecasts, 30-day implied volatility
+    against the forecast, and whether any quant signal has passed out-of-sample
+    validation. Quote these numbers instead of estimating volatility or regime
+    yourself, and repeat their validation status: unvalidated numbers are
+    context, not trade signals.
+
+    Args:
+        curr_date (str): Analysis date, yyyy-mm-dd
+    Returns:
+        str: Regime, volatility, implied vol and validation status, with dates
+    """
+    from tradingagents.analytics.quant_report import quant_signal_text
+
+    return quant_signal_text(symbol, as_of(curr_date, trade_date))

@@ -7,6 +7,7 @@ from tradingagents.agents.tools import (
     get_india_fo_contract_info,
     get_india_index_data_health,
     get_indicators,
+    get_quant_signal_report,
     get_stock_data,
     get_verified_market_snapshot,
 )
@@ -19,6 +20,7 @@ TOOLS = (
     get_india_index_data_health,
     get_india_delivery_data,
     get_india_fo_contract_info,
+    get_quant_signal_report,
 )
 
 

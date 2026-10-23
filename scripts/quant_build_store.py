@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tradingagents.analytics import datastore as ds  # noqa: E402
 from tradingagents.analytics.backfill import load_manifest, raw_root  # noqa: E402
+from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
 from tradingagents.analytics.prices import (  # noqa: E402
     fetch_prices,
     fill_stock_gaps,
@@ -72,6 +73,12 @@ def main() -> int:
         if len(issues):
             print("  price issues by type:", issues.groupby("issue").size().to_dict())
             print("  most affected:", issues.groupby("symbol").size().nlargest(5).to_dict())
+    # 30-day ATM implied vol per symbol, for the agents' quant report (fast to read, slow to compute).
+    iv = atm_iv_table(ds.load("option_chain"))
+    iv_path = ds.store_root() / "iv" / "iv30.parquet"
+    iv_path.parent.mkdir(parents=True, exist_ok=True)
+    iv.to_parquet(iv_path, index=False)
+    print(f"  implied vol: {len(iv):,} symbol-days -> {iv_path}")
     print(f"\n{SURVIVORSHIP_NOTE}")
     return 0
 
