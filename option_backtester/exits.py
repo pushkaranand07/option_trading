@@ -54,13 +54,14 @@ def _apply_early_exits(
 
     result = result.copy()
 
+    exit_dte = int(params.get("exit_dte") or 0)
     if len(leg_def) == 1:
         return _apply_single_leg_exits(
-            result, data, leg_def, stop_loss, take_profit, max_hold_days
+            result, data, leg_def, stop_loss, take_profit, max_hold_days, exit_dte
         )
     else:
         return _apply_multi_leg_exits(
-            result, data, leg_def, stop_loss, take_profit, max_hold_days
+            result, data, leg_def, stop_loss, take_profit, max_hold_days, exit_dte
         )
 
 
@@ -71,6 +72,7 @@ def _apply_single_leg_exits(
     stop_loss: Optional[float],
     take_profit: Optional[float],
     max_hold_days: Optional[int] = None,
+    exit_dte: int = 0,
 ) -> pd.DataFrame:
     """Apply early exits for single-leg strategies.
 
@@ -87,7 +89,7 @@ def _apply_single_leg_exits(
     # Get intermediate snapshots
     contract_cols = ["underlying_symbol", "option_type", "expiration", "strike"]
     intermediates = _get_intermediate_snapshots(
-        data, result, contract_cols, "quote_date_entry"
+        data, result, contract_cols, "quote_date_entry", exit_dte=exit_dte
     )
 
     if intermediates.empty:
@@ -129,6 +131,7 @@ def _apply_multi_leg_exits(
     stop_loss: Optional[float],
     take_profit: Optional[float],
     max_hold_days: Optional[int] = None,
+    exit_dte: int = 0,
 ) -> pd.DataFrame:
     """Apply early exits for multi-leg strategies.
 
@@ -192,6 +195,7 @@ def _apply_multi_leg_exits(
             contract_cols,
             "quote_date_entry",
             max_dates=precomputed_max_dates,
+            exit_dte=exit_dte,
         )
 
         if intermediates.empty:
@@ -279,6 +283,7 @@ def _get_intermediate_snapshots(
     contract_cols: List[str],
     entry_date_col: str,
     max_dates: Optional[pd.DataFrame] = None,
+    exit_dte: int = 0,
 ) -> pd.DataFrame:
     """Extract intermediate quotes between entry and exit dates.
 
@@ -290,6 +295,9 @@ def _get_intermediate_snapshots(
         max_dates: Pre-computed max quote_date per contract group. When provided,
             skips the internal groupby computation. Callers processing multiple
             legs should pre-compute this once and pass it to each call.
+        exit_dte: The planned exit's days to expiration. Only quotes with more
+            days left than this are intermediate: a later quote is past the
+            planned exit, so a threshold crossed there must not count.
 
     Returns:
         DataFrame with _trade_id, quote_date, and _mid (midpoint price)
@@ -335,8 +343,12 @@ def _get_intermediate_snapshots(
             .rename(columns={"quote_date": "_max_date"})
         )
     merged = merged.merge(max_dates, on=available_cols, how="left")
-    # Only keep dates strictly before the planned exit
+    # Only keep dates strictly before the planned exit: before the contract's
+    # last quote, and with more than exit_dte days left (the planned exit row).
     merged = merged[merged["quote_date"] < merged["_max_date"]]
+    if exit_dte > 0 and "expiration" in merged.columns:
+        days_left = (merged["expiration"] - merged["quote_date"]).dt.days
+        merged = merged[days_left > exit_dte]
 
     if merged.empty:
         return pd.DataFrame(columns=["_trade_id", "quote_date", "_mid"])
