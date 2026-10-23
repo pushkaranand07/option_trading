@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `████████████████░░░░░░░░░` 65% (51/78 tasks)
+**Overall:** `█████████████████░░░░░░░░` 67% (52/78 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `██████████████████████░░░` 90% (8,232/9,196 files)
+**NSE history download:** `████████████████████████░` 95% (8,739/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:03_
+_Last updated: 2026-10-23 17:16_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -39,7 +39,7 @@ _Last updated: 2026-10-23 17:03_
 
 ## Phase 1 — Point-in-time data foundation
 <!-- progress:phase -->
-`█████████████████░░░░░░░░` 67% (6/9)
+`███████████████████░░░░░░` 78% (7/9)
 <!-- /progress:phase -->
 - [x] Resumable, throttled NSE downloader (F&O bhavcopy, participant OI, MTO delivery)
 - [x] Parsers + Parquet store with `known_from` on every row
@@ -47,7 +47,7 @@ _Last updated: 2026-10-23 17:03_
 - [x] Cost model at 2026 rates with sources (Dhan + statutory)
 - [x] Parser fixes: untitled / full-month participant files, lot sizes per day
 - [x] Full 2018–2026 download finished (6,503 files; 379 missing, mostly holidays — to confirm in the quality report)
-- [ ] Store built for every year
+- [x] Store built for every year: participant and delivery on all 2,172 F&O days, 31/31 symbols ≥98%, IV on 65,984 symbol-days; lot sizes exact
 - [ ] Data-quality report reviewed with you
 - [ ] Cost model matched to a real Dhan contract note within ₹1 (needs your numbers)
 
@@ -175,9 +175,9 @@ _Last updated: 2026-10-23 17:03_
 
 ## Runs queued for when the download finishes
 1. Download NSE index files (`quant_backfill.py --kinds indices`) — **running**
-2. Build the store (F&O, option chain, participant, delivery) — **running**; then index_close + prices + quality report
+2. Build the store (F&O, option chain, participant, delivery) — **done**; then index_close + prices + quality report
 3. Re-run regimes on NSE's VIX (`quant_regime.py`)
-4. VRP iron condor test on NIFTY / BANKNIFTY (`quant_vrp_condor.py`, ~30–60 min)
+4. VRP iron condor test on NIFTY / BANKNIFTY (`quant_vrp_condor.py`) — **running**
 5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`)
 
 ## Open items needing you
