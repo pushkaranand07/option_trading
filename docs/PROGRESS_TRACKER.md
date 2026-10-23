@@ -12,7 +12,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:32_
+_Last updated: 2026-10-23 17:33_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -178,7 +178,7 @@ _Last updated: 2026-10-23 17:32_
 2. Build the store, index data, prices, quality report — **done**
 3. Re-run regimes on NSE's VIX — **done**
 4. VRP iron condor test on NIFTY / BANKNIFTY — **running** (first NIFTY run: 19 OOS trades, OOS Sharpe 0.04 vs IS 1.29, beats random 64% → heading for *rejected*; re-run with corrected gates in progress)
-5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`) — next
+5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`) — **running**
 
 ## Open items needing you
 - Numbers from one Dhan contract note (segment, quantity, buy/sell price, each charge line)
