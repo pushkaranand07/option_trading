@@ -129,6 +129,23 @@ def round_trip(
     return b
 
 
+def fill_charges(segment: str, quantity: float, price: float, side: str, rates: ChargeRates = ChargeRates()) -> float:
+    """Contract-note charges for one executed order (``side`` "buy" or "sell"), slippage excluded.
+
+    For multi-leg option trades, where each leg is its own order on entry and exit.
+    """
+    if side not in ("buy", "sell"):
+        raise ValueError("side must be 'buy' or 'sell'")
+    value = quantity * price
+    brokerage = _brokerage(rates, segment, value)
+    stt_buy, stt_sell = rates.stt[segment]
+    stt = (stt_buy if side == "buy" else stt_sell) * value
+    exchange = rates.exchange[segment] * value
+    sebi = rates.sebi_fee * value
+    stamp = rates.stamp[segment] * value if side == "buy" else 0.0
+    return brokerage + stt + exchange + sebi + stamp + rates.gst * (brokerage + exchange + sebi)
+
+
 def cost_fraction(segment: str, price: float, quantity: float = 1.0, rates: ChargeRates = ChargeRates(),
                   slippage: Slippage | None = Slippage()) -> float:
     """Round-trip cost as a fraction of position value, for return-based backtests."""
