@@ -238,6 +238,32 @@ def pool(evaluations: list[CondorEvaluation], n_trials: int, regimes: pd.Series 
                             [], trial_srs, stability, on_capital)
 
 
+def load_inputs(symbol: str):
+    """Option chain, settlement spot, lot sizes and VRP for one index, from the store.
+
+    Spot for expiry settlement: NSE's official index close (prices store), falling back
+    to the expiring future's close. VRP: stored 30-day IV minus the GARCH 21-session
+    forecast (IV recomputed if the stored table is missing).
+    """
+    from tradingagents.analytics import datastore as ds
+    from tradingagents.analytics.implied_vol import atm_iv_table
+    from tradingagents.analytics.prices import load_prices
+
+    chain = ds.load("option_chain", symbols=[symbol])
+    summary = ds.load("fo_summary", symbols=[symbol])
+    summary["trade_date"] = pd.to_datetime(summary["trade_date"])
+    lots = summary.set_index("trade_date")["lot_size"]
+    px = load_prices([symbol])
+    spot = pd.Series(px["close"].to_numpy(), index=pd.to_datetime(px["trade_date"]))
+    spot = spot.combine_first(summary.set_index("trade_date")["fut_close"])
+    iv_file = ds.store_root() / "iv" / "iv30.parquet"
+    iv = pd.read_parquet(iv_file).query("symbol == @symbol") if iv_file.exists() else atm_iv_table(chain)
+    iv30 = pd.Series(iv["iv30"].to_numpy(), index=pd.to_datetime(iv["trade_date"]))
+    garch = pd.read_parquet(ds.store_root() / "vol_forecasts" / f"{symbol}.parquet")["garch_h21"]
+    garch.index = pd.to_datetime(garch.index)
+    return chain, spot, lots, vrp_series(iv30, garch)
+
+
 def regime_expectancy(trades: list[cd.CondorTrade], regimes: pd.Series) -> dict[str, float]:
     """Mean return on risk of the trades entered in each regime."""
     labels = regimes.copy()

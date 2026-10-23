@@ -12,6 +12,8 @@ stale or half-built data):
 3. GARCH / EWMA volatility forecasts
 4. market regime
 5. progress tracker bars
+6. forward paper trading (PROOF_PLAN.md Stage 3); last, so a kill rule shows as a
+   failed step without blocking the others
 
 Writes <data_cache_dir>/quant/daily_status.json with each step's outcome and
 time. Run it after about 19:00 IST, when NSE has published the day's files.
@@ -48,6 +50,7 @@ def steps(today: date) -> list[tuple[str, list[str]]]:
         ("volatility", ["scripts/quant_vol_forecasts.py"]),
         ("regime", ["scripts/quant_regime.py"]),
         ("tracker", ["scripts/update_progress.py"]),
+        ("paper", ["scripts/quant_paper.py"]),
     ]
 
 

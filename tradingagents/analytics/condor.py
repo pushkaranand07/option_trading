@@ -208,8 +208,12 @@ def simulate(
     params: CondorParams = DEFAULT_PARAMS,
     rates: ChargeRates = DEFAULT_RATES,
     slippage: Slippage = DEFAULT_SLIPPAGE,
+    include_open: bool = False,
 ) -> tuple[list[CondorTrade], pd.Series]:
     """Trades, and daily mark-to-market P&L as a fraction of the open trade's max risk.
+
+    ``include_open``: also return the condor still open when the data ends (its
+    ``exit_date`` is None); paper trading needs it, backtests do not.
 
     ``chain``: one underlying's option chain (store schema). ``spot``: index close
     by date (expiry settlement). ``lots``: lot size by date. ``signal``: bool by
@@ -335,6 +339,8 @@ def simulate(
         open_trade.daily[daily.index[i]] = float(daily.iloc[i])
         last_value = -charges / lot
 
+    if include_open and open_trade is not None:
+        trades.append(open_trade)
     return trades, daily
 
 
