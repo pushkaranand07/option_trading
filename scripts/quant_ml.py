@@ -17,42 +17,18 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tradingagents.analytics import (
-    datastore as ds,  # noqa: E402
-    trial_log,  # noqa: E402
-)
-from tradingagents.analytics.datastore import store_root  # noqa: E402
+from tradingagents.analytics import trial_log  # noqa: E402
 from tradingagents.analytics.evaluate import panel  # noqa: E402
-from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
 from tradingagents.analytics.ml import (
-    derived as md,  # noqa: E402
     features as mf,  # noqa: E402
     labels as ml,  # noqa: E402
     pipeline as mp,  # noqa: E402
 )
+from tradingagents.analytics.ml.inputs import market_context, store_features  # noqa: E402
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import STOCKS, SURVIVORSHIP_NOTE  # noqa: E402
-
-
-def context() -> tuple[dict[str, pd.Series], pd.Series | None]:
-    """Market context dated by the close it is known after, and the regime known at each session's start."""
-    p = load_prices(["NIFTY", "INDIAVIX"])
-    p = p.assign(trade_date=pd.to_datetime(p["trade_date"])).pivot(index="trade_date", columns="symbol",
-                                                                     values="close")
-    ctx = {"nifty_ret20": np.log(p["NIFTY"]).diff(20), "vix": np.log(p["INDIAVIX"])}
-    regimes = None
-    f = store_root() / "regime" / "regime.parquet"
-    if f.exists():
-        r = pd.read_parquet(f).assign(trade_date=lambda d: pd.to_datetime(d["trade_date"])).set_index("trade_date")
-        for col in ("p_calm", "p_choppy", "p_stress"):
-            ctx[col] = r[col]
-        regimes = r["regime"].shift(1).dropna()
-    return ctx, regimes
 
 
 def main() -> int:
@@ -65,15 +41,11 @@ def main() -> int:
     args = parser.parse_args()
 
     data = panel(load_prices(STOCKS))
-    ctx, regimes = context()
+    ctx, regimes = market_context()
     extra = {}
     if args.with_store:
-        extra.update(md.from_fo_summary(ds.load("fo_summary", symbols=STOCKS)))
-        extra.update(md.from_delivery(ds.load("delivery", symbols=STOCKS)))
-        iv_file = store_root() / "iv" / "iv30.parquet"     # saved by quant_build_store.py
-        iv = pd.read_parquet(iv_file) if iv_file.exists() else atm_iv_table(ds.load("option_chain", symbols=STOCKS))
-        extra.update(md.from_iv(iv[iv["symbol"].isin(STOCKS)], data["close"]))
-        ctx.update(md.from_participant(ds.load("participant")))
+        extra, positioning = store_features(data["close"])
+        ctx.update(positioning)
         print(f"Store features: {sorted(extra)} + {sorted(k for k in ctx if 'share' in k)}", flush=True)
     print(f"Panel: {len(data)} sessions x {data['close'].shape[1]} stocks; context: {sorted(ctx)}", flush=True)
     leaks = mf.leak_check(data, samples=6, context=ctx, extra=extra)
