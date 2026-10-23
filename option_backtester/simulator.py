@@ -151,6 +151,13 @@ def _normalise_trades(
         # Multi-leg (spreads, butterflies, condors, straddles, strangles)
         df = _normalise_multi_leg(raw)
 
+    # Commission is in currency per contract set (both sides); the trade log
+    # deducts it from realized P&L. Absent when no commission was configured.
+    if "total_commission" in raw.columns:
+        df["commission"] = pd.to_numeric(raw["total_commission"], errors="coerce").fillna(0.0).values
+    else:
+        df["commission"] = 0.0
+
     # Propagate exit_type from strategy output (set by early exit logic)
     if "exit_type" in raw.columns:
         df["exit_type"] = raw["exit_type"].values
@@ -607,9 +614,22 @@ def _build_trade_log(
     lot_size = quantity * multiplier
     trade_log["dollar_cost"] = trade_log["entry_cost"].abs() * lot_size
     trade_log["dollar_proceeds"] = trade_log["exit_proceeds"] * lot_size
+    commission = (
+        trades["commission"].to_numpy(dtype=float) * quantity
+        if "commission" in trades.columns
+        else np.zeros(len(trades))
+    )
     trade_log["realized_pnl"] = (
         trade_log["exit_proceeds"] - trade_log["entry_cost"]
-    ) * lot_size
+    ) * lot_size - commission
+    # The strategy's pct_change subtracts commission (currency) from per-unit
+    # premiums; with commission configured, restate it on the currency basis.
+    has_commission = (commission != 0) & (trade_log["dollar_cost"].to_numpy() > 0)
+    trade_log["pct_change"] = np.where(
+        has_commission,
+        trade_log["realized_pnl"] / trade_log["dollar_cost"].where(trade_log["dollar_cost"] > 0),
+        trade_log["pct_change"],
+    )
     trade_log["days_held"] = (
         pd.to_datetime(trade_log["exit_date"]) - pd.to_datetime(trade_log["entry_date"])
     ).dt.days
