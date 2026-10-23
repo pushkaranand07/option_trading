@@ -88,8 +88,7 @@ def _slice_sharpe(pred: pd.DataFrame, thr: float, data: pd.DataFrame, cost: pd.S
     index = data.index[(data.index >= dates[0]) & (data.index <= dates[-1])]
     if len(index) < 20:
         return float("nan")
-    positions = positions_from_signals(pred[pred["p"] > thr], index, data["close"].columns)
-    return sharpe(ev.strategy_returns(data.loc[index], positions, cost).mean(axis=1))
+    return sharpe(trading_returns(pred[pred["p"] > thr], data.loc[index], cost).mean(axis=1))
 
 
 def taken_entries(entries: pd.DataFrame, index: pd.Index) -> pd.DataFrame:
@@ -114,6 +113,22 @@ def positions_from_signals(entries: pd.DataFrame, index: pd.Index, columns: pd.I
     for row in taken_entries(entries, index).itertuples(index=False):
         pos.iloc[loc[row.date]:loc[row.t1], pos.columns.get_loc(row.symbol)] = 1.0
     return pos
+
+
+def trading_returns(entries: pd.DataFrame, data: pd.DataFrame, cost: pd.Series) -> pd.DataFrame:
+    """Per-stock net daily returns of the taken entries, costed like the ledger.
+
+    ``strategy_returns`` charges on position changes, so an exit and a re-entry on
+    the same open (position stays 1) would pay nothing; a manual trader places both
+    orders there, so that session pays a full round trip extra.
+    """
+    index = data.index
+    net = ev.strategy_returns(data, positions_from_signals(entries, index, data["close"].columns), cost)
+    taken = taken_entries(entries, index).sort_values(["symbol", "date"])
+    joins = taken[taken["date"].to_numpy() == taken.groupby("symbol")["t1"].shift().to_numpy()]
+    for row in joins.itertuples(index=False):
+        net.loc[row.date, row.symbol] -= float(cost.get(row.symbol, 0.0))
+    return net
 
 
 def ledger_from_entries(entries: pd.DataFrame, index: pd.Index, cost: pd.Series) -> list[ev.Trade]:
@@ -216,8 +231,7 @@ def run(
     entries = pred[pred["p"].to_numpy() > pred["date"].map(thr_by_date).to_numpy()]
     oos_index = data.index[(data.index >= folds[0]["test_start"]) & (data.index <= folds[-1]["test_end"])]
     oos_data = data.loc[oos_index]
-    positions = positions_from_signals(entries, oos_index, data["close"].columns)
-    net = ev.strategy_returns(oos_data, positions, cost)
+    net = trading_returns(entries, oos_data, cost)
     port = net.mean(axis=1)
     trades = ledger_from_entries(entries, oos_index, cost)
     stats = ev.TradeStats.of(trades)

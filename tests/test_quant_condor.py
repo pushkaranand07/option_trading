@@ -104,3 +104,16 @@ def test_only_monthly_expiries_are_traded_and_signal_off_means_no_trade():
     assert cd.monthly_expiries(both) == {date(2026, 2, 24)}
     trades, daily = cd.simulate(chain, spot, lots, pd.Series(False, index=idx))
     assert trades == [] and (daily == 0).all()
+
+
+@pytest.mark.unit
+def test_each_trades_daily_share_sums_to_its_return_and_a_missing_expiry_close_still_settles():
+    chain, spot, lots, idx = market([1000.0] * 29)
+    params = cd.CondorParams(take_profit=10.0, stop_loss=10.0)
+    no_expiry_close = spot.drop(spot.index[-1])                   # expiry-day index close missing
+    trades, daily = cd.simulate(chain, no_expiry_close, lots, enter_first_day(idx), params, NO_COST, NO_SLIP)
+    t = trades[0]
+    assert sum(t.daily.values()) == pytest.approx(t.return_on_risk)
+    assert sum(t.daily.values()) == pytest.approx(daily.sum())
+    assert any("last earlier close" in f for f in t.flags)
+    assert t.pnl == pytest.approx(t.credit * t.lot)               # all legs expire worthless at 1000

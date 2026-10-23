@@ -81,6 +81,8 @@ class CondorTrade:
     charges: float = 0.0                # rupees, whole trade
     pnl: float = 0.0                    # rupees, whole trade, after charges
     flags: list[str] = field(default_factory=list)
+    # This trade's share of the daily series (date -> return on max risk); sums to return_on_risk.
+    daily: dict = field(default_factory=dict)
 
     @property
     def return_on_risk(self) -> float:
@@ -176,6 +178,7 @@ def simulate(
     days = sorted(by_day)
     spot = spot.copy()
     spot.index = pd.to_datetime(spot.index).date
+    spot_items = sorted(spot.items())
     sig = signal.copy()
     sig.index = pd.to_datetime(sig.index).date
     lots_by_day = lots.copy()
@@ -221,13 +224,18 @@ def simulate(
             if day >= t.expiry:
                 s = spot.get(t.expiry, np.nan)
                 if not np.isfinite(s):
-                    t.flags.append("no index close on expiry; last marks used")
-                    marks = leg_marks(day, t) or t.entry_prices
-                    close_out(day, t, marks, "expiry", at_expiry=True)
-                else:
+                    # No index close for the expiry day: settle against the last close
+                    # before it (never the entry prices, which would erase the outcome).
+                    earlier = [v for d, v in spot_items if d <= t.expiry and np.isfinite(v)]
+                    s = earlier[-1] if earlier else np.nan
+                    t.flags.append("no index close on expiry; settled on the last earlier close")
+                if np.isfinite(s):
                     intrinsic = {leg: max(0.0, (s - k) if TYPE[leg] == "CE" else (k - s))
                                  for leg, k in t.strikes.items()}
                     close_out(day, t, intrinsic, "expiry", at_expiry=True)
+                else:
+                    t.flags.append("no index close at all before expiry; closed at the day's marks")
+                    close_out(day, t, leg_marks(day, t) or t.entry_prices, "expiry", at_expiry=False)
             else:
                 marks = leg_marks(day, t)
                 if marks is None:
@@ -248,6 +256,8 @@ def simulate(
             if t.exit_date is not None:
                 final_per_unit = (t.pnl / t.lot)
                 daily.iloc[i] += (final_per_unit - last_value) / t.max_risk
+            t.daily[daily.index[i]] = float(daily.iloc[i])
+            if t.exit_date is not None:
                 trades.append(t)
                 open_trade, last_value, exit_tomorrow = None, 0.0, ""
             continue
@@ -277,6 +287,7 @@ def simulate(
                                  charges=charges, flags=list(flags))
         # Entry charges hit the day of entry.
         daily.iloc[i] = -charges / lot / open_trade.max_risk
+        open_trade.daily[daily.index[i]] = float(daily.iloc[i])
         last_value = -charges / lot
 
     return trades, daily

@@ -165,3 +165,15 @@ def test_participant_long_share_is_long_over_long_plus_short():
     assert out["fii_fut_idx_long_share"].iloc[0] == pytest.approx(0.40)
     assert out["fii_fut_stk_long_share"].iloc[0] == pytest.approx(0.75)
     assert out["client_fut_idx_long_share"].iloc[0] == pytest.approx(0.75)
+
+
+@pytest.mark.unit
+def test_daily_returns_charge_back_to_back_trades_like_the_ledger():
+    idx = pd.bdate_range("2026-01-01", periods=8)
+    flat = pd.DataFrame({"A": [100.0] * 8}, index=idx)
+    data = pd.concat({"open": flat, "close": flat}, axis=1)
+    entries = pd.DataFrame({"date": [idx[0], idx[3]], "symbol": "A", "t1": [idx[3], idx[6]], "ret": [0.0, 0.0]})
+    cost = pd.Series({"A": 0.004})
+    series_cost = -mp.trading_returns(entries, data, cost).to_numpy().sum()
+    ledger_cost = -sum(t.net_return for t in mp.ledger_from_entries(entries, idx, cost))
+    assert series_cost == pytest.approx(ledger_cost) == pytest.approx(0.008)

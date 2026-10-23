@@ -142,18 +142,27 @@ class Trade:
 
 def trade_ledger(data: pd.DataFrame, positions: pd.DataFrame, cost_per_unit: pd.Series) -> list[Trade]:
     """Trades are runs of an unchanged non-zero position. A trade's return compounds
-    its sessions' gross returns and pays one full round trip, scaled by its size."""
+    its sessions' gross returns and pays half a round trip per unit of position
+    changed on its way in and on its way out, as ``strategy_returns`` charges (so a
+    1 -> 0.5 -> 0 path pays one round trip in total, not one and a half)."""
     rets = session_returns(data).reindex(positions.index).fillna(0.0)
     trades = []
     for symbol in positions.columns:
         pos = positions[symbol].fillna(0.0)
+        before = pos.shift(1).fillna(0.0)
+        after = pos.shift(-1).fillna(0.0)
+        half = float(cost_per_unit.get(symbol, 0.0)) / 2.0
         run_id = (pos != pos.shift()).cumsum()
         for _, idx in pos.groupby(run_id).groups.items():
             size = float(pos.loc[idx[0]])
             if size == 0:
                 continue
             gross = float((1.0 + size * rets[symbol].loc[idx]).prod() - 1.0)
-            net = gross - abs(size) * float(cost_per_unit.get(symbol, 0.0))
+            # A change between two non-flat runs (a resize or a flip) is one set of
+            # orders, so each side of that boundary takes half of its charge.
+            b, a = before.loc[idx[0]], after.loc[idx[-1]]
+            moved = abs(size - b) * (0.5 if b else 1.0) + abs(a - size) * (0.5 if a else 1.0)
+            net = gross - half * moved
             trades.append(Trade(symbol, size, idx[0], idx[-1], len(idx), net))
     return trades
 
