@@ -2,10 +2,12 @@
 
     python scripts/quant_ml.py --position-value 100000
     python scripts/quant_ml.py --position-value 100000 --horizon 10 --k 1.0
+    python scripts/quant_ml.py --position-value 100000 --with-store   # + OI, PCR, delivery, FII, IV
 
 Features: price/volume/structure per stock, plus NIFTY 20-day return, India
-VIX and regime probabilities as context. (Derivatives and flow features are
-added once the NSE store is built.) Long-only, delivery costs, entry at the
+VIX and regime probabilities as context. ``--with-store`` adds futures OI,
+put/call ratios, delivery %, FII/Client futures positioning and each stock's
+implied vol from the NSE store (scripts/quant_build_store.py first). Long-only, delivery costs, entry at the
 open, exit per the triple-barrier rule. Every run goes to the trial log.
 """
 
@@ -20,8 +22,11 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from tradingagents.analytics import datastore as ds  # noqa: E402
 from tradingagents.analytics import trial_log  # noqa: E402
 from tradingagents.analytics.datastore import store_root  # noqa: E402
+from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
+from tradingagents.analytics.ml import derived as md  # noqa: E402
 from tradingagents.analytics.evaluate import panel  # noqa: E402
 from tradingagents.analytics.ml import features as mf  # noqa: E402
 from tradingagents.analytics.ml import labels as ml  # noqa: E402
@@ -52,14 +57,22 @@ def main() -> int:
     parser.add_argument("--horizon", type=int, default=10)
     parser.add_argument("--k", type=float, default=1.0)
     parser.add_argument("--random-runs", type=int, default=300)
+    parser.add_argument("--with-store", action="store_true", help="add NSE derivatives / flow features")
     args = parser.parse_args()
 
     data = panel(load_prices(STOCKS))
     ctx, regimes = context()
+    extra = {}
+    if args.with_store:
+        extra.update(md.from_fo_summary(ds.load("fo_summary", symbols=STOCKS)))
+        extra.update(md.from_delivery(ds.load("delivery", symbols=STOCKS)))
+        extra.update(md.from_iv(atm_iv_table(ds.load("option_chain", symbols=STOCKS)), data["close"]))
+        ctx.update(md.from_participant(ds.load("participant")))
+        print(f"Store features: {sorted(extra)} + {sorted(k for k in ctx if 'share' in k)}", flush=True)
     print(f"Panel: {len(data)} sessions x {data['close'].shape[1]} stocks; context: {sorted(ctx)}", flush=True)
-    leaks = mf.leak_check(data, samples=6, context=ctx)
+    leaks = mf.leak_check(data, samples=6, context=ctx, extra=extra)
     print(f"Feature leak check: {leaks} mismatching sessions", flush=True)
-    feats = mf.build(data, context=ctx)
+    feats = mf.build(data, context=ctx, extra=extra)
     labels = ml.triple_barrier(data["open"], data["close"], ml.causal_daily_vol(data["close"]),
                                k=args.k, horizon=args.horizon)
     print(f"Features {feats.shape}, labels {len(labels):,} (exits: "
@@ -71,7 +84,7 @@ def main() -> int:
     print(f"\n{SURVIVORSHIP_NOTE}")
     r = result.oos_net.mean(axis=1)
     trial_log.record(trial_log.Trial(
-        idea=f"lgbm_h{args.horizon}_k{args.k}", params={"thresholds": list(mp.THRESHOLDS),
+        idea=f"lgbm_h{args.horizon}_k{args.k}{'_store' if args.with_store else ''}", params={"thresholds": list(mp.THRESHOLDS),
                                                          "position_value": args.position_value},
         universe="29 F&O stocks since 2018", data_start=str(r.index[0].date()), data_end=str(r.index[-1].date()),
         n_trials=len(mp.THRESHOLDS), n_oos_trades=result.stats.n, oos_sharpe=result.oos_sharpe,
