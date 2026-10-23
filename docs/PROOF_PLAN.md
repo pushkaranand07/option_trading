@@ -102,7 +102,8 @@ the one-sided test of "mean trade result > 0" reaches p < 0.01 with at least 30 
 *Pass:* mean trade result > 0 with p < 0.05 on forward trades; hit rate inside the backtest's 95% band; no kill rule hit.
 
 ### Stage 4 — Small live trading on Dhan (you place every order)
-- **Risk 0.5% of capital per trade** (half the plan's normal cap), **≤ 3% total open risk**.
+- **Risk 0.5% of capital per trade** (half the plan's normal cap), **≤ 3% total open risk** — whichever is lower:
+  a strategy that can hold N positions at once uses at most 3% / N each (the VRP condor: 8 → 0.375%).
 - You place orders yourself from the system's daily list; record your actual fills.
 - **Minimum 3 months and 30 live trades.**
 
@@ -121,7 +122,8 @@ Monthly re-check of every gate on all data to date. **Never above 1% per trade o
 | ✅ 2026-10-23 | Quiet-stock condor judged: **rejected** | me |
 | ✅ 2026-10-23 | Stage 0 spec frozen: `docs/strategies/vrp_condor_pooled.md` | me |
 | ✅ 2026-10-23 | **Paper-trading ledger built** and added to the daily refresh; VRP condor paper trades start **Mon 2026-10-26** | me |
-| Next | Stage 2 stress tests for the VRP condor | me |
+| ✅ 2026-10-23 | Stage 2 stress tests for the VRP condor: **pass** (weakness found: V-shaped rebounds after a crash) | me |
+| Next | Phase 9 replay (if approved) · your own idea at Stage 0 · monthly paper review | me + you |
 | Days 4–5 | Phase 9 replay check (agents never invent numbers) — only if you approve the LLM cost | me |
 | Weeks 1–… | Stage 3 paper trading runs automatically every weekday at 19:30 | automatic |
 | Monthly | Review: forward results vs backtest band; sequential test; kill rules | me + you |
