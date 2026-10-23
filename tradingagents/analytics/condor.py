@@ -35,7 +35,14 @@ from statistics import NormalDist
 import numpy as np
 import pandas as pd
 
-from tradingagents.analytics.costs import OPTIONS, ChargeRates, Slippage, fill_charges
+from tradingagents.analytics.costs import (
+    DEFAULT_RATES,
+    DEFAULT_SLIPPAGE,
+    OPTIONS,
+    ChargeRates,
+    Slippage,
+    fill_charges,
+)
 from tradingagents.analytics.implied_vol import black76_iv, expiry_atm
 from tradingagents.integrations.optopsy.adapter import DEFAULT_RISK_FREE
 
@@ -56,6 +63,9 @@ class CondorParams:
     risk_free: float = DEFAULT_RISK_FREE
 
 
+DEFAULT_PARAMS = CondorParams()
+
+
 @dataclass
 class CondorTrade:
     entry_date: date
@@ -71,6 +81,8 @@ class CondorTrade:
     charges: float = 0.0                # rupees, whole trade
     pnl: float = 0.0                    # rupees, whole trade, after charges
     flags: list[str] = field(default_factory=list)
+    # This trade's share of the daily series (date -> return on max risk); sums to return_on_risk.
+    daily: dict = field(default_factory=dict)
 
     @property
     def return_on_risk(self) -> float:
@@ -138,6 +150,22 @@ def choose_strikes(day_chain: pd.DataFrame, params: CondorParams) -> tuple[dict,
     return strikes, prices, flags
 
 
+def close_cost(marks: dict, strikes: dict) -> tuple[float, bool]:
+    """Per-unit cost to buy back the condor, each spread capped at its width.
+
+    A put or call spread can never cost more than its width to close (at worst it
+    expires there), but end-of-day marks are not simultaneous: an untraded wing at
+    NSE's settlement price next to a short leg's last trade can imply more. The
+    cap removes that artefact; ``True`` says it was needed.
+    """
+    put_w = strikes["short_put"] - strikes["long_put"]
+    call_w = strikes["long_call"] - strikes["short_call"]
+    put = marks["short_put"] - marks["long_put"]
+    call = marks["short_call"] - marks["long_call"]
+    capped_put, capped_call = min(max(put, 0.0), put_w), min(max(call, 0.0), call_w)
+    return capped_put + capped_call, (capped_put != put or capped_call != call)
+
+
 def _fill(price: float, buying: bool, slip: Slippage) -> float:
     s = slip.option_ticks * slip.option_tick_size + slip.option_premium_pct * price
     return price + s if buying else max(price - s, 0.0)
@@ -148,9 +176,9 @@ def simulate(
     spot: pd.Series,
     lots: pd.Series,
     signal: pd.Series,
-    params: CondorParams = CondorParams(),
-    rates: ChargeRates = ChargeRates(),
-    slippage: Slippage = Slippage(),
+    params: CondorParams = DEFAULT_PARAMS,
+    rates: ChargeRates = DEFAULT_RATES,
+    slippage: Slippage = DEFAULT_SLIPPAGE,
 ) -> tuple[list[CondorTrade], pd.Series]:
     """Trades, and daily mark-to-market P&L as a fraction of the open trade's max risk.
 
@@ -162,10 +190,11 @@ def simulate(
     chain["trade_date"] = pd.to_datetime(chain["trade_date"]).dt.date
     chain["expiry"] = pd.to_datetime(chain["expiry"]).dt.date
     monthly = monthly_expiries(chain)
-    by_day = {d: g for d, g in chain.groupby("trade_date")}
+    by_day = dict(iter(chain.groupby("trade_date")))
     days = sorted(by_day)
     spot = spot.copy()
     spot.index = pd.to_datetime(spot.index).date
+    spot_items = sorted(spot.items())
     sig = signal.copy()
     sig.index = pd.to_datetime(sig.index).date
     lots_by_day = lots.copy()
@@ -190,7 +219,7 @@ def simulate(
 
     def close_out(day: date, trade: CondorTrade, prices: dict, reason: str, at_expiry: bool) -> None:
         trade.exit_date, trade.exit_reason = day, reason
-        debit, charges = 0.0, trade.charges
+        charges = trade.charges
         for leg in LEGS:
             p = prices[leg]
             if at_expiry:
@@ -201,7 +230,10 @@ def simulate(
                 fill = _fill(p, buying=SIGN[leg] < 0, slip=slippage)
                 charges += fill_charges(OPTIONS, trade.lot, fill, "buy" if SIGN[leg] < 0 else "sell", rates)
             trade.exit_prices[leg] = fill
-            debit += -SIGN[leg] * fill          # cost to buy back shorts, minus proceeds of longs
+        # Cost to buy back the shorts minus the longs' proceeds, each spread capped at its width.
+        debit, capped = close_cost(trade.exit_prices, trade.strikes)
+        if capped:
+            trade.flags.append(f"{day}: exit marks implied a spread wider than its strikes; capped")
         trade.charges = charges
         trade.pnl = (trade.credit - debit) * trade.lot - charges
 
@@ -211,13 +243,18 @@ def simulate(
             if day >= t.expiry:
                 s = spot.get(t.expiry, np.nan)
                 if not np.isfinite(s):
-                    t.flags.append("no index close on expiry; last marks used")
-                    marks = leg_marks(day, t) or t.entry_prices
-                    close_out(day, t, marks, "expiry", at_expiry=True)
-                else:
+                    # No index close for the expiry day: settle against the last close
+                    # before it (never the entry prices, which would erase the outcome).
+                    earlier = [v for d, v in spot_items if d <= t.expiry and np.isfinite(v)]
+                    s = earlier[-1] if earlier else np.nan
+                    t.flags.append("no index close on expiry; settled on the last earlier close")
+                if np.isfinite(s):
                     intrinsic = {leg: max(0.0, (s - k) if TYPE[leg] == "CE" else (k - s))
                                  for leg, k in t.strikes.items()}
                     close_out(day, t, intrinsic, "expiry", at_expiry=True)
+                else:
+                    t.flags.append("no index close at all before expiry; closed at the day's marks")
+                    close_out(day, t, leg_marks(day, t) or t.entry_prices, "expiry", at_expiry=False)
             else:
                 marks = leg_marks(day, t)
                 if marks is None:
@@ -227,7 +264,7 @@ def simulate(
                 else:
                     # Premium P&L per unit decides the exits; the daily series also
                     # carries the entry charges (t.charges holds only those until exit).
-                    value = t.credit + sum(SIGN[leg] * marks[leg] for leg in LEGS)
+                    value = t.credit - close_cost(marks, t.strikes)[0]
                     if value >= params.take_profit * t.credit:
                         exit_tomorrow = "take_profit"
                     elif -value >= params.stop_loss * t.credit:
@@ -238,6 +275,8 @@ def simulate(
             if t.exit_date is not None:
                 final_per_unit = (t.pnl / t.lot)
                 daily.iloc[i] += (final_per_unit - last_value) / t.max_risk
+            t.daily[daily.index[i]] = float(daily.iloc[i])
+            if t.exit_date is not None:
                 trades.append(t)
                 open_trade, last_value, exit_tomorrow = None, 0.0, ""
             continue
@@ -267,6 +306,7 @@ def simulate(
                                  charges=charges, flags=list(flags))
         # Entry charges hit the day of entry.
         daily.iloc[i] = -charges / lot / open_trade.max_risk
+        open_trade.daily[daily.index[i]] = float(daily.iloc[i])
         last_value = -charges / lot
 
     return trades, daily

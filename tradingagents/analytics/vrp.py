@@ -110,7 +110,7 @@ def evaluate_condor(
         signal = vrp_signal(vrp, g["z"], sessions)
         runs[i] = cd.simulate(chain, spot, lots, signal, params, **sim_kwargs)
 
-    folds, oos_parts, oos_trades, is_srs, trial_srs = [], [], [], [], []
+    folds, oos_trades, is_srs, trial_srs = [], [], [], []
     for split in walk_forward_splits(sessions, train, test, embargo=embargo):
         scored = []
         for i, (_, daily) in runs.items():
@@ -118,8 +118,7 @@ def evaluate_condor(
             scored.append((sharpe(tr), i))
             trial_srs.append(sharpe(tr, 1))
         best_sr, best = max(scored)
-        trades, daily = runs[best]
-        oos_parts.append(daily.reindex(split.test).fillna(0.0))
+        trades, _ = runs[best]
         lo, hi = split.test[0].date(), split.test[-1].date()
         oos_trades += [t for t in trades if lo <= t.entry_date <= hi]
         is_srs.append(best_sr)
@@ -127,7 +126,15 @@ def evaluate_condor(
                       "test_end": split.test[-1]})
     if not folds:
         raise ValueError("history too short for one walk-forward split")
-    oos = pd.concat(oos_parts)
+    # The out-of-sample series is exactly the out-of-sample trades' daily P&L, over their
+    # whole lives (a trade entered near a fold's end runs into the next window), so trade
+    # statistics, Sharpe and the gates all describe the same trades.
+    first = folds[0]["test_start"]
+    last = max([folds[-1]["test_end"]] + [pd.Timestamp(t.exit_date) for t in oos_trades if t.exit_date])
+    oos = pd.Series(0.0, index=sessions[(sessions >= first) & (sessions <= last)])
+    for t in oos_trades:
+        for d, v in t.daily.items():
+            oos.loc[d] += v
     oos_sr = sharpe(oos)
     dsr = deflated_sharpe_ratio(oos, len(grid), trial_sharpes=trial_srs)
     verdict = evidence_verdict(len(oos_trades), dsr)
@@ -140,7 +147,11 @@ def evaluate_condor(
     random_pct = None
     if random_runs:
         rng = np.random.default_rng(seed)
-        on_share = float(np.mean([vrp_signal(vrp, f["params"]["z"], sessions).mean() for f in folds]))
+        # The real signal's entry rate in each fold's test window, where it is used. Over
+        # all sessions it would include the early years where the z-score cannot exist yet
+        # (forced off), and the random strategy would fire too rarely to compare.
+        on_share = float(np.mean([vrp_signal(vrp, f["params"]["z"], sessions)
+                                  .loc[f["test_start"]: f["test_end"]].mean() for f in folds]))
         rand = []
         for _ in range(random_runs):
             sig = pd.Series(rng.random(len(sessions)) < on_share, index=sessions)

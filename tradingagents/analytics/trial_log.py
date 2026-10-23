@@ -13,7 +13,7 @@ import json
 import sqlite3
 from contextlib import closing
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tradingagents.dataflows.config import get_config
@@ -54,7 +54,7 @@ class Trial:
     verdict: str | None = None
     gate_verdict: str | None = None
     notes: str = ""
-    run_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    run_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
     id: int | None = None
 
 
@@ -91,7 +91,7 @@ def load(idea: str | None = None, path: Path | None = None) -> list[Trial]:
         rows = conn.execute(query + " ORDER BY id", args).fetchall()
     trials = []
     for row in rows:
-        data = dict(zip(("id",) + _COLUMNS, row))
+        data = dict(zip(("id",) + _COLUMNS, row, strict=True))
         data["params"] = json.loads(data["params"])
         trials.append(Trial(**data))
     return trials

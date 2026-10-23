@@ -20,7 +20,7 @@ def rolling_market(n=420, vol=0.15, seed=0):
     path = 1000 * np.exp(np.cumsum(rng.normal(0, vol / math.sqrt(252), n)))
     expiries = sorted({d.date() for d in pd.bdate_range(days[0], days[-1] + pd.Timedelta(days=70), freq="BME")})
     rows = []
-    for day, f in zip(days.date, path):
+    for day, f in zip(days.date, path, strict=True):
         for e in expiries:
             dte = (e - day).days
             if dte < 0 or dte > 70:

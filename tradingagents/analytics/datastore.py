@@ -202,7 +202,7 @@ def option_chain(fo: pd.DataFrame, summary: pd.DataFrame, symbols: Iterable[str]
 def next_sessions(trading_days: Iterable[date]) -> dict[date, date]:
     """Each trading day mapped to the following one; the last maps to the next weekday."""
     days = sorted(set(trading_days))
-    mapping = {d: n for d, n in zip(days, days[1:])}
+    mapping = dict(zip(days[:-1], days[1:], strict=True))
     if days:
         nxt = days[-1] + timedelta(days=1)
         while nxt.weekday() >= 5:
@@ -235,8 +235,17 @@ def _write(df: pd.DataFrame, root: Path, dataset: str, year: int) -> Path:
     return path
 
 
-def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> dict[str, int]:
-    """Parse one year's raw files into the four datasets. Returns row counts."""
+def build_year(year: int, raw: Path | None = None, root: Path | None = None,
+               datasets: tuple[str, ...] = DATASETS) -> dict[str, int]:
+    """Parse one year's raw files into the datasets named (all by default). Returns row counts.
+
+    Datasets not named are neither parsed nor rewritten, so e.g. ``("index_close",)``
+    adds newly downloaded index files without re-parsing a year of F&O bhavcopies.
+    """
+    unknown = set(datasets) - set(DATASETS)
+    if unknown:
+        raise ValueError(f"unknown datasets {sorted(unknown)}")
+    want_fo = bool({"fo_summary", "option_chain"} & set(datasets))
     raw = raw or raw_root()
     root = root or store_root()
     manifest = load_manifest(raw)
@@ -247,22 +256,23 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
 
     summaries, chains, participants, deliveries, indices = [], [], [], [], []
     for day in year_days:
-        fo_row = ok[(day, "fo")]
-        fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
-        summary = fo_summary(fo)
-        if summary["lot_size"].isna().any():
-            derived = derive_legacy_lot_sizes(fo)
-            summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(derived))
-        summaries.append(summary)
-        chains.append(option_chain(fo, summary))
-        if (day, "participant") in ok:
+        if want_fo:
+            fo_row = ok[(day, "fo")]
+            fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
+            summary = fo_summary(fo)
+            if summary["lot_size"].isna().any():
+                lots = lots_from_open_interest(fo)
+                summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(lots))
+            summaries.append(summary)
+            chains.append(option_chain(fo, summary))
+        if "participant" in datasets and (day, "participant") in ok:
             r = ok[(day, "participant")]
             participants.append(parse_participant(raw_path(raw, "participant", day, r.url).read_bytes(), day))
-        if (day, "mto") in ok:
+        if "delivery" in datasets and (day, "mto") in ok:
             r = ok[(day, "mto")]
             mto = parse_mto(raw_path(raw, "mto", day, r.url).read_bytes())
             deliveries.append(mto[(mto["series"] == "EQ") & mto["symbol"].isin(SYMBOLS)])
-        if (day, "indices") in ok:
+        if "index_close" in datasets and (day, "indices") in ok:
             r = ok[(day, "indices")]
             indices.append(parse_index_close(raw_path(raw, "indices", day, r.url).read_bytes(), day))
 
@@ -270,6 +280,8 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
     for name, parts in (("fo_summary", summaries), ("option_chain", chains),
                         ("participant", participants), ("delivery", deliveries),
                         ("index_close", indices)):
+        if name not in datasets:
+            continue
         parts = [p for p in parts if len(p)]
         if not parts:
             counts[name] = 0
@@ -299,3 +311,34 @@ def load(dataset: str, start: date | None = None, end: date | None = None,
     if symbols is not None and "symbol" in df:
         df = df[df["symbol"].isin(set(symbols))]
     return df.reset_index(drop=True)
+
+
+def lots_from_open_interest(fo: pd.DataFrame) -> dict[str, int]:
+    """Lot size per symbol for files that do not state it.
+
+    Open interest and its change are in units, i.e. whole lots, so their GCD over
+    the contracts expiring with the nearest future is the lot or a divisor of it
+    (only that expiry: longer-dated contracts keep the lot they were listed with).
+    Around a lot change the GCD can be a divisor (75 and 50 -> 25), so the answer is
+    the multiple of the GCD nearest the turnover-based estimate, which is roughly
+    right (+/- a few %) but never exact.
+    """
+    import math
+    from functools import reduce
+
+    lots = {}
+    futures = fo[fo["instrument"].isin(FUTURES)]
+    near = futures.sort_values("expiry").groupby("symbol")["expiry"].first()
+    for symbol, expiry in near.items():
+        g = fo[(fo["symbol"] == symbol) & (fo["expiry"] == expiry)]
+        vals = np.concatenate([pd.to_numeric(g["open_interest"], errors="coerce").to_numpy(float),
+                               np.abs(pd.to_numeric(g["oi_change"], errors="coerce").to_numpy(float))])
+        vals = vals[np.isfinite(vals) & (vals > 0)]
+        if len(vals):
+            lots[symbol] = int(reduce(math.gcd, vals.astype(np.int64).tolist()))
+    estimate = derive_legacy_lot_sizes(fo)
+    for symbol, g in lots.items():
+        e = estimate.get(symbol)
+        if e:
+            lots[symbol] = g * max(1, round(e / g))
+    return lots

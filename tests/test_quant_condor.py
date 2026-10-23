@@ -1,7 +1,7 @@
 """Phase 3 of the quant plan: the end-of-day iron condor simulator."""
 
 import math
-from datetime import date, timedelta
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -12,11 +12,11 @@ from tradingagents.analytics.costs import ChargeRates, Slippage
 from tradingagents.integrations.optopsy.adapter import bs_price
 
 R = cd.DEFAULT_RISK_FREE
-NO_COST = ChargeRates(stt={k: (0.0, 0.0) for k in ("delivery", "intraday", "futures", "options")},
+NO_COST = ChargeRates(stt=dict.fromkeys(("delivery", "intraday", "futures", "options"), (0.0, 0.0)),
                       stt_options_exercise=0.0,
-                      exchange={k: 0.0 for k in ("delivery", "intraday", "futures", "options")},
-                      sebi_fee=0.0, stamp={k: 0.0 for k in ("delivery", "intraday", "futures", "options")},
-                      brokerage_flat={k: 0.0 for k in ("delivery", "intraday", "futures", "options")})
+                      exchange=dict.fromkeys(("delivery", "intraday", "futures", "options"), 0.0),
+                      sebi_fee=0.0, stamp=dict.fromkeys(("delivery", "intraday", "futures", "options"), 0.0),
+                      brokerage_flat=dict.fromkeys(("delivery", "intraday", "futures", "options"), 0.0))
 NO_SLIP = Slippage(option_ticks=0, option_premium_pct=0.0)
 
 
@@ -24,7 +24,7 @@ def market(path, vol=0.15, start=date(2026, 1, 15), expiry=date(2026, 2, 24), st
     """A chain priced by Black-76 at a flat vol along a given forward path (one monthly expiry)."""
     rows, spot = [], {}
     days = pd.bdate_range(start, periods=len(path)).date
-    for day, f in zip(days, path):
+    for day, f in zip(days, path, strict=True):
         spot[day] = f
         t = max((expiry - day).days, 0) / 365
         for k in strikes:
@@ -104,3 +104,26 @@ def test_only_monthly_expiries_are_traded_and_signal_off_means_no_trade():
     assert cd.monthly_expiries(both) == {date(2026, 2, 24)}
     trades, daily = cd.simulate(chain, spot, lots, pd.Series(False, index=idx))
     assert trades == [] and (daily == 0).all()
+
+
+@pytest.mark.unit
+def test_each_trades_daily_share_sums_to_its_return_and_a_missing_expiry_close_still_settles():
+    chain, spot, lots, idx = market([1000.0] * 29)
+    params = cd.CondorParams(take_profit=10.0, stop_loss=10.0)
+    no_expiry_close = spot.drop(spot.index[-1])                   # expiry-day index close missing
+    trades, daily = cd.simulate(chain, no_expiry_close, lots, enter_first_day(idx), params, NO_COST, NO_SLIP)
+    t = trades[0]
+    assert sum(t.daily.values()) == pytest.approx(t.return_on_risk)
+    assert sum(t.daily.values()) == pytest.approx(daily.sum())
+    assert any("last earlier close" in f for f in t.flags)
+    assert t.pnl == pytest.approx(t.credit * t.lot)               # all legs expire worthless at 1000
+
+
+@pytest.mark.unit
+def test_closing_a_spread_never_costs_more_than_its_width():
+    strikes = {"long_put": 900.0, "short_put": 950.0, "short_call": 1050.0, "long_call": 1100.0}
+    # Non-simultaneous marks: short put 80 (traded), long put 10 (stale settle) -> 70 > width 50.
+    cost, capped = cd.close_cost({"long_put": 10.0, "short_put": 80.0, "short_call": 2.0, "long_call": 3.0}, strikes)
+    assert capped and cost == pytest.approx(50.0 + 0.0)
+    cost, capped = cd.close_cost({"long_put": 5.0, "short_put": 20.0, "short_call": 8.0, "long_call": 3.0}, strikes)
+    assert not capped and cost == pytest.approx(15.0 + 5.0)

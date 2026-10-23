@@ -92,8 +92,8 @@ def merge_nse_indices(prices: pd.DataFrame, index_close: pd.DataFrame) -> pd.Dat
         "adj_close": nse["close"].to_numpy(float), "volume": nse["volume"].to_numpy(float),
         "dividend": 0.0, "split": 0.0, "source": "nse",
     })
-    keys = set(zip(nse["trade_date"], nse["symbol"]))
-    keep = [(d, s) not in keys for d, s in zip(prices["trade_date"], prices["symbol"])]
+    keys = set(zip(nse["trade_date"], nse["symbol"], strict=True))
+    keep = [(d, s) not in keys for d, s in zip(prices["trade_date"], prices["symbol"], strict=True)]
     return (pd.concat([prices[keep], nse], ignore_index=True)
             .sort_values(["symbol", "trade_date"]).reset_index(drop=True))
 
@@ -185,7 +185,7 @@ def quality_report(prices: pd.DataFrame, trading_days: Iterable[date]) -> pd.Dat
             if first <= d <= last and d not in have:
                 issues.append({"symbol": symbol, "trade_date": d, "issue": "missing_session", "value": None})
         move = g["adj_close"].pct_change()
-        for d, m, s in zip(g["trade_date"], move, g["split"]):
+        for d, m, s in zip(g["trade_date"], move, g["split"], strict=True):
             if pd.notna(m) and abs(m) > JUMP_THRESHOLD and not s:
                 issues.append({"symbol": symbol, "trade_date": d, "issue": "jump_no_split", "value": float(m)})
     return pd.DataFrame(issues, columns=["symbol", "trade_date", "issue", "value"])

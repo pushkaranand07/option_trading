@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `████████████░░░░░░░░░░░░░` 47% (31/66 tasks)
+**Overall:** `████████████████░░░░░░░░░` 64% (47/74 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `████████░░░░░░░░░░░░░░░░░` 31% (2,862/9,196 files)
+**NSE history download:** `█████████████████████░░░░` 82% (7,565/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 13:40_
+_Last updated: 2026-10-23 16:47_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -20,6 +20,8 @@ _Last updated: 2026-10-23 13:40_
 | `quant/phase-2-harness` | 2 Harness | **exit gate passed** |
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; part 2 waiting on data |
 | `quant/phase-4-regime` | 4 Regime (HMM) | built and run; exit gate pending NSE VIX re-run |
+| `quant/phase-6-lgbm` | 6 LightGBM | pipeline built and verified; price-only model has no edge; derivatives features next |
+| `quant/phase-9-agent-tool` | 9 Agent integration | tool + prompts done; main merged in, full suite green (1517) |
 | `fix/windows-test-portability` | Bug fix | done, full suite green on Windows (1423 passed) |
 | `fix/option-backtester-exits` | Bug fix | done, 3 regression tests (fail before / pass after) |
 
@@ -37,14 +39,14 @@ _Last updated: 2026-10-23 13:40_
 
 ## Phase 1 — Point-in-time data foundation
 <!-- progress:phase -->
-`██████████████░░░░░░░░░░░` 56% (5/9)
+`█████████████████░░░░░░░░` 67% (6/9)
 <!-- /progress:phase -->
 - [x] Resumable, throttled NSE downloader (F&O bhavcopy, participant OI, MTO delivery)
 - [x] Parsers + Parquet store with `known_from` on every row
 - [x] Yahoo prices through the data layer, stopping at yesterday
 - [x] Cost model at 2026 rates with sources (Dhan + statutory)
 - [x] Parser fixes: untitled / full-month participant files, lot sizes per day
-- [ ] Full 2018–2026 download finished
+- [x] Full 2018–2026 download finished (6,503 files; 379 missing, mostly holidays — to confirm in the quality report)
 - [ ] Store built for every year
 - [ ] Data-quality report reviewed with you
 - [ ] Cost model matched to a real Dhan contract note within ₹1 (needs your numbers)
@@ -94,12 +96,15 @@ _Last updated: 2026-10-23 13:40_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/5)
+`███████████████████░░░░░░` 75% (6/8)
 <!-- /progress:phase -->
-- [ ] Triple-barrier labels
-- [ ] Feature set (price, structure, derivatives, flows, regime, calendar)
-- [ ] Purged, embargoed walk-forward
-- [ ] Calibration (Brier, reliability curve)
+- [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
+- [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
+- [x] Derivatives and flow features coded and timing-tested (OI change, PCR, delivery %, FII/Client futures positioning, stock IV)
+- [x] Purged, embargoed walk-forward; fit / early-stop / calibrate on separate slices
+- [x] Calibration (Platt), reliability table, same-day AUC (stock picking vs market timing)
+- [x] Price-only run: **no edge** — same-day AUC 0.505, Sharpe 0.97 vs buy-and-hold 1.22, rejected (stability 0.34)
+- [ ] Re-run with derivatives/flow features
 - [ ] Exit gate: OOS AUC ≥ 0.55, calibrated, passes gates after costs
 
 ## Phase 7 — Pretrained time-series models (optional)
@@ -111,27 +116,28 @@ _Last updated: 2026-10-23 13:40_
 
 ## Phase 8 — Ensemble, meta-labelling, sizing
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/4)
+`██████░░░░░░░░░░░░░░░░░░░` 25% (1/4)
 <!-- /progress:phase -->
 - [ ] Meta-label model
 - [ ] Ensemble of surviving signals
-- [ ] ¼-Kelly sizing with your position-size setting
+- [x] ¼-Kelly sizing, capped at 1% risk, your capital as input; lot-rounded quantity (`sizing.py`)
 - [ ] Exit gate: beats best single component on Sharpe and drawdown
 
 ## Phase 9 — Agent integration
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/4)
+`███████████████████░░░░░░` 75% (3/4)
 <!-- /progress:phase -->
-- [ ] `get_quant_signal_report` tool
-- [ ] Risk manager refuses non-significant signals
-- [ ] Report in the HTML output
-- [ ] Exit gate: 50-date replay, no invented numbers
+- [x] `get_quant_signal_report` tool (regime, vol forecasts, IV vs forecast, gate verdicts; only data known before the date)
+- [x] Market analyst told to quote it; portfolio manager discounts any unvalidated quant signal
+- [x] "VI. Quant Context" section in the Markdown and HTML reports (skipped outside the universe; never breaks a report)
+- [ ] Exit gate: 50-date replay, no invented numbers (needs LLM runs — your call on cost)
 
 ## Phase 10 — Paper trading
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/3)
+`██████░░░░░░░░░░░░░░░░░░░` 25% (1/4)
 <!-- /progress:phase -->
-- [ ] Daily after-close run recording intended trades
+- [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker)
+- [ ] Record intended trades each day (needs an approved signal)
 - [ ] ≥ 3 months and ≥ 50 paper trades
 - [ ] Hit rate inside the backtest band; slippage ≤ 1.5× model
 
@@ -145,7 +151,7 @@ _Last updated: 2026-10-23 13:40_
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`███████████████████░░░░░░` 75% (6/8)
+`█████████████████████░░░░` 83% (10/12)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -154,9 +160,21 @@ _Last updated: 2026-10-23 13:40_
 - [x] Index data gaps: NSE official NIFTY / BANKNIFTY / India VIX bars replace Yahoo
 - [x] Stock data gaps (e.g. TCS 22-Oct): filled from NSE equity bhavcopy on Yahoo's adjusted basis
 - [ ] Index files downloaded for 2018–2026 (runs after the main download)
+- [x] Lint pass to the repo's ruff rules: `zip(strict=True)` everywhere lengths must match, invalid `\L`/`\T` escapes in a test docstring (full suite 1518 passed)
+- [x] Independent logic review: no high-severity issues (no look-ahead, no split errors); 6 medium/low fixed, each with a test:
+  regime gate passed single-regime periods · ML daily returns under-charged back-to-back trades · condor random baseline fired too rarely · condor trades vs daily series windows · expiry with no index close · ledger cost on resizes/flips
+- [x] Lot sizes for 2018–mid-2024 were estimated ±3% (NIFTY 72–77); now exact from open interest (99.6% match with NSE's stated lots)
+- [x] Condor: non-simultaneous end-of-day marks could make a spread cost more than its width (a trade lost 132% of max risk); capped
 - [ ] "Something else" bug you mentioned (waiting for your description)
 
 ---
+
+## Runs queued for when the download finishes
+1. Download NSE index files (`quant_backfill.py --kinds indices`) — **running**
+2. Build the store (F&O, option chain, participant, delivery) — **running**; then index_close + prices + quality report
+3. Re-run regimes on NSE's VIX (`quant_regime.py`)
+4. VRP iron condor test on NIFTY / BANKNIFTY (`quant_vrp_condor.py`, ~30–60 min)
+5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`)
 
 ## Open items needing you
 - Numbers from one Dhan contract note (segment, quantity, buy/sell price, each charge line)
@@ -165,3 +183,6 @@ _Last updated: 2026-10-23 13:40_
 ## Log
 - 2026-10-23 — Phases 0, 2 done; Phase 1 code done (download running); Phase 3 part 1 passed, part 2 coded.
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
+- 2026-10-23 — Main NSE download finished; logic-review fixes merged into the branch; store build started.
+- 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
+- 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.

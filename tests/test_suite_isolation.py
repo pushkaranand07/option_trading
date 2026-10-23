@@ -37,7 +37,7 @@ def test_yfinance_keeps_its_cache_out_of_the_users_home():
     """yfinance caches each symbol's time zone on disk, in the home directory by default.
 
     The suite moves it to a fresh temp directory. On Windows the temp directory is itself
-    under the home folder (AppData\Local\Temp), so the check is "in temp", not "outside home".
+    under the home folder (AppData/Local/Temp), so the check is "in temp", not "outside home".
     """
     import tempfile
     from pathlib import Path

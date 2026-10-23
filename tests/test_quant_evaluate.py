@@ -130,3 +130,20 @@ def test_panel_puts_opens_on_the_dividend_adjusted_basis():
     data = ev.panel(prices)
     assert data["open"]["A"].iloc[0] == pytest.approx(98.0)
     assert data["close"]["A"].iloc[0] == pytest.approx(98.0)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("path, round_trips", [
+    ([0, 1, 1, 0.5, 0.5, 0, 0], 1.0),      # resize down, then out: one round trip
+    ([0, 1, 1, -1, -1, 0, 0], 2.0),        # long, flip short, out: two round trips
+    ([0, 0.5, 0.5, 0, 0, 0, 0], 0.5),      # half size
+])
+def test_ledger_costs_match_the_daily_series(path, round_trips):
+    data = synthetic(n=len(path), symbols=("A",))
+    flat = data.copy()
+    flat.loc[:, ("open", "A")] = 100.0                          # no price moves: only costs remain
+    pos = pd.DataFrame({"A": path}, index=data.index, dtype=float)
+    cost = pd.Series({"A": 0.004})
+    ledger = -sum(t.net_return for t in ev.trade_ledger(flat, pos, cost))
+    series = -ev.strategy_returns(flat, pos, cost)["A"].sum()
+    assert ledger == pytest.approx(series) == pytest.approx(round_trips * 0.004)

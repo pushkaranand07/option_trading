@@ -143,10 +143,10 @@ def test_prices_are_normalised_stamped_and_quality_checked(tmp_path):
 
     nse_days = [date(2026, 10, 15), date(2026, 10, 16), date(2026, 10, 19)]
     issues = px.quality_report(got, nse_days)
-    assert ("NIFTY", date(2026, 10, 16), "missing_session") in set(zip(issues.symbol, issues.trade_date, issues.issue))
+    assert ("NIFTY", date(2026, 10, 16), "missing_session") in set(zip(issues.symbol, issues.trade_date, issues.issue, strict=True))
     jumps = issues[issues.issue == "jump_no_split"]
     # The -90% day has a split recorded; the +30% day after it does not.
-    assert list(zip(jumps.symbol, jumps.trade_date)) == [("TATASTEEL", date(2026, 10, 19))]
+    assert list(zip(jumps.symbol, jumps.trade_date, strict=True)) == [("TATASTEEL", date(2026, 10, 19))]
 
     px.save_prices(got, nse_days, root=tmp_path)
     loaded = px.load_prices(["NIFTY"], root=tmp_path)
@@ -205,3 +205,21 @@ def test_a_missing_stock_session_is_filled_on_yahoos_adjusted_basis():
     assert bar["adj_close"] == pytest.approx(255.0 * 0.98)
     assert bar["source"] == "nse_fill"
     assert px.quality_report(filled.reset_index(), list(nse_days)).empty
+
+
+@pytest.mark.unit
+def test_build_year_rebuilds_only_the_named_datasets(tmp_path):
+    from tradingagents.analytics.backfill import ManifestRow, _append_manifest
+
+    raw, root = tmp_path / "raw", tmp_path / "store"
+    day = date(2018, 1, 1)
+    (raw / "indices" / "2018").mkdir(parents=True)
+    (raw / "indices" / "2018" / "ind_close_all_01012018.csv").write_bytes(INDEX_CLOSE)
+    for kind, url in (("fo", "/x/fo01JAN2018bhav.csv.zip"), ("indices", "/x/ind_close_all_01012018.csv")):
+        _append_manifest(raw, ManifestRow(day, kind, "ok", url, 1, ""))
+    # The F&O file is not even on disk: asking for index_close only must not touch it.
+    counts = ds.build_year(2018, raw=raw, root=root, datasets=("index_close",))
+    assert counts == {"index_close": 3}
+    assert not (root / "fo_summary").exists()
+    with pytest.raises(ValueError):
+        ds.build_year(2018, raw=raw, root=root, datasets=("nope",))
