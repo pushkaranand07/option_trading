@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `██████████████░░░░░░░░░░░` 57% (39/69 tasks)
+**Overall:** `██████████████░░░░░░░░░░░` 56% (40/71 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `██████████████░░░░░░░░░░░` 56% (5,123/9,196 files)
+**NSE history download:** `███████████████░░░░░░░░░░` 62% (5,659/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 14:38_
+_Last updated: 2026-10-23 15:25_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -150,7 +150,7 @@ _Last updated: 2026-10-23 14:38_
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`███████████████████░░░░░░` 75% (6/8)
+`██████████████████░░░░░░░` 70% (7/10)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -159,6 +159,8 @@ _Last updated: 2026-10-23 14:38_
 - [x] Index data gaps: NSE official NIFTY / BANKNIFTY / India VIX bars replace Yahoo
 - [x] Stock data gaps (e.g. TCS 22-Oct): filled from NSE equity bhavcopy on Yahoo's adjusted basis
 - [ ] Index files downloaded for 2018–2026 (runs after the main download)
+- [x] Lint pass to the repo's ruff rules: `zip(strict=True)` everywhere lengths must match, invalid `\L`/`\T` escapes in a test docstring (full suite 1518 passed)
+- [ ] Independent logic review of the quant code (look-ahead, off-by-one, cost units) — running
 - [ ] "Something else" bug you mentioned (waiting for your description)
 
 ---
