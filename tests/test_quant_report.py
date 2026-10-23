@@ -102,3 +102,14 @@ def test_a_broken_quant_store_never_breaks_the_report(tmp_path, monkeypatch):
     state = {"trade_date": "2026-10-22", "market_report": "ok"}
     text = reporting.write_report_tree(state, "TCS.NS", tmp_path / "r", html=False).read_text(encoding="utf-8")
     assert "Quant Context" not in text and "ok" in text
+
+
+@pytest.mark.unit
+def test_expected_move_scales_the_forecast_by_the_square_root_of_time(store, tmp_path):
+    days = pd.bdate_range("2026-10-19", periods=4)
+    (store / "prices").mkdir()
+    pd.DataFrame({"trade_date": [d.date() for d in days], "symbol": "RELIANCE",
+                  "close": [1000.0, 1000.0, 1200.0, 1200.0]}).to_parquet(store / "prices" / "prices.parquet")
+    text = qr.quant_signal_text("RELIANCE.NS", date(2026, 10, 21), root=store, trial_path=tmp_path / "t.sqlite")
+    # GARCH 21% annualised known before Wed 21-Oct; 10 sessions -> 21% x sqrt(10/252) = 4.18%
+    assert "next 10 sessions: ±4.2% = ±Rs 42 on the last close Rs 1,000" in text
