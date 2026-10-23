@@ -5,7 +5,7 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `███████████████████░░░░░░` 74% (58/78 tasks)
+**Overall:** `███████████████████░░░░░░` 76% (59/78 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
@@ -20,7 +20,7 @@ _Last updated: 2026-10-23 17:34_
 | `quant/phase-2-harness` | 2 Harness | **exit gate passed** | merged (PR #3) |
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | GARCH passed; VRP condor **rejected** (too few trades to prove) | merged (PR #4) |
 | `quant/phase-4-regime` | 4 Regime (HMM) | **exit gate passed** (as a risk input) | merged (PR #7) |
-| `quant/phase-6-lgbm` | 6 LightGBM | price-only: no edge; store-feature run next | not yet |
+| `quant/phase-6-lgbm` | 6 LightGBM | no edge with price or with NSE derivatives/flow features | not yet |
 | `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | **current working branch**; full suite 1536 passed, ruff-clean | not yet |
 | `fix/windows-test-portability` | Bug fix | done | merged (PR #5) |
 | `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
@@ -96,7 +96,7 @@ _Last updated: 2026-10-23 17:34_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`███████████████████░░░░░░` 75% (6/8)
+`██████████████████████░░░` 88% (7/8)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
@@ -104,8 +104,8 @@ _Last updated: 2026-10-23 17:34_
 - [x] Purged, embargoed walk-forward; fit / early-stop / calibrate on separate slices
 - [x] Calibration (Platt), reliability table, same-day AUC (stock picking vs market timing)
 - [x] Price-only run: **no edge** — same-day AUC 0.505, Sharpe 0.97 vs buy-and-hold 1.22, rejected (stability 0.34)
-- [ ] Re-run with derivatives/flow features
-- [ ] Exit gate: OOS AUC ≥ 0.55, calibrated, passes gates after costs
+- [x] Re-run with derivatives/flow features (OI, PCR, delivery %, FII/Client positioning, stock IV; leak check 0): **no edge** — same-day AUC 0.502, top features all market-wide, beats random timing 40%, Sharpe 0.68 vs buy-and-hold 1.22
+- [ ] Exit gate: OOS AUC ≥ 0.55, calibrated, passes gates after costs — **not met** (AUC 0.506, DSR 0.935, OOS/IS 0.44)
 
 ## Phase 7 — Pretrained time-series models (optional)
 <!-- progress:phase -->
@@ -178,7 +178,12 @@ _Last updated: 2026-10-23 17:34_
 2. Build the store, index data, prices, quality report — **done**
 3. Re-run regimes on NSE's VIX — **done**
 4. VRP iron condor test on NIFTY / BANKNIFTY — **done: rejected** (see Phase 3)
-5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`) — **running**
+5. LightGBM with store features — **done: rejected** (see Phase 6)
+
+## Where this leaves us (2026-10-23)
+No signal has passed the gates yet. What *has* been validated: GARCH volatility forecasts (beat historical vol on 31/31
+symbols) and the regime model as a risk input (next-month volatility differs, p=0.026). Rejected: 50/200 MA trend,
+VRP iron condors (too few trades), LightGBM on price and on NSE derivatives/flow data.
 
 ## Open items needing you
 - **Phase 3 decision:** test more condor trades so the evidence can count — pool both indices, add the 29 stocks' options, enter weekly into monthly expiries, or use weekly expiries (you chose monthly indices; each option changes that)
@@ -190,6 +195,7 @@ _Last updated: 2026-10-23 17:34_
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
 - 2026-10-23 — Main NSE download finished; logic-review fixes merged into the branch; store build started.
 - 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
+- 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502). No signal has passed the gates.
 - 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19) to prove an edge; BANKNIFTY closest (beats random 94%).
 - 2026-10-23 — All NSE data downloaded, built and verified (0 missing sessions; exact lot sizes). Regimes re-run on NSE VIX: Phase 4 passes as a risk input. Condor test started; fixed its gates (returns on capital, parameter stability).
 - 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.
