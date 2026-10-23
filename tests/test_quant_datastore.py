@@ -242,3 +242,10 @@ def test_parquet_writes_are_whole_or_not_at_all(tmp_path, monkeypatch):
     monkeypatch.undo()
     assert list(pd.read_parquet(path)["v"]) == [1, 2]            # the old file is intact
     assert [p.name for p in path.parent.iterdir()] == ["a.parquet"]  # no temp file left behind
+
+
+@pytest.mark.unit
+def test_lot_blips_are_removed_but_real_changes_kept():
+    lots = pd.Series([75, 75, 75, 225, 75, 75, 50, 50, 50, 50, 50, 50, 25.0])
+    out = ds.despike_lots(lots)
+    assert list(out) == [75, 75, 75, 75, 75, 75, 50, 50, 50, 50, 50, 50, 25]   # 225 was a blip; 25 at the end stays

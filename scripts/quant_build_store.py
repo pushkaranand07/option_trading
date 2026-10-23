@@ -53,6 +53,8 @@ def main() -> int:
         print(f"{year}: " + ", ".join(f"{k} {v:,}" for k, v in counts.items())
               + f" ({time.monotonic() - started:.0f}s)", flush=True)
 
+    if "fo_summary" in args.datasets:
+        print(f"  lot-size blips removed: {ds.clean_lot_sizes()} rows")
     summary = ds.load("fo_summary")
     print("\nData quality")
     for kind in ("participant", "mto", "indices"):

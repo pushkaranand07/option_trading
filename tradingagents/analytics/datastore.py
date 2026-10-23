@@ -359,3 +359,34 @@ def lots_from_open_interest(fo: pd.DataFrame, symbols: Iterable[str] | None = No
         if e:
             lots[symbol] = g * max(1, round(e / g))
     return lots
+
+
+def despike_lots(lots: pd.Series, max_days: int = 5) -> pd.Series:
+    """Remove lot-size blips: a run shorter than ``max_days`` sessions with the same lot
+    on both sides takes that lot. Real lot changes last months; the GCD of very few
+    open-interest values (near expiry) can give a multiple of the lot for a day or two."""
+    s = lots.copy()
+    values = np.array(s.to_numpy(dtype=float), copy=True)   # pandas 3 hands out read-only arrays
+    run_id = np.concatenate([[0], np.cumsum(values[1:] != values[:-1])])
+    runs = pd.Series(values).groupby(run_id)
+    starts, sizes, vals = runs.head(1).index.to_numpy(), runs.size().to_numpy(), runs.first().to_numpy()
+    for k in range(1, len(sizes) - 1):
+        if sizes[k] < max_days and vals[k - 1] == vals[k + 1]:
+            values[starts[k]: starts[k] + sizes[k]] = vals[k - 1]
+    return pd.Series(values, index=s.index, name=s.name)
+
+
+def clean_lot_sizes(root: Path | None = None) -> int:
+    """Despike every symbol's lot history across all years of ``fo_summary``; returns rows changed."""
+    root = root or store_root()
+    files = sorted((root / "fo_summary").glob("*.parquet"))
+    if not files:
+        return 0
+    df = pd.concat({int(f.stem): pd.read_parquet(f) for f in files}, names=["year", "row"]).reset_index()
+    df = df.sort_values(["symbol", "trade_date"])
+    before = df["lot_size"].copy()
+    df["lot_size"] = df.groupby("symbol", group_keys=False)["lot_size"].apply(despike_lots)
+    changed = int((before.fillna(-1) != df["lot_size"].fillna(-1)).sum())
+    for year, part in df.groupby("year"):
+        write_parquet(part.sort_values("row").drop(columns=["year", "row"]), root / "fo_summary" / f"{year}.parquet")
+    return changed
