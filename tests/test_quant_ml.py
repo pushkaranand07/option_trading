@@ -141,3 +141,30 @@ def test_back_to_back_trades_are_counted_separately_and_each_pays_costs():
     trades = mp.ledger_from_entries(entries, idx, pd.Series({"A": 0.004}))
     assert [t.net_return for t in trades] == pytest.approx([0.016, 0.006])
     assert [t.sessions for t in trades] == [3, 3]
+
+
+@pytest.mark.unit
+def test_store_features_for_a_session_come_from_the_previous_sessions_files():
+    from tradingagents.analytics.ml import derived as md
+
+    data = ar_market(n=30, k=2, seed=5)
+    days = data.index
+    fo = pd.DataFrame([{"trade_date": d.date(), "symbol": s, "fut_oi": 1000.0 + i, "pcr_oi": 1.0 + i / 100,
+                        "pcr_volume": 0.9, "opt_turnover": 1e6} for i, d in enumerate(days) for s in ("S0", "S1")])
+    feats = mf.build(data, extra=md.from_fo_summary(fo), with_structure=False)
+    # Session days[10] must see the file for days[9] (published after its close), not days[10]'s.
+    assert feats.loc[(days[10], "S0"), "pcr_oi"] == pytest.approx(1.09)
+
+
+@pytest.mark.unit
+def test_participant_long_share_is_long_over_long_plus_short():
+    from tradingagents.analytics.ml import derived as md
+
+    part = pd.DataFrame([{"trade_date": "2026-10-16", "category": "FII", "fut_idx_long": 40, "fut_idx_short": 60,
+                          "fut_stk_long": 75, "fut_stk_short": 25},
+                         {"trade_date": "2026-10-16", "category": "Client", "fut_idx_long": 3, "fut_idx_short": 1,
+                          "fut_stk_long": 1, "fut_stk_short": 1}])
+    out = md.from_participant(part)
+    assert out["fii_fut_idx_long_share"].iloc[0] == pytest.approx(0.40)
+    assert out["fii_fut_stk_long_share"].iloc[0] == pytest.approx(0.75)
+    assert out["client_fut_idx_long_share"].iloc[0] == pytest.approx(0.75)
