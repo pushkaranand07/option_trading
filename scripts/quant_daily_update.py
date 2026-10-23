@@ -15,6 +15,12 @@ stale or half-built data):
 
 Writes <data_cache_dir>/quant/daily_status.json with each step's outcome and
 time. Run it after about 19:00 IST, when NSE has published the day's files.
+
+For Task Scheduler, run it windowless with ``pythonw.exe ... --log <file>``: a
+console window on the desktop can be closed by accident (Windows then kills the
+run with 0xC000013A), and pythonw has no console to print to. With ``--log``
+everything, including each step's output, is appended to that file, and each
+step starts without a window.
 """
 
 from __future__ import annotations
@@ -57,15 +63,30 @@ def run_steps(plan: list[tuple[str, list[str]]], runner: Callable[[list[str]], i
     return records
 
 
+def _python() -> str:
+    """The console Python next to this interpreter: steps run as python.exe even when
+    this script runs under pythonw.exe."""
+    exe = Path(sys.executable)
+    console = exe.with_name("python.exe") if exe.name.lower() == "pythonw.exe" else exe
+    return str(console if console.exists() else exe)
+
+
 def _subprocess_runner(args: list[str]) -> int:
     print(f"\n=== {' '.join(args)}", flush=True)
-    return subprocess.run([sys.executable, "-W", "ignore", *args], cwd=ROOT).returncode
+    no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.run([_python(), "-W", "ignore", *args], cwd=ROOT, stdout=sys.stdout, stderr=sys.stderr,
+                          creationflags=no_window).returncode
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--log", type=Path, help="append all output here (for windowless pythonw runs)")
     args = parser.parse_args()
+    if args.log:
+        args.log.parent.mkdir(parents=True, exist_ok=True)
+        sys.stdout = sys.stderr = args.log.open("a", encoding="utf-8", buffering=1)
+        print(f"\n==== {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
 
     plan = steps(date.today())
     if args.dry_run:
