@@ -12,7 +12,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:43_
+_Last updated: 2026-10-23 17:52_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -20,9 +20,10 @@ _Last updated: 2026-10-23 17:43_
 | `quant/phase-2-harness` | 2 Harness | **exit gate passed** | merged (PR #3) |
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | GARCH passed; VRP condor **rejected** (too few trades to prove) | merged (PR #4) |
 | `quant/phase-4-regime` | 4 Regime (HMM) | **exit gate passed** (as a risk input) | merged (PR #7) |
-| `quant/phase-6-lgbm` | 6 LightGBM | no edge with price or with NSE derivatives/flow features | not yet |
-| `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | full suite 1536 passed, ruff-clean | not yet |
-| `quant/phase-6b-relative` | 6 relative-strength model | **current working branch**; rejected on real data | not yet |
+| `quant/phase-6-lgbm` | 6 LightGBM | no edge with price or with NSE derivatives/flow features | merged (via PR #8) |
+| `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | full suite green, ruff-clean | merged (PR #8) |
+| `quant/phase-6b-relative` | 6 relative-strength model | rejected on real data | merged (PR #9) |
+| `quant/phase-10-ship` | Ship what's validated | expected move in the report, daily refresh scheduled | PR open |
 | `fix/windows-test-portability` | Bug fix | done | merged (PR #5) |
 | `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
 
@@ -139,7 +140,7 @@ _Last updated: 2026-10-23 17:43_
 <!-- progress:phase -->
 `██████░░░░░░░░░░░░░░░░░░░` 25% (1/4)
 <!-- /progress:phase -->
-- [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker)
+- [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker); first end-to-end run OK in 6.6 min; **scheduled weekdays 19:30** (Windows Task Scheduler, `quant_daily_update.cmd`)
 - [ ] Record intended trades each day (needs an approved signal)
 - [ ] ≥ 3 months and ≥ 50 paper trades
 - [ ] Hit rate inside the backtest band; slippage ≤ 1.5× model
@@ -190,6 +191,15 @@ VRP iron condors (too few trades), LightGBM on price and on NSE derivatives/flow
 and "will it beat the other 28"). Across 6 rigorous tests, public end-of-day data has not produced a tradable edge
 in these 29 large, heavily-watched stocks — consistent with how efficient they are.
 
+## Shipped (2026-10-23) — what you can use now
+- **Agents' quant report** (every run on these 31 symbols, and section VI of each saved report): regime, GARCH
+  volatility forecasts, **expected move** (e.g. RELIANCE ±5.0% / ±Rs 60 over 10 sessions), implied vol vs forecast,
+  and every signal's verdict. The portfolio manager is told not to base a direction on unvalidated signals.
+- **For your Dhan trading:** use the expected move for stop distance and option strike width; size with
+  `sizing.py` (¼-Kelly, max 1% of your capital at risk) once a signal has a measured edge.
+- **Daily refresh** after the close keeps all of it current (log: `~/.tradingagents/cache/quant/daily_update.log`).
+  Remove with `schtasks /Delete /TN "TradingAgents quant daily update" /F`.
+
 ## Open items needing you
 - **Phase 3 decision:** test more condor trades so the evidence can count — pool both indices, add the 29 stocks' options, enter weekly into monthly expiries, or use weekly expiries (you chose monthly indices; each option changes that)
 - Numbers from one Dhan contract note (segment, quantity, buy/sell price, each charge line)
@@ -200,6 +210,7 @@ in these 29 large, heavily-watched stocks — consistent with how efficient they
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
 - 2026-10-23 — Main NSE download finished; logic-review fixes merged into the branch; store build started.
 - 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
+- 2026-10-23 — Shipped: expected move in the quant report; daily refresh verified and scheduled (19:30 weekdays). Local `main` synced (PRs #8, #9 merged).
 - 2026-10-23 — Relative-strength model rejected (same-day AUC 0.507, excess −1.2%/yr).
 - 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502). No signal has passed the gates.
 - 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19) to prove an edge; BANKNIFTY closest (beats random 94%).
