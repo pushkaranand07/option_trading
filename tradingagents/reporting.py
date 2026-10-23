@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from tradingagents.agents.rating import run_rating
+from tradingagents.compliance import compliance_section
 
 
 def analyst_names(keys) -> list[str]:
@@ -108,6 +109,9 @@ def write_report_tree(final_state: dict, ticker: str, save_path, settings: dict 
         content = "\n\n".join(f"### {agent}\n{text}" for agent, _filename, text in written)
         sections.append(f"## {heading}\n\n{content}")
 
+    body = "\n\n".join(sections)
+    # Every complete report closes with the disclaimer and the advice-language review (SEBI).
+    sections.append(compliance_section(body))
     (save_path / "complete_report.md").write_text(
         _header(ticker, final_state, settings) + "\n\n".join(sections), encoding="utf-8"
     )

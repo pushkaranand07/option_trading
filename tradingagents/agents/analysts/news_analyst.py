@@ -4,6 +4,7 @@ from tradingagents.agents.analysts.turn import take_turn
 from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction
 from tradingagents.agents.tools import (
     get_global_news,
+    get_india_fii_dii_flows,
     get_macro_indicators,
     get_news,
     get_prediction_markets,
@@ -15,6 +16,7 @@ TOOLS = (
     get_global_news,
     get_macro_indicators,
     get_prediction_markets,
+    get_india_fii_dii_flows,
 )
 
 

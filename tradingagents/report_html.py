@@ -13,6 +13,7 @@ from importlib.resources import files
 from markdown_it import MarkdownIt
 
 from tradingagents.agents.rating import run_rating
+from tradingagents.compliance import compliance_section
 from tradingagents.reporting import analyst_names
 
 # Ratings by direction, so the page can show which way the call leans.
@@ -274,6 +275,8 @@ def render_report(ticker: str, final_state: dict, settings: dict | None, parts) 
         for m, (agent, _filename, text) in enumerate(written, 1):
             body.append(f'<h3 id="s{n}-{m}">{escape(agent)}</h3>\n{_render_agent_text(md, text)}')
         body.append("</section>")
+    report_text = "\n".join(text for _h, _f, written in parts for _a, _fn, text in written)
+    body.append(f'<section id="compliance">{_render_agent_text(md, compliance_section(report_text))}</section>')
 
     page_title = " ".join(x for x in (ticker, date, rating) if x)
     return f"""<!doctype html>

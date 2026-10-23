@@ -289,3 +289,104 @@ def get_prediction_markets(
         str: A formatted markdown report of matching prediction markets
     """
     return route_to_vendor("get_prediction_markets", topic, limit, trade_date or None)
+
+
+# ---------------------------------------------------------------- NSE India
+# Each returns "not applicable" for instruments not listed on NSE, so offering
+# them to every run costs one line of context, not a wrong answer.
+
+
+@tool
+def get_india_fii_dii_flows(
+    symbol: Annotated[str, InjectedState("company_of_interest")],
+    curr_date: Annotated[str, "Date to report flows for, yyyy-mm-dd"],
+    trade_date: Annotated[str, InjectedState("trade_date")] = "",
+) -> str:
+    """
+    Retrieve FII/FPI and DII net buying/selling in the Indian cash market (₹ crore)
+    for NSE-listed instruments and Indian indices. The result states whether the
+    figures are for the requested date or, because NSE publishes them in the
+    evening, for an earlier session; never present earlier figures as today's.
+
+    Args:
+        curr_date (str): Date to report flows for, yyyy-mm-dd
+    Returns:
+        str: Flow table with publication status and source
+    """
+    from tradingagents.dataflows.vendors.nse.tool_text import fii_dii_text
+
+    return fii_dii_text(symbol, as_of(curr_date, trade_date))
+
+
+@tool
+def get_india_fo_contract_info(
+    symbol: Annotated[str, InjectedState("company_of_interest")],
+    curr_date: Annotated[str, "Date of interest, yyyy-mm-dd"],
+    trade_date: Annotated[str, InjectedState("trade_date")] = "",
+) -> str:
+    """
+    Retrieve NSE F&O contract facts for the instrument: the lot size in force on
+    the date and the upcoming option expiries with weekdays, read from NSE's F&O
+    bhavcopy. Use these for any position sizing or expiry reasoning instead of
+    remembered values; lot sizes and expiry days change over time.
+
+    Args:
+        curr_date (str): Date of interest, yyyy-mm-dd
+    Returns:
+        str: Lot size (with confidence) and expiries, with source
+    """
+    from tradingagents.dataflows.vendors.nse.tool_text import fo_contract_text
+
+    return fo_contract_text(symbol, as_of(curr_date, trade_date))
+
+
+@tool
+def get_india_delivery_data(
+    symbol: Annotated[str, InjectedState("company_of_interest")],
+    curr_date: Annotated[str, "Last date of the window, yyyy-mm-dd"],
+    look_back_days: Annotated[int, "Number of sessions to include (max 20)"] = 10,
+    trade_date: Annotated[str, InjectedState("trade_date")] = "",
+) -> str:
+    """
+    Retrieve NSE delivery data for an NSE-listed stock: traded quantity, delivered
+    quantity and delivery percentage per session. High delivery % on up-moves
+    indicates buying for holding rather than intraday speculation.
+
+    Args:
+        curr_date (str): Last date of the window, yyyy-mm-dd
+        look_back_days (int): Number of sessions (max 20)
+    Returns:
+        str: Delivery table with source
+    """
+    from tradingagents.dataflows.vendors.nse.tool_text import delivery_text
+
+    return delivery_text(symbol, as_of(curr_date, trade_date), max(1, min(int(look_back_days), 20)))
+
+
+@tool
+def get_india_index_data_health(
+    symbol: Annotated[str, InjectedState("company_of_interest")],
+    start_date: Annotated[str, "Start date, yyyy-mm-dd"],
+    end_date: Annotated[str, "End date, yyyy-mm-dd"],
+    trade_date: Annotated[str, InjectedState("trade_date")] = "",
+) -> str:
+    """
+    Check an NSE index's price data before doing volume analysis on it (^NSEI,
+    ^NSEBANK, ...). Yahoo's index volume is not real traded volume; this reports
+    whether it is usable, gives a constituent-turnover proxy instead, and lists
+    NSE sessions missing from the vendor series. Call it before any volume-based
+    claim about an Indian index.
+
+    Args:
+        start_date (str): Start date, yyyy-mm-dd
+        end_date (str): End date, yyyy-mm-dd
+    Returns:
+        str: Volume reliability, proxy table and missing sessions
+    """
+    from tradingagents.dataflows.vendors.nse.tool_text import index_health_text
+
+    try:
+        start_date, end_date = as_of_window(start_date, end_date, trade_date)
+    except ValueError as e:
+        return str(e)
+    return index_health_text(symbol, start_date, end_date)
