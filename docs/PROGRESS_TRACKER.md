@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `██████████████░░░░░░░░░░░` 58% (41/71 tasks)
+**Overall:** `███████████████░░░░░░░░░░` 61% (43/71 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `████████████████░░░░░░░░░` 63% (5,755/9,196 files)
+**NSE history download:** `███████████████████░░░░░░` 77% (7,108/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 15:28_
+_Last updated: 2026-10-23 16:35_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -39,14 +39,14 @@ _Last updated: 2026-10-23 15:28_
 
 ## Phase 1 — Point-in-time data foundation
 <!-- progress:phase -->
-`██████████████░░░░░░░░░░░` 56% (5/9)
+`█████████████████░░░░░░░░` 67% (6/9)
 <!-- /progress:phase -->
 - [x] Resumable, throttled NSE downloader (F&O bhavcopy, participant OI, MTO delivery)
 - [x] Parsers + Parquet store with `known_from` on every row
 - [x] Yahoo prices through the data layer, stopping at yesterday
 - [x] Cost model at 2026 rates with sources (Dhan + statutory)
 - [x] Parser fixes: untitled / full-month participant files, lot sizes per day
-- [ ] Full 2018–2026 download finished
+- [x] Full 2018–2026 download finished (6,503 files; 379 missing, mostly holidays — to confirm in the quality report)
 - [ ] Store built for every year
 - [ ] Data-quality report reviewed with you
 - [ ] Cost model matched to a real Dhan contract note within ₹1 (needs your numbers)
@@ -150,7 +150,7 @@ _Last updated: 2026-10-23 15:28_
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`██████████████████░░░░░░░` 70% (7/10)
+`████████████████████░░░░░` 80% (8/10)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -160,14 +160,15 @@ _Last updated: 2026-10-23 15:28_
 - [x] Stock data gaps (e.g. TCS 22-Oct): filled from NSE equity bhavcopy on Yahoo's adjusted basis
 - [ ] Index files downloaded for 2018–2026 (runs after the main download)
 - [x] Lint pass to the repo's ruff rules: `zip(strict=True)` everywhere lengths must match, invalid `\L`/`\T` escapes in a test docstring (full suite 1518 passed)
-- [ ] Independent logic review of the quant code (look-ahead, off-by-one, cost units) — running
+- [x] Independent logic review: no high-severity issues (no look-ahead, no split errors); 6 medium/low fixed, each with a test:
+  regime gate passed single-regime periods · ML daily returns under-charged back-to-back trades · condor random baseline fired too rarely · condor trades vs daily series windows · expiry with no index close · ledger cost on resizes/flips
 - [ ] "Something else" bug you mentioned (waiting for your description)
 
 ---
 
 ## Runs queued for when the download finishes
-1. Download NSE index files (`quant_backfill.py --kinds indices`, ~55 min)
-2. Build the store + data-quality report (`quant_build_store.py`, ~30 min)
+1. Download NSE index files (`quant_backfill.py --kinds indices`) — **running**
+2. Build the store (F&O, option chain, participant, delivery) — **running**; then index_close + prices + quality report
 3. Re-run regimes on NSE's VIX (`quant_regime.py`)
 4. VRP iron condor test on NIFTY / BANKNIFTY (`quant_vrp_condor.py`, ~30–60 min)
 5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`)
@@ -179,5 +180,6 @@ _Last updated: 2026-10-23 15:28_
 ## Log
 - 2026-10-23 — Phases 0, 2 done; Phase 1 code done (download running); Phase 3 part 1 passed, part 2 coded.
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
+- 2026-10-23 — Main NSE download finished; logic-review fixes merged into the branch; store build started.
 - 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
 - 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.
