@@ -57,26 +57,55 @@ def rank_features(feats: pd.DataFrame, context: list[str]) -> pd.DataFrame:
 
 
 def portfolio(pred: pd.DataFrame, data: pd.DataFrame, k: int, horizon: int, cost: pd.Series,
-              hedge_cost: float, dates: pd.DatetimeIndex) -> tuple[pd.Series, pd.Series, int]:
+              hedge_cost: float, dates: pd.DatetimeIndex, keep: int | None = None,
+              swaps: list[int] | None = None, rng: np.random.Generator | None = None,
+              ) -> tuple[pd.Series, pd.Series, int, list[int]]:
     """Top-``k`` long book rebalanced every ``horizon`` sessions over ``dates``.
 
-    Returns (excess daily returns net of costs, long-book daily returns, number of picks).
-    The book's return is the mean of its ``k`` stocks; the benchmark is all stocks equally.
-    Each rebalance pays the stock round trips that change and the hedge's round trip.
+    ``keep``: a held stock stays while it ranks within the top ``keep`` (a buffer that
+    cuts turnover); only the stocks that drop out are replaced. ``None`` rebuilds the
+    book from the top ``k`` every time.
+
+    Random mode (``rng`` given): ignores the predictions and, at rebalance *i*, swaps
+    ``swaps[i]`` randomly chosen holdings for random non-held stocks (all ``k`` at the
+    first), so it trades exactly as often as the model did; any difference is then
+    *which* stocks were held, not how much was paid in costs.
+
+    Returns (excess daily returns net of costs, long-book daily returns, number of new
+    entries, swaps per rebalance). The benchmark is all stocks equally; each rebalance
+    pays the stock round trips that change and the hedge's roll.
     """
     index = data.index[(data.index >= dates[0]) & (data.index <= dates[-1])]
     sess = ev.session_returns(data.loc[index]).fillna(0.0)
     bench = sess.mean(axis=1)
     pos = pd.DataFrame(0.0, index=index, columns=data["close"].columns)
-    picks = 0
     by_date = dict(iter(pred.groupby("date")))
     rebalance = [d for d in index[::horizon] if d in by_date]
+    held: list[str] = []
+    made: list[int] = []
     for i, d in enumerate(rebalance):
-        top = by_date[d].nlargest(k, "p")["symbol"]
+        universe = by_date[d]["symbol"].tolist()
+        if rng is not None:
+            if not held:
+                new_held = list(rng.choice(universe, size=min(k, len(universe)), replace=False))
+            else:
+                n = min(swaps[i] if swaps and i < len(swaps) else 0, k)
+                stay = [s for s in held if s in universe]
+                drop = set(rng.choice(stay, size=min(n, len(stay)), replace=False)) if n else set()
+                kept = [s for s in stay if s not in drop]
+                pool_ = [s for s in universe if s not in held]       # never re-pick a dropped stock
+                add = list(rng.choice(pool_, size=min(k - len(kept), len(pool_)), replace=False))
+                new_held = kept + add
+        else:
+            ranked = by_date[d].sort_values("p", ascending=False)["symbol"].tolist()
+            kept = [s for s in held if keep and s in ranked[:keep]]
+            new_held = kept + [s for s in ranked if s not in kept][: k - len(kept)]
+        made.append(len(set(new_held) - set(held)))
+        held = new_held
         end = rebalance[i + 1] if i + 1 < len(rebalance) else index[-1]
-        pos.loc[d:end, :] = 0.0
-        pos.loc[pos.index[(pos.index >= d) & (pos.index < end)], list(top)] = 1.0 / k
-        picks += len(top)
+        span = pos.index[(pos.index >= d) & (pos.index < end)]
+        pos.loc[span, :] = 0.0
+        pos.loc[span, held] = 1.0 / k
     gross = (pos * sess).sum(axis=1)
     turnover = pos.diff().abs()
     turnover.iloc[0] = pos.iloc[0].abs()
@@ -86,7 +115,7 @@ def portfolio(pred: pd.DataFrame, data: pd.DataFrame, k: int, horizon: int, cost
     long_book = gross - stock_costs
     invested = pos.sum(axis=1) > 0
     excess = (long_book - bench.where(invested, 0.0)) - hedge
-    return excess, long_book, picks
+    return excess, long_book, int(sum(made)), made
 
 
 @dataclass
@@ -141,6 +170,7 @@ def run(
     position_value: float,
     k: int = 5,
     horizon: int = 10,
+    keep: int | None = None,
     train: int = 756,
     test: int = 126,
     embargo: int | None = None,
@@ -180,7 +210,7 @@ def run(
         cal = tr[dates[tr_mask] >= pd.Timestamp(cal_dates[int(len(cal_dates) * 0.85)])]
         cal_pred = cal[["label"]].assign(p=fitted.predict(cal[cols])).reset_index()
         is_srs.append(sharpe(portfolio(cal_pred, data, k, horizon, cost, hedge_cost,
-                                       pd.DatetimeIndex(sorted(cal_pred["date"].unique())))[0]))
+                                       pd.DatetimeIndex(sorted(cal_pred["date"].unique())), keep=keep)[0]))
         out = te[["label", "rel", "t1"]].copy()
         out["p"] = fitted.predict(te[cols])
         preds.append(out)
@@ -190,7 +220,7 @@ def run(
     pred = pd.concat(preds).reset_index()
     y, p = pred["label"].to_numpy(int), pred["p"].to_numpy(float)
     oos_dates = pd.DatetimeIndex(sorted(pred["date"].unique()))
-    excess, long_book, picks = portfolio(pred, data, k, horizon, cost, hedge_cost, oos_dates)
+    excess, long_book, picks, swaps = portfolio(pred, data, k, horizon, cost, hedge_cost, oos_dates, keep=keep)
     oos_index = excess.index
     bench = ev.session_returns(data.loc[oos_index]).fillna(0.0).mean(axis=1)
     ex_sr = sharpe(excess)
@@ -199,15 +229,17 @@ def run(
 
     neighbours = {}
     for kk in (max(1, k - 2), k + 3):
-        neighbours[kk] = sharpe(portfolio(pred, data, kk, horizon, cost, hedge_cost, oos_dates)[0])
+        kk_keep = None if keep is None else keep - k + kk
+        neighbours[kk] = sharpe(portfolio(pred, data, kk, horizon, cost, hedge_cost, oos_dates, keep=kk_keep)[0])
 
     random_pct = None
     if random_runs:
         rng = np.random.default_rng(seed)
         rand = []
         for _ in range(random_runs):
-            shuffled = pred.assign(p=rng.random(len(pred)))
-            rand.append(sharpe(portfolio(shuffled, data, k, horizon, cost, hedge_cost, oos_dates)[0]))
+            # Same number of swaps at each rebalance as the model: a turnover-matched baseline.
+            rand.append(sharpe(portfolio(pred, data, k, horizon, cost, hedge_cost, oos_dates,
+                                         swaps=swaps, rng=rng)[0]))
         random_pct = float((np.array(rand) < ex_sr).mean())
 
     by_regime = {}
