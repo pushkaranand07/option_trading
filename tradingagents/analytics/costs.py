@@ -11,8 +11,9 @@ Sources (fetched 2026-10-23):
 - NSE transaction charges incl. IPFT: NSE circular NSE/FA/73061 (27-Feb-2026), effective 1-Mar-2026
   https://nsearchives.nseindia.com/content/circulars/FA73061.pdf
 - SEBI fee Rs 10/crore, stamp duty, GST 18%: Zerodha / Upstox / Angel One / Groww / Dhan charge pages
-- Brokerage: Upstox / Angel One / Groww / Dhan all charge Rs 20 per executed F&O order;
-  delivery differs by broker (Rs 0 to Rs 20), so the default is the highest, Rs 20.
+- Brokerage and DP charge: Dhan (the user's broker), https://dhan.co/pricing/ —
+  Rs 0 delivery, lower of Rs 20 or 0.03% intraday, Rs 20 per F&O order,
+  DP Rs 12.50 per scrip on a delivery sell (+ GST).
 
 Slippage is not a charge but is modelled here too, since it is paid on every fill.
 """
@@ -42,10 +43,10 @@ class ChargeRates:
     gst: float = 0.18                           # on brokerage + exchange + SEBI fee + DP charge
     # Brokerage per executed order: flat Rs, capped at a % of the order's value where the broker does.
     brokerage_flat: dict = field(default_factory=lambda: {
-        DELIVERY: 20.0, INTRADAY: 20.0, FUTURES: 20.0, OPTIONS: 20.0})
+        DELIVERY: 0.0, INTRADAY: 20.0, FUTURES: 20.0, OPTIONS: 20.0})
     brokerage_pct_cap: dict = field(default_factory=lambda: {
-        DELIVERY: None, INTRADAY: None, FUTURES: None, OPTIONS: None})
-    dp_charge: float = 20.0                     # per scrip on a delivery sell, before GST
+        DELIVERY: None, INTRADAY: 0.0003, FUTURES: None, OPTIONS: None})
+    dp_charge: float = 12.5                     # per scrip on a delivery sell, before GST
 
 
 @dataclass(frozen=True)
