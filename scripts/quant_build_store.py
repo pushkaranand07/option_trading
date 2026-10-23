@@ -14,7 +14,10 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import date
 from pathlib import Path
+
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -80,8 +83,17 @@ def main() -> int:
             print("  most affected:", issues.groupby("symbol").size().nlargest(5).to_dict())
     # 30-day ATM implied vol per symbol, for the agents' quant report (fast to read, slow to compute).
     if not args.skip_iv:
-        iv = atm_iv_table(ds.load("option_chain"))
-        iv_path = ds.write_parquet(iv, ds.store_root() / "iv" / "iv30.parquet")
+        # Recompute only the years rebuilt here and keep the rest (all years: ~15 min).
+        iv_path = ds.store_root() / "iv" / "iv30.parquet"
+        if args.years and iv_path.exists():
+            fresh = pd.concat([atm_iv_table(ds.load("option_chain", start=date(y, 1, 1), end=date(y, 12, 31)))
+                               for y in years], ignore_index=True)
+            old = pd.read_parquet(iv_path)
+            keep = ~pd.to_datetime(old["trade_date"]).dt.year.isin(years)
+            iv = pd.concat([old[keep], fresh], ignore_index=True).sort_values(["trade_date", "symbol"])
+        else:
+            iv = atm_iv_table(ds.load("option_chain"))
+        ds.write_parquet(iv, iv_path)
         print(f"  implied vol: {len(iv):,} symbol-days -> {iv_path}")
     print(f"\n{SURVIVORSHIP_NOTE}")
     return 0

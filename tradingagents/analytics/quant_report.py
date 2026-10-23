@@ -70,7 +70,25 @@ def _vol_lines(symbol: str, on: date, root: Path) -> tuple[list[str], float | No
                      f"EWMA {last[f'ewma_h{h}']:.1%}")
     lines.append(f"  20-session historical: {last['hist_h21']:.1%}. Out of sample, GARCH beat historical vol "
                  "on all 31 symbols and EWMA only narrowly; for NIFTY, India VIX forecast better than both.")
+    lines += _expected_move_lines(symbol, on, last, root)
     return lines, float(last["garch_h21"])
+
+
+def _expected_move_lines(symbol: str, on: date, forecast: pd.Series, root: Path) -> list[str]:
+    """One-standard-deviation move implied by the GARCH forecast: about 2 in 3 moves over the
+    horizon stay inside it. A risk yardstick for stop distance and strike width, not a target."""
+    close = None
+    f = root / "prices" / "prices.parquet"
+    if f.exists():
+        p = _known_rows(pd.read_parquet(f, filters=[("symbol", "==", symbol)]), on)
+        if len(p):
+            close = float(p.sort_values("trade_date")["close"].iloc[-1])
+    lines = ["Expected move (1 standard deviation, from the GARCH forecast; ~2 in 3 moves stay inside):"]
+    for h in (5, 10, 21):
+        pct = float(forecast[f"garch_h{h}"]) * (h / 252) ** 0.5
+        rupees = f" = ±Rs {close * pct:,.0f} on the last close Rs {close:,.0f}" if close else ""
+        lines.append(f"  next {h:>2} sessions: ±{pct:.1%}{rupees}")
+    return lines
 
 
 def _iv_lines(symbol: str, on: date, garch21: float | None, root: Path) -> list[str]:
