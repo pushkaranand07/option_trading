@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `███████████████░░░░░░░░░░` 61% (43/71 tasks)
+**Overall:** `████████████████░░░░░░░░░` 62% (45/72 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `███████████████████░░░░░░` 77% (7,108/9,196 files)
+**NSE history download:** `████████████████████░░░░░` 79% (7,294/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 16:35_
+_Last updated: 2026-10-23 16:40_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -116,11 +116,11 @@ _Last updated: 2026-10-23 16:35_
 
 ## Phase 8 — Ensemble, meta-labelling, sizing
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/4)
+`██████░░░░░░░░░░░░░░░░░░░` 25% (1/4)
 <!-- /progress:phase -->
 - [ ] Meta-label model
 - [ ] Ensemble of surviving signals
-- [ ] ¼-Kelly sizing with your position-size setting
+- [x] ¼-Kelly sizing, capped at 1% risk, your capital as input; lot-rounded quantity (`sizing.py`)
 - [ ] Exit gate: beats best single component on Sharpe and drawdown
 
 ## Phase 9 — Agent integration
@@ -134,9 +134,10 @@ _Last updated: 2026-10-23 16:35_
 
 ## Phase 10 — Paper trading
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/3)
+`██████░░░░░░░░░░░░░░░░░░░` 25% (1/4)
 <!-- /progress:phase -->
-- [ ] Daily after-close run recording intended trades
+- [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker)
+- [ ] Record intended trades each day (needs an approved signal)
 - [ ] ≥ 3 months and ≥ 50 paper trades
 - [ ] Hit rate inside the backtest band; slippage ≤ 1.5× model
 
