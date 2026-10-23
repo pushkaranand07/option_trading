@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `█████████████░░░░░░░░░░░░` 52% (36/69 tasks)
+**Overall:** `█████████████░░░░░░░░░░░░` 54% (37/69 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `█████████░░░░░░░░░░░░░░░░` 38% (3,462/9,196 files)
+**NSE history download:** `██████████░░░░░░░░░░░░░░░` 38% (3,524/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 13:55_
+_Last updated: 2026-10-23 13:57_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -95,11 +95,11 @@ _Last updated: 2026-10-23 13:55_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`████████████████░░░░░░░░░` 62% (5/8)
+`███████████████████░░░░░░` 75% (6/8)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
-- [ ] Derivatives and flow features (OI, PCR, FII/DII positioning, delivery %) — needs the NSE store
+- [x] Derivatives and flow features coded and timing-tested (OI change, PCR, delivery %, FII/Client futures positioning, stock IV)
 - [x] Purged, embargoed walk-forward; fit / early-stop / calibrate on separate slices
 - [x] Calibration (Platt), reliability table, same-day AUC (stock picking vs market timing)
 - [x] Price-only run: **no edge** — same-day AUC 0.505, Sharpe 0.97 vs buy-and-hold 1.22, rejected (stability 0.34)
@@ -161,6 +161,13 @@ _Last updated: 2026-10-23 13:55_
 - [ ] "Something else" bug you mentioned (waiting for your description)
 
 ---
+
+## Runs queued for when the download finishes
+1. Download NSE index files (`quant_backfill.py --kinds indices`, ~55 min)
+2. Build the store + data-quality report (`quant_build_store.py`, ~30 min)
+3. Re-run regimes on NSE's VIX (`quant_regime.py`)
+4. VRP iron condor test on NIFTY / BANKNIFTY (`quant_vrp_condor.py`, ~30–60 min)
+5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`)
 
 ## Open items needing you
 - Numbers from one Dhan contract note (segment, quantity, buy/sell price, each charge line)
