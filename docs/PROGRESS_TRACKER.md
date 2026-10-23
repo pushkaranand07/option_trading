@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `███████████████████░░░░░░` 76% (59/78 tasks)
+**Overall:** `███████████████████░░░░░░` 75% (60/80 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:34_
+_Last updated: 2026-10-23 17:40_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -21,7 +21,8 @@ _Last updated: 2026-10-23 17:34_
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | GARCH passed; VRP condor **rejected** (too few trades to prove) | merged (PR #4) |
 | `quant/phase-4-regime` | 4 Regime (HMM) | **exit gate passed** (as a risk input) | merged (PR #7) |
 | `quant/phase-6-lgbm` | 6 LightGBM | no edge with price or with NSE derivatives/flow features | not yet |
-| `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | **current working branch**; full suite 1536 passed, ruff-clean | not yet |
+| `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | full suite 1536 passed, ruff-clean | not yet |
+| `quant/phase-6b-relative` | 6 relative-strength model | **current working branch**; real run in progress | not yet |
 | `fix/windows-test-portability` | Bug fix | done | merged (PR #5) |
 | `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
 
@@ -96,7 +97,7 @@ _Last updated: 2026-10-23 17:34_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`██████████████████████░░░` 88% (7/8)
+`████████████████████░░░░░` 80% (8/10)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
@@ -106,6 +107,8 @@ _Last updated: 2026-10-23 17:34_
 - [x] Price-only run: **no edge** — same-day AUC 0.505, Sharpe 0.97 vs buy-and-hold 1.22, rejected (stability 0.34)
 - [x] Re-run with derivatives/flow features (OI, PCR, delivery %, FII/Client positioning, stock IV; leak check 0): **no edge** — same-day AUC 0.502, top features all market-wide, beats random timing 40%, Sharpe 0.68 vs buy-and-hold 1.22
 - [ ] Exit gate: OOS AUC ≥ 0.55, calibrated, passes gates after costs — **not met** (AUC 0.506, DSR 0.935, OOS/IS 0.44)
+- [x] Second model built and verified: **relative strength** (beat the 29-stock average? top-5 book vs equal weight, hedged, after costs); tests: noise rejected, persistent planted edge found (a one-day edge was found but lost to costs)
+- [ ] Relative-strength model on real data — **running**
 
 ## Phase 7 — Pretrained time-series models (optional)
 <!-- progress:phase -->
