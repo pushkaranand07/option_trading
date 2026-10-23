@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `████████████████████░░░░░` 79% (73/92 tasks)
+**Overall:** `████████████████████░░░░░` 78% (73/93 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 21:36_
+_Last updated: 2026-10-23 21:42_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -154,7 +154,7 @@ _Last updated: 2026-10-23 21:36_
 
 ## Phase 10 — Paper trading
 <!-- progress:phase -->
-`████████████████░░░░░░░░░` 62% (5/8)
+`██████████████░░░░░░░░░░░` 56% (5/9)
 <!-- /progress:phase -->
 - [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker); first end-to-end run OK in 6.6 min; **scheduled weekdays 19:30** (Windows Task Scheduler, `quant_daily_update.cmd`)
 - [x] Paper-trading ledger (`paper.py`): re-runs the frozen simulation nightly, records trades from the start date,
@@ -163,6 +163,9 @@ _Last updated: 2026-10-23 21:36_
 - [x] Stage 2 stress tests passed: costs ×2 +9.7%/trade, slippage ×3 +9.6%, start shifts stable, bootstrap 95% CI
   [+6.7%, +15.2%], 95th-pct drawdown 0.58% of capital; **weakness: 2020 V-rebound gave two max losses** (crash proxy)
 - [x] Sizing fixed: 8 condors can be open → ≤ 0.375% of capital each (3% cap)
+- [ ] **Backward holdout (Stage 1 evidence):** the frozen rules, unchanged, on 2016 → Mar-2021 — years the settings'
+  selection never saw (incl. the real 2020 crash). Needs 2015–2017 NSE files (downloading). If it holds, the frozen
+  rules have > 100 trades in total and the trade-count gate can pass honestly
 - [ ] **Paper trading the pooled VRP condor since Mon 2026-10-26**: needs ≥ 30 forward trades (~21 months at ~17/yr)
 - [ ] ≥ 3 months and ≥ 50 paper trades
 - [ ] Hit rate inside the backtest band; slippage ≤ 1.5× model
