@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `████████████████████░░░░░` 79% (73/92 tasks)
+**Overall:** `████████████████████░░░░░` 81% (75/93 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 21:36_
+_Last updated: 2026-10-23 22:30_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -154,7 +154,7 @@ _Last updated: 2026-10-23 21:36_
 
 ## Phase 10 — Paper trading
 <!-- progress:phase -->
-`████████████████░░░░░░░░░` 62% (5/8)
+`███████████████████░░░░░░` 78% (7/9)
 <!-- /progress:phase -->
 - [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker); first end-to-end run OK in 6.6 min; **scheduled weekdays 19:30** (Windows Task Scheduler, `quant_daily_update.cmd`)
 - [x] Paper-trading ledger (`paper.py`): re-runs the frozen simulation nightly, records trades from the start date,
@@ -163,7 +163,10 @@ _Last updated: 2026-10-23 21:36_
 - [x] Stage 2 stress tests passed: costs ×2 +9.7%/trade, slippage ×3 +9.6%, start shifts stable, bootstrap 95% CI
   [+6.7%, +15.2%], 95th-pct drawdown 0.58% of capital; **weakness: 2020 V-rebound gave two max losses** (crash proxy)
 - [x] Sizing fixed: 8 condors can be open → ≤ 0.375% of capital each (3% cap)
-- [ ] **Paper trading the pooled VRP condor since Mon 2026-10-26**: needs ≥ 30 forward trades (~21 months at ~17/yr)
+- [x] **Backward holdout: FAILED.** Frozen rules on 2015-08 → 2021-04 (never seen by the settings): 95 trades,
+  **−5.6% of risk/trade**, beats random entry 60% (needs 95%); NIFTY +1.1%, BANKNIFTY −9.5%. All 190 trades: +2.7%,
+  CI [−4.3%, +8.7%] → **VRP condor rejected.** The 2021–26 edge was period-specific or luck
+- [x] Paper trading of the VRP condor kept as **observation only** (your choice): tracked, never reported as passing
 - [ ] ≥ 3 months and ≥ 50 paper trades
 - [ ] Hit rate inside the backtest band; slippage ≤ 1.5× model
 
@@ -212,7 +215,7 @@ somewhere in-sample and fell apart out of sample or after costs.
 | Regime model (HMM) | ✅ **validated** (risk input) | next-month vol calm 11.5% vs choppy 15.1%, p=0.026; not a direction signal |
 | 50/200 MA trend | ❌ rejected | beats random timing only 6% |
 | VRP iron condor (NIFTY, BANKNIFTY) | ❌ rejected | only 15–19 trades in 5 yrs; BANKNIFTY closest (beats random 94%) |
-| VRP iron condor, 4 books, pooled (re-test) | 🟡 **close — not yet proven** | 84 trades, 87% wins, beats random 100%, DSR 0.934; needs more trades → paper trade |
+| VRP iron condor, 4 books, pooled (re-test) | ❌ **rejected by holdout** | 2021–26 looked strong (beats random 100%); 2015–21: −5.6%/trade, beats random 60% |
 | LightGBM "will it rise" — price | ❌ rejected | same-day AUC 0.505; Sharpe 0.97 vs buy-and-hold 1.22 |
 | LightGBM "will it rise" — + NSE OI/PCR/delivery/FII/IV | ❌ rejected | same-day AUC 0.502; Sharpe 0.68 |
 | LightGBM "will it beat the other 28" | ❌ rejected | same-day AUC 0.507; excess −1.2%/yr after costs |
@@ -284,6 +287,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 - 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19); BANKNIFTY closest (beats random 94%).
 - 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502).
 - 2026-10-23 — Relative-strength model rejected (same-day AUC 0.507, excess −1.2%/yr).
+- 2026-10-23 (night) — Backward holdout on 2015–21 (downloaded 1,473 more NSE files): the VRP condor failed (−5.6% of risk/trade, beats random 60%) → rejected; paper trading kept as observation only.
 - 2026-10-23 (late) — Stage 2 stress tests for the VRP condor: pass; the 2020 crash replay shows its weak spot (V-shaped rebound); size ≤ 0.375% per condor.
 - 2026-10-23 (late) — Proof plan approved. Quiet-stock condor rejected. VRP condor spec frozen; paper-trading ledger built and scheduled (starts 26-Oct). LightGBM / MA trend dropped (your call).
 - 2026-10-23 (night) — Approach A: move size is predictable by GARCH (same-day AUC 0.573), not by LightGBM (0.503); step 2 (condors on GARCH-quietest stocks) started.

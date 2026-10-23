@@ -69,6 +69,21 @@ positive folds (60% < 70%), parameter stability (0.41 < 0.5).
 **Known weakness found:** a sharp V-shaped rebound while IV is still elevated — the signal says "sell premium" just as
 the market rips through the call wing. Within the risk limits, but a loss. Watch for it in paper trading.
 
+## Backward holdout (2026-10-23, `scripts/quant_holdout.py`): FAIL
+The frozen rules, unchanged, on entries 2015-08 → 2021-04 — years the settings' selection never saw:
+
+| | NIFTY | BANKNIFTY | Pooled |
+|---|---|---|---|
+| Trades | 35 | 60 | 95 |
+| Mean return on risk | +1.09% | −9.45% | **−5.57%** |
+| Wins | 74% | 67% | 69% |
+
+Bootstrap 95% interval of the mean [−16.1%, +5.5%]; beats random entry days in **60%** of 200 runs (needs 95%);
+entering whenever possible −5.0%. All 190 frozen-rule trades (holdout + 2021–26): mean +2.7%, 95% interval
+[−4.3%, +8.7%] — includes 0.
+
+**Conclusion:** on unseen years the VRP filter did no better than random timing. The 2021–26 result did not carry over.
+
 ## Status
-Stage 1: narrowly not passed. Stage 2: passed. **Stage 3 (paper only) from Mon 2026-10-26** to collect the missing
-trades on new data. Not eligible for Stage 4 until Stage 3 passes.
+**REJECTED (2026-10-23)** — the backward holdout failed. Paper trading continues as **observation only** (the user's
+choice): tracked for information, never reported as passing, not eligible for live trading on this evidence.

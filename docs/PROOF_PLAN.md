@@ -27,7 +27,7 @@ What this plan **does** make close to 100% certain:
 |---|---|---|
 | GARCH volatility forecasts | ✅ validated as a **risk tool** | beat historical vol on 31/31 symbols, out of sample |
 | Regime model | ✅ validated as a **risk tool** | next-month vol 11.5% (calm) vs 15.1% (choppy), p = 0.026 |
-| **Pooled VRP iron condor** (NIFTY + BANKNIFTY, 4 staggered books) | 🟡 **candidate #1** | 84 trades, 87% wins, +12.7% of risk/trade, beats random timing in 100% of runs, deflated Sharpe 0.934 (bar 0.95) |
+| Pooled VRP iron condor (NIFTY + BANKNIFTY, 4 staggered books) | ❌ **rejected** (holdout, 2026-10-23) | 2021–26: 84 trades, beats random 100%; but on 2015–21 (never seen by the settings): −5.6% of risk/trade, beats random only 60%. Paper trading continues as observation only |
 | Quiet-stock iron condor (5 stocks GARCH predicts quietest) | ❌ rejected (2026-10-23) | GARCH's picks lose less than random (beats random 92%), but selling stock condors loses money: Sharpe −0.44 (random −0.84, all stocks −1.22) |
 | MA trend, LightGBM ×3, relative strength ×2 | ❌ rejected | no predictive skill or no edge after costs |
 
@@ -123,7 +123,8 @@ Monthly re-check of every gate on all data to date. **Never above 1% per trade o
 | ✅ 2026-10-23 | Stage 0 spec frozen: `docs/strategies/vrp_condor_pooled.md` | me |
 | ✅ 2026-10-23 | **Paper-trading ledger built** and added to the daily refresh; VRP condor paper trades start **Mon 2026-10-26** | me |
 | ✅ 2026-10-23 | Stage 2 stress tests for the VRP condor: **pass** (weakness found: V-shaped rebounds after a crash) | me |
-| Next | Phase 9 replay (if approved) · your own idea at Stage 0 · monthly paper review | me + you |
+| ✅ 2026-10-23 | Backward holdout 2015–21: **failed** → VRP condor rejected; paper trading kept as observation only | me |
+| Next | A new candidate at Stage 0 — most promising: your own idea · Phase 9 replay (if approved) | me + you |
 | Days 4–5 | Phase 9 replay check (agents never invent numbers) — only if you approve the LLM cost | me |
 | Weeks 1–… | Stage 3 paper trading runs automatically every weekday at 19:30 | automatic |
 | Monthly | Review: forward results vs backtest band; sequential test; kill rules | me + you |

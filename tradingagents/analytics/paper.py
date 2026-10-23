@@ -45,6 +45,8 @@ class PaperStrategy:
     simulate: Callable[[], list]                # -> condor.CondorTrade list (open ones included)
     backtest_mean: float                        # backtest mean return on risk per trade
     backtest_sd: float                          # and its spread, for the band and the kill rules
+    status: str = "candidate"                   # or "observation": rejected, tracked for information only
+    note: str = ""                              # why, when not a candidate
 
 
 def default_path() -> Path:
@@ -121,6 +123,8 @@ class PaperReport:
     integrity_events: int
     backtest_mean: float
     backtest_sd: float
+    status: str = "candidate"
+    note: str = ""
 
     @property
     def n(self) -> int:
@@ -182,7 +186,12 @@ class PaperReport:
             wins = sum(x > 0 for x in self.closed) / self.n
             lines.append(f"Mean return on risk {self.mean:+.2%} | wins {wins:.0%} | one-sided p(mean > 0) "
                          f"{self.p_value:.3f} | longest losing streak {self.losing_streak}")
-        verdict = ("KILL: " + "; ".join(self.kill) if self.kill
+        if self.status != "candidate":
+            # A rejected strategy is never reported as passing, whatever its paper results.
+            lines.append(f"Status: OBSERVATION ONLY - rejected ({self.note}); not eligible for live trading"
+                         + (f"; kill rules hit: {'; '.join(self.kill)}" if self.kill else ""))
+            return "\n".join(lines)
+        verdict =("KILL: " + "; ".join(self.kill) if self.kill
                    else "PASS (Stage 3)" if self.n >= max(30, self.trades_needed) and self.p_value < 0.05
                    else "collecting evidence")
         lines.append(f"Status: {verdict}")
@@ -196,4 +205,4 @@ def report(strategy: PaperStrategy, path: Path | None = None) -> PaperReport:
         events = conn.execute("SELECT COUNT(*) FROM events WHERE strategy = ?", (strategy.name,)).fetchone()[0]
     closed = [r for s, r in rows if s == "closed" and r is not None]
     return PaperReport(strategy.name, strategy.start, sum(s == "open" for s, _ in rows), closed, events,
-                       strategy.backtest_mean, strategy.backtest_sd)
+                       strategy.backtest_mean, strategy.backtest_sd, strategy.status, strategy.note)
