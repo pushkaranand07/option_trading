@@ -22,29 +22,10 @@ from tradingagents.analytics import (
     datastore as ds,  # noqa: E402
     trial_log,  # noqa: E402
 )
-from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
-from tradingagents.analytics.prices import load_prices  # noqa: E402
-from tradingagents.analytics.vrp import evaluate_condor, pool, vrp_series  # noqa: E402
+from tradingagents.analytics.vrp import evaluate_condor, load_inputs, pool  # noqa: E402
 
 GRID = [{"short_delta": d, "wing_pct": w, "z": z}
         for d in (0.15, 0.20, 0.25) for w in (0.02, 0.04) for z in (0.5, 1.0, 1.5)]
-
-
-def inputs(symbol: str):
-    chain = ds.load("option_chain", symbols=[symbol])
-    summary = ds.load("fo_summary", symbols=[symbol])
-    summary["trade_date"] = pd.to_datetime(summary["trade_date"])
-    lots = summary.set_index("trade_date")["lot_size"]
-    # Expiry settlement: the index close (Yahoo); where Yahoo lacks a day, the
-    # expiring future's close, which converges to the index on expiry.
-    yahoo = load_prices([symbol])
-    spot = pd.Series(yahoo["close"].to_numpy(), index=pd.to_datetime(yahoo["trade_date"]))
-    spot = spot.combine_first(summary.set_index("trade_date")["fut_close"])
-    iv = atm_iv_table(chain)
-    iv30 = pd.Series(iv["iv30"].to_numpy(), index=pd.to_datetime(iv["trade_date"]))
-    garch = pd.read_parquet(ds.store_root() / "vol_forecasts" / f"{symbol}.parquet")["garch_h21"]
-    garch.index = pd.to_datetime(garch.index)
-    return chain, spot, lots, vrp_series(iv30, garch)
 
 
 def main() -> int:
@@ -66,7 +47,7 @@ def main() -> int:
     tag = f"_books{args.books}" if args.books > 1 else ""
     results = []
     for symbol in args.symbols:
-        chain, spot, lots, vrp = inputs(symbol)
+        chain, spot, lots, vrp = load_inputs(symbol)
         print(f"{symbol}: {chain['trade_date'].nunique()} sessions of options, VRP on {len(vrp)} days, "
               f"mean VRP {vrp.mean():+.3f}", flush=True)
         result = evaluate_condor(f"vrp_condor_{symbol}{tag}", chain, spot, lots, vrp, GRID,

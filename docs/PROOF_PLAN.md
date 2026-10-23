@@ -28,7 +28,7 @@ What this plan **does** make close to 100% certain:
 | GARCH volatility forecasts | ✅ validated as a **risk tool** | beat historical vol on 31/31 symbols, out of sample |
 | Regime model | ✅ validated as a **risk tool** | next-month vol 11.5% (calm) vs 15.1% (choppy), p = 0.026 |
 | **Pooled VRP iron condor** (NIFTY + BANKNIFTY, 4 staggered books) | 🟡 **candidate #1** | 84 trades, 87% wins, +12.7% of risk/trade, beats random timing in 100% of runs, deflated Sharpe 0.934 (bar 0.95) |
-| **Quiet-stock iron condor** (5 stocks GARCH predicts quietest) | ⏳ backtest running | step 1 passed: GARCH ranks which stocks move big (same-day AUC 0.573) |
+| Quiet-stock iron condor (5 stocks GARCH predicts quietest) | ❌ rejected (2026-10-23) | GARCH's picks lose less than random (beats random 92%), but selling stock condors loses money: Sharpe −0.44 (random −0.84, all stocks −1.22) |
 | MA trend, LightGBM ×3, relative strength ×2 | ❌ rejected | no predictive skill or no edge after costs |
 
 **Trials so far:** 16 logged runs, 178 parameter combinations. This number matters: the more ideas tried on the same
@@ -90,11 +90,10 @@ This is the only test that cannot be overfit: the data did not exist when the ru
 
 | Candidate | Backtest: avg / spread per trade (of max risk) | Trades needed | Trades per year | **Time needed** |
 |---|---|---|---|---|
-| Pooled VRP condor | +12.7% / ~45% (estimate) | **~50** | ~15 | **~3 years** ⚠️ |
-| Quiet-stock condor | (pending) | (pending) | up to ~120 | (pending; likely **4–9 months**) |
+| Pooled VRP condor | +11.1% / 20% (measured: frozen rules, 95 trades 2021–26) | 14 by the formula → **30** (the plan's floor) | ~17 | **~21 months** |
 
-That table is the most important planning fact: **the index condor fires too rarely to prove itself quickly.** A
-higher-frequency candidate (the quiet-stock condor, if its backtest passes) can be proven in months, not years.
+The index condor fires rarely, so its forward proof takes time. The faster candidate (the quiet-stock condor) was
+rejected, so this is the realistic timeline unless a new candidate (e.g. your own idea) trades more often.
 
 **Early stopping (sequential test):** checked monthly, so a clearly good or clearly bad strategy does not have to wait
 the full time. Stop and **reject** if the running result is below the backtest's 5th-percentile path; **pass early** only if
@@ -119,10 +118,10 @@ Monthly re-check of every gate on all data to date. **Never above 1% per trade o
 
 | When | Step | Who |
 |---|---|---|
-| Tonight | Quiet-stock condor backtest finishes; judged against Stage 1 | me |
-| Day 1 | If it passes or nearly passes: Stage 0 spec for it and for the pooled VRP condor | me |
-| Days 2–3 | Stage 2 stress tests for both | me |
-| Days 3–4 | **Build the paper-trading ledger** into the daily refresh (records, prices and tracks the hypothetical trades; monthly report) | me |
+| ✅ 2026-10-23 | Quiet-stock condor judged: **rejected** | me |
+| ✅ 2026-10-23 | Stage 0 spec frozen: `docs/strategies/vrp_condor_pooled.md` | me |
+| ✅ 2026-10-23 | **Paper-trading ledger built** and added to the daily refresh; VRP condor paper trades start **Mon 2026-10-26** | me |
+| Next | Stage 2 stress tests for the VRP condor | me |
 | Days 4–5 | Phase 9 replay check (agents never invent numbers) — only if you approve the LLM cost | me |
 | Weeks 1–… | Stage 3 paper trading runs automatically every weekday at 19:30 | automatic |
 | Monthly | Review: forward results vs backtest band; sequential test; kill rules | me + you |

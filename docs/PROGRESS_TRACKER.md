@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `███████████████████░░░░░░` 77% (68/88 tasks)
+**Overall:** `████████████████████░░░░░` 79% (71/90 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 21:18_
+_Last updated: 2026-10-23 21:29_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -105,7 +105,7 @@ _Last updated: 2026-10-23 21:18_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`█████████████████████░░░░` 86% (12/14)
+`███████████████████████░░` 93% (13/14)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
@@ -123,7 +123,9 @@ _Last updated: 2026-10-23 21:18_
 - [x] **Approach A, step 1 — predict move *size*, not direction** (label: 10-session move > 1× expected move):
   LightGBM same-day AUC **0.503** (no skill; it leaned on market-wide features that can't rank stocks) vs
   **ranking by the GARCH forecast alone: 0.573** → move size *is* predictable, by GARCH, not by the fitted model
-- [ ] Approach A, step 2 — iron condors on the 5 stocks GARCH predicts quietest (stock options; vs 5 random, vs all) — **running**
+- [x] Approach A, step 2 — iron condors on the 5 stocks GARCH predicts quietest: **rejected**. 387 trades, Sharpe −0.44;
+  beats random picks 92% (GARCH's ranking helps) but selling stock condors loses money (random −0.84, all stocks −1.22;
+  190 of 387 trades had an untraded wing at entry) — structural, not a setting
 
 ## Phase 7 — Pretrained time-series models (optional)
 <!-- progress:phase -->
@@ -152,10 +154,13 @@ _Last updated: 2026-10-23 21:18_
 
 ## Phase 10 — Paper trading
 <!-- progress:phase -->
-`██████░░░░░░░░░░░░░░░░░░░` 25% (1/4)
+`████████████░░░░░░░░░░░░░` 50% (3/6)
 <!-- /progress:phase -->
 - [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker); first end-to-end run OK in 6.6 min; **scheduled weekdays 19:30** (Windows Task Scheduler, `quant_daily_update.cmd`)
-- [ ] Record intended trades each day — **candidate: the pooled VRP condor** (paper only, to collect new out-of-sample trades)
+- [x] Paper-trading ledger (`paper.py`): re-runs the frozen simulation nightly, records trades from the start date,
+  flags any recorded trade that changes (integrity), applies the kill rules; last step of the daily refresh
+- [x] Stage 0 spec frozen: `docs/strategies/vrp_condor_pooled.md` (modal walk-forward settings per index)
+- [ ] **Paper trading the pooled VRP condor since Mon 2026-10-26**: needs ≥ 30 forward trades (~21 months at ~17/yr)
 - [ ] ≥ 3 months and ≥ 50 paper trades
 - [ ] Hit rate inside the backtest band; slippage ≤ 1.5× model
 
@@ -210,6 +215,7 @@ somewhere in-sample and fell apart out of sample or after costs.
 | LightGBM "will it beat the other 28" | ❌ rejected | same-day AUC 0.507; excess −1.2%/yr after costs |
 | Relative strength + turnover buffer (re-test) | ❌ rejected | turnover −59% but excess still −1.0%/yr; AUC 0.510 |
 | LightGBM "how big will the move be" | ❌ no skill | same-day AUC 0.503 — but **GARCH alone ranks it at 0.573** ✅ |
+| Condors on the 5 GARCH-quietest stocks | ❌ rejected | Sharpe −0.44: stock condors lose money; GARCH only makes them lose less |
 
 Public end-of-day data has not produced a tradable edge in these 29 large, heavily-watched stocks, consistent with
 how efficiently they are priced. Costs matter a lot: a delivery round trip is ~0.33%, so a strategy rotating 5 stocks
@@ -237,9 +243,8 @@ every 10 sessions pays ~16% a year before it earns anything.
   time on the evening of 23-Oct. If not (PC off or logged out), run `python scripts/quant_daily_update.py` once.
 
 ### Decisions waiting on you (pick any)
-0. **Paper-trade the pooled VRP condor?** It's the one candidate close to passing. Each day the refresh would log the
-   condors the rule *would* open (NIFTY/BANKNIFTY monthly, 4 books) and track them to exit; after enough new trades it is
-   re-judged on data it has never seen. No money involved. (You'd decide later whether to trade it on Dhan.)
+0. ~~Paper-trade the pooled VRP condor?~~ **Done** — paper trading starts Mon 2026-10-26 (see PROOF_PLAN.md).
+   Dropped at your request: no further work on the LightGBM models or the MA trend rule.
 1. **Your own trading idea (Phase 5)**: the most promising next step. Describe a pattern you actually trade (entry,
    exit, stop, which data you look at); I code it exactly and run it through the same gates. Template: plan section 6.
 2. **Condors, more trades?** Done (4 books, pooled): 84 trades. Adding the 29 stocks' options would add more, but
@@ -276,6 +281,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 - 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19); BANKNIFTY closest (beats random 94%).
 - 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502).
 - 2026-10-23 — Relative-strength model rejected (same-day AUC 0.507, excess −1.2%/yr).
+- 2026-10-23 (late) — Proof plan approved. Quiet-stock condor rejected. VRP condor spec frozen; paper-trading ledger built and scheduled (starts 26-Oct). LightGBM / MA trend dropped (your call).
 - 2026-10-23 (night) — Approach A: move size is predictable by GARCH (same-day AUC 0.573), not by LightGBM (0.503); step 2 (condors on GARCH-quietest stocks) started.
 - 2026-10-23 (evening) — Scheduled refresh fixed and verified (PR #12). Re-tests of the two fixable rejections:
   relative strength still rejected; pooled 4-book VRP condor close (84 trades, beats random 100%, DSR 0.934) → paper-trade candidate.
