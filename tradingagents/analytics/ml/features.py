@@ -98,7 +98,7 @@ def build(
     symbols = data["close"].columns
     for name, series in (context or {}).items():
         s = series.reindex(data.index)
-        wide[name] = pd.DataFrame({sym: s for sym in symbols}, index=data.index)
+        wide[name] = pd.DataFrame(dict.fromkeys(symbols, s), index=data.index)
     # One-row shift: session t sees the close of t-1 and earlier only.
     stacked = {name: frame.shift(1).stack(future_stack=True) for name, frame in wide.items()}
     long = pd.DataFrame(stacked)

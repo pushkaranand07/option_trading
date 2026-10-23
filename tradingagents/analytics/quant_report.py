@@ -36,7 +36,7 @@ def store_symbol(ticker: str) -> str | None:
 
 def _known_rows(df: pd.DataFrame, on: date) -> pd.DataFrame:
     """Rows dated before ``on``: published after an earlier close, so known when ``on`` opens."""
-    dates = pd.to_datetime(df["trade_date"] if "trade_date" in df else df.index)
+    dates = pd.to_datetime(df.get("trade_date", df.index))
     return df[np.asarray(dates < pd.Timestamp(on))]
 
 

@@ -22,15 +22,19 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tradingagents.analytics import datastore as ds  # noqa: E402
-from tradingagents.analytics import trial_log  # noqa: E402
+from tradingagents.analytics import (
+    datastore as ds,  # noqa: E402
+    trial_log,  # noqa: E402
+)
 from tradingagents.analytics.datastore import store_root  # noqa: E402
-from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
-from tradingagents.analytics.ml import derived as md  # noqa: E402
 from tradingagents.analytics.evaluate import panel  # noqa: E402
-from tradingagents.analytics.ml import features as mf  # noqa: E402
-from tradingagents.analytics.ml import labels as ml  # noqa: E402
-from tradingagents.analytics.ml import pipeline as mp  # noqa: E402
+from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
+from tradingagents.analytics.ml import (
+    derived as md,  # noqa: E402
+    features as mf,  # noqa: E402
+    labels as ml,  # noqa: E402
+    pipeline as mp,  # noqa: E402
+)
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import STOCKS, SURVIVORSHIP_NOTE  # noqa: E402
 

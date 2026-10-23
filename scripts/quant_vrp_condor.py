@@ -18,8 +18,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tradingagents.analytics import datastore as ds  # noqa: E402
-from tradingagents.analytics import trial_log  # noqa: E402
+from tradingagents.analytics import (
+    datastore as ds,  # noqa: E402
+    trial_log,  # noqa: E402
+)
 from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.vrp import evaluate_condor, vrp_series  # noqa: E402

@@ -35,6 +35,9 @@ class Gates:
     min_neighbour_sharpe_ratio: float = 0.5     # median neighbour Sharpe / chosen Sharpe
 
 
+DEFAULT_GATES = Gates()
+
+
 @dataclass
 class Evidence:
     """What is known about one strategy, all of it out-of-sample and after costs."""
@@ -127,7 +130,7 @@ def _median(values: Iterable[float]) -> float:
     return float(np.median(np.asarray(list(values), dtype=float)))
 
 
-def check_gates(ev: Evidence, gates: Gates = Gates(), periods: int = 252) -> GateReport:
+def check_gates(ev: Evidence, gates: Gates = DEFAULT_GATES, periods: int = 252) -> GateReport:
     report = GateReport()
     add = report.results.append
 

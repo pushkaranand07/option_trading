@@ -57,6 +57,10 @@ class Slippage:
     option_premium_pct: float = 0.01
 
 
+DEFAULT_RATES = ChargeRates()
+DEFAULT_SLIPPAGE = Slippage()
+
+
 @dataclass
 class Breakdown:
     brokerage: float = 0.0
@@ -89,8 +93,8 @@ def round_trip(
     quantity: float,
     buy_price: float,
     sell_price: float,
-    rates: ChargeRates = ChargeRates(),
-    slippage: Slippage | None = Slippage(),
+    rates: ChargeRates = DEFAULT_RATES,
+    slippage: Slippage | None = DEFAULT_SLIPPAGE,
     exercised_intrinsic: float = 0.0,
 ) -> Breakdown:
     """Costs of buying ``quantity`` at ``buy_price`` and selling at ``sell_price``.
@@ -129,7 +133,7 @@ def round_trip(
     return b
 
 
-def fill_charges(segment: str, quantity: float, price: float, side: str, rates: ChargeRates = ChargeRates()) -> float:
+def fill_charges(segment: str, quantity: float, price: float, side: str, rates: ChargeRates = DEFAULT_RATES) -> float:
     """Contract-note charges for one executed order (``side`` "buy" or "sell"), slippage excluded.
 
     For multi-leg option trades, where each leg is its own order on entry and exit.
@@ -146,8 +150,8 @@ def fill_charges(segment: str, quantity: float, price: float, side: str, rates: 
     return brokerage + stt + exchange + sebi + stamp + rates.gst * (brokerage + exchange + sebi)
 
 
-def cost_fraction(segment: str, price: float, quantity: float = 1.0, rates: ChargeRates = ChargeRates(),
-                  slippage: Slippage | None = Slippage()) -> float:
+def cost_fraction(segment: str, price: float, quantity: float = 1.0, rates: ChargeRates = DEFAULT_RATES,
+                  slippage: Slippage | None = DEFAULT_SLIPPAGE) -> float:
     """Round-trip cost as a fraction of position value, for return-based backtests."""
     value = quantity * price
     return round_trip(segment, quantity, price, price, rates, slippage).total / value if value else 0.0

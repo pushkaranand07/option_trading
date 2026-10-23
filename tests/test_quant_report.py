@@ -5,8 +5,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from tradingagents.analytics import quant_report as qr
-from tradingagents.analytics import trial_log
+from tradingagents.analytics import quant_report as qr, trial_log
 
 
 @pytest.fixture

@@ -202,7 +202,7 @@ def option_chain(fo: pd.DataFrame, summary: pd.DataFrame, symbols: Iterable[str]
 def next_sessions(trading_days: Iterable[date]) -> dict[date, date]:
     """Each trading day mapped to the following one; the last maps to the next weekday."""
     days = sorted(set(trading_days))
-    mapping = {d: n for d, n in zip(days, days[1:])}
+    mapping = dict(zip(days[:-1], days[1:], strict=True))
     if days:
         nxt = days[-1] + timedelta(days=1)
         while nxt.weekday() >= 5:

@@ -28,8 +28,20 @@ import numpy as np
 import pandas as pd
 
 from tradingagents.analytics import trial_log
-from tradingagents.analytics.costs import ChargeRates, Slippage, cost_fraction
-from tradingagents.analytics.gates import Evidence, GateReport, annual_return, check_gates, max_drawdown
+from tradingagents.analytics.costs import (
+    DEFAULT_RATES,
+    DEFAULT_SLIPPAGE,
+    ChargeRates,
+    Slippage,
+    cost_fraction,
+)
+from tradingagents.analytics.gates import (
+    Evidence,
+    GateReport,
+    annual_return,
+    check_gates,
+    max_drawdown,
+)
 from tradingagents.analytics.validation import (
     deflated_sharpe_ratio,
     evidence_verdict,
@@ -288,8 +300,8 @@ def evaluate(
     regimes: pd.Series | None = None,
     regimes_switched_off: frozenset[str] = frozenset(),
     random_runs: int = 1000,
-    rates: ChargeRates = ChargeRates(),
-    slippage: Slippage = Slippage(),
+    rates: ChargeRates = DEFAULT_RATES,
+    slippage: Slippage = DEFAULT_SLIPPAGE,
     log: bool = True,
     universe_note: str = "",
 ) -> Evaluation:

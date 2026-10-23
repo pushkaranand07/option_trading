@@ -5,10 +5,7 @@ import pandas as pd
 import pytest
 
 from tradingagents.analytics import evaluate as ev
-from tradingagents.analytics.ml import features as mf
-from tradingagents.analytics.ml import labels as ml
-from tradingagents.analytics.ml import model as mm
-from tradingagents.analytics.ml import pipeline as mp
+from tradingagents.analytics.ml import features as mf, labels as ml, model as mm, pipeline as mp
 
 
 def panel_from(prices: pd.DataFrame) -> pd.DataFrame:

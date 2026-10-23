@@ -1,7 +1,7 @@
 """Phase 3 of the quant plan: the end-of-day iron condor simulator."""
 
 import math
-from datetime import date, timedelta
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -12,11 +12,11 @@ from tradingagents.analytics.costs import ChargeRates, Slippage
 from tradingagents.integrations.optopsy.adapter import bs_price
 
 R = cd.DEFAULT_RISK_FREE
-NO_COST = ChargeRates(stt={k: (0.0, 0.0) for k in ("delivery", "intraday", "futures", "options")},
+NO_COST = ChargeRates(stt=dict.fromkeys(("delivery", "intraday", "futures", "options"), (0.0, 0.0)),
                       stt_options_exercise=0.0,
-                      exchange={k: 0.0 for k in ("delivery", "intraday", "futures", "options")},
-                      sebi_fee=0.0, stamp={k: 0.0 for k in ("delivery", "intraday", "futures", "options")},
-                      brokerage_flat={k: 0.0 for k in ("delivery", "intraday", "futures", "options")})
+                      exchange=dict.fromkeys(("delivery", "intraday", "futures", "options"), 0.0),
+                      sebi_fee=0.0, stamp=dict.fromkeys(("delivery", "intraday", "futures", "options"), 0.0),
+                      brokerage_flat=dict.fromkeys(("delivery", "intraday", "futures", "options"), 0.0))
 NO_SLIP = Slippage(option_ticks=0, option_premium_pct=0.0)
 
 
@@ -24,7 +24,7 @@ def market(path, vol=0.15, start=date(2026, 1, 15), expiry=date(2026, 2, 24), st
     """A chain priced by Black-76 at a flat vol along a given forward path (one monthly expiry)."""
     rows, spot = [], {}
     days = pd.bdate_range(start, periods=len(path)).date
-    for day, f in zip(days, path):
+    for day, f in zip(days, path, strict=True):
         spot[day] = f
         t = max((expiry - day).days, 0) / 365
         for k in strikes:

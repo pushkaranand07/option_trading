@@ -152,7 +152,7 @@ def run(
 
     lab = labels.set_index(["date", "symbol"])
     frame = feats.join(lab, how="inner").dropna(subset=["label"])
-    feature_cols = [c for c in feats.columns]
+    feature_cols = list(feats.columns)
     frame = frame.dropna(subset=feature_cols, how="all")
     dates = frame.index.get_level_values("date").to_series(index=frame.index)
     sessions = pd.DatetimeIndex(sorted(dates.unique()))

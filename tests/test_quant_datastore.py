@@ -143,10 +143,10 @@ def test_prices_are_normalised_stamped_and_quality_checked(tmp_path):
 
     nse_days = [date(2026, 10, 15), date(2026, 10, 16), date(2026, 10, 19)]
     issues = px.quality_report(got, nse_days)
-    assert ("NIFTY", date(2026, 10, 16), "missing_session") in set(zip(issues.symbol, issues.trade_date, issues.issue))
+    assert ("NIFTY", date(2026, 10, 16), "missing_session") in set(zip(issues.symbol, issues.trade_date, issues.issue, strict=True))
     jumps = issues[issues.issue == "jump_no_split"]
     # The -90% day has a split recorded; the +30% day after it does not.
-    assert list(zip(jumps.symbol, jumps.trade_date)) == [("TATASTEEL", date(2026, 10, 19))]
+    assert list(zip(jumps.symbol, jumps.trade_date, strict=True)) == [("TATASTEEL", date(2026, 10, 19))]
 
     px.save_prices(got, nse_days, root=tmp_path)
     loaded = px.load_prices(["NIFTY"], root=tmp_path)

@@ -35,7 +35,14 @@ from statistics import NormalDist
 import numpy as np
 import pandas as pd
 
-from tradingagents.analytics.costs import OPTIONS, ChargeRates, Slippage, fill_charges
+from tradingagents.analytics.costs import (
+    DEFAULT_RATES,
+    DEFAULT_SLIPPAGE,
+    OPTIONS,
+    ChargeRates,
+    Slippage,
+    fill_charges,
+)
 from tradingagents.analytics.implied_vol import black76_iv, expiry_atm
 from tradingagents.integrations.optopsy.adapter import DEFAULT_RISK_FREE
 
@@ -54,6 +61,9 @@ class CondorParams:
     min_dte: int = 20
     max_dte: int = 45
     risk_free: float = DEFAULT_RISK_FREE
+
+
+DEFAULT_PARAMS = CondorParams()
 
 
 @dataclass
@@ -148,9 +158,9 @@ def simulate(
     spot: pd.Series,
     lots: pd.Series,
     signal: pd.Series,
-    params: CondorParams = CondorParams(),
-    rates: ChargeRates = ChargeRates(),
-    slippage: Slippage = Slippage(),
+    params: CondorParams = DEFAULT_PARAMS,
+    rates: ChargeRates = DEFAULT_RATES,
+    slippage: Slippage = DEFAULT_SLIPPAGE,
 ) -> tuple[list[CondorTrade], pd.Series]:
     """Trades, and daily mark-to-market P&L as a fraction of the open trade's max risk.
 
@@ -162,7 +172,7 @@ def simulate(
     chain["trade_date"] = pd.to_datetime(chain["trade_date"]).dt.date
     chain["expiry"] = pd.to_datetime(chain["expiry"]).dt.date
     monthly = monthly_expiries(chain)
-    by_day = {d: g for d, g in chain.groupby("trade_date")}
+    by_day = dict(iter(chain.groupby("trade_date")))
     days = sorted(by_day)
     spot = spot.copy()
     spot.index = pd.to_datetime(spot.index).date

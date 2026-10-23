@@ -24,10 +24,10 @@ import pandas as pd
 
 from tradingagents.analytics.validation import walk_forward_splits
 
-LGBM_PARAMS = dict(
-    num_leaves=15, min_child_samples=200, learning_rate=0.03, n_estimators=2000,
-    subsample=0.8, subsample_freq=1, colsample_bytree=0.8, reg_lambda=5.0, verbose=-1,
-)
+LGBM_PARAMS = {
+    "num_leaves": 15, "min_child_samples": 200, "learning_rate": 0.03, "n_estimators": 2000,
+    "subsample": 0.8, "subsample_freq": 1, "colsample_bytree": 0.8, "reg_lambda": 5.0, "verbose": -1,
+}
 
 
 @dataclass
@@ -49,7 +49,7 @@ def purge(dates: pd.Series, t1: pd.Series, before: pd.Timestamp) -> np.ndarray:
 class PlattCalibrator:
     """Logistic regression on the logit of the raw probability."""
 
-    def fit(self, raw: np.ndarray, y: np.ndarray) -> "PlattCalibrator":
+    def fit(self, raw: np.ndarray, y: np.ndarray) -> PlattCalibrator:
         from sklearn.linear_model import LogisticRegression
 
         self._lr = LogisticRegression(C=1e6).fit(self._logit(raw), y)
