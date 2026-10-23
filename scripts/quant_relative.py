@@ -21,8 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tradingagents.analytics import trial_log  # noqa: E402
 from tradingagents.analytics.evaluate import panel  # noqa: E402
-from tradingagents.analytics.ml import features as mf  # noqa: E402
-from tradingagents.analytics.ml import relative as mr  # noqa: E402
+from tradingagents.analytics.ml import (
+    features as mf,  # noqa: E402
+    relative as mr,  # noqa: E402
+)
 from tradingagents.analytics.ml.inputs import market_context, store_features  # noqa: E402
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import STOCKS, SURVIVORSHIP_NOTE  # noqa: E402
