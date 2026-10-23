@@ -5,6 +5,7 @@ Per trading day, three published files are kept exactly as NSE served them:
 - ``fo``          F&O bhavcopy (UDiFF from 2024-07-08, legacy format before)
 - ``participant`` participant-wise open interest (FII / DII / Pro / Client)
 - ``mto``         security-wise delivery position
+- ``indices``     official open/high/low/close of every NSE index, incl. India VIX
 
 Raw files live under ``<data_cache_dir>/quant/raw/<kind>/<year>/``; a manifest CSV
 records each (day, kind) as ``ok`` or ``missing`` (holiday / never published).
@@ -29,7 +30,7 @@ from tradingagents.dataflows.vendors.nse.derivatives import UDIFF_SINCE, legacy_
 
 logger = logging.getLogger(__name__)
 
-KINDS = ("fo", "participant", "mto")
+KINDS = ("fo", "participant", "mto", "indices")
 MANIFEST_FIELDS = ["day", "kind", "status", "url", "bytes", "fetched_at"]
 
 
@@ -41,6 +42,10 @@ def mto_url(day: date) -> str:
     return f"/archives/equities/mto/MTO_{day:%d%m%Y}.DAT"
 
 
+def index_close_url(day: date) -> str:
+    return f"/content/indices/ind_close_all_{day:%d%m%Y}.csv"
+
+
 def candidate_urls(kind: str, day: date) -> list[str]:
     if kind == "fo":
         urls = [udiff_url(day), legacy_url(day)]
@@ -49,6 +54,8 @@ def candidate_urls(kind: str, day: date) -> list[str]:
         return [participant_oi_url(day)]
     if kind == "mto":
         return [mto_url(day)]
+    if kind == "indices":
+        return [index_close_url(day)]
     raise ValueError(f"unknown kind {kind!r}")
 
 

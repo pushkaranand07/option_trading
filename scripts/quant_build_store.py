@@ -20,7 +20,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tradingagents.analytics import datastore as ds  # noqa: E402
 from tradingagents.analytics.backfill import load_manifest, raw_root  # noqa: E402
-from tradingagents.analytics.prices import fetch_prices, quality_report, save_prices  # noqa: E402
+from tradingagents.analytics.prices import (  # noqa: E402
+    fetch_prices,
+    fill_stock_gaps,
+    merge_nse_indices,
+    quality_report,
+    save_prices,
+)
 from tradingagents.analytics.universe import SURVIVORSHIP_NOTE, SYMBOLS  # noqa: E402
 
 
@@ -46,7 +52,7 @@ def main() -> int:
 
     summary = ds.load("fo_summary")
     print("\nData quality")
-    for kind in ("participant", "mto"):
+    for kind in ("participant", "mto", "indices"):
         gaps = [d for d in trading_days if manifest.get((d, kind)) is None or manifest[(d, kind)].status != "ok"]
         print(f"  {kind}: missing on {len(gaps)} F&O trading days" + (f" (e.g. {gaps[:3]})" if gaps else ""))
     per_symbol = summary.groupby("symbol")["trade_date"].nunique()
@@ -56,7 +62,10 @@ def main() -> int:
 
     if not args.skip_prices:
         prices = fetch_prices()
+        prices = merge_nse_indices(prices, ds.load("index_close"))
+        prices = fill_stock_gaps(prices, trading_days)
         path = save_prices(prices, trading_days)
+        print("  price bars by source:", prices.groupby("source").size().to_dict())
         issues = quality_report(prices, trading_days)
         issues.to_csv(ds.store_root() / "quality_report.csv", index=False)
         print(f"  prices: {prices['symbol'].nunique()} symbols, {len(prices):,} rows -> {path}")

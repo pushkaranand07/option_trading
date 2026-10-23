@@ -12,6 +12,7 @@ Datasets (``<data_cache_dir>/quant/store/<dataset>/<year>.parquet``):
 - ``option_chain`` near-dated option contracts for the universe (for IV and backtests)
 - ``participant``  FII / DII / Pro / Client open interest by contract type
 - ``delivery``     traded and deliverable quantity, delivery % per stock
+- ``index_close``  NSE's official OHLC for NIFTY, BANKNIFTY and India VIX
 
 Raw files are parsed as NSE published them; nothing here calls the network.
 """
@@ -30,9 +31,17 @@ import pandas as pd
 from tradingagents.analytics.backfill import load_manifest, raw_path, raw_root
 from tradingagents.analytics.universe import SYMBOLS
 from tradingagents.dataflows.config import get_config
-from tradingagents.dataflows.vendors.nse.derivatives import _unzip_csv, normalize_legacy, normalize_udiff
+from tradingagents.dataflows.vendors.nse.derivatives import (
+    _unzip_csv,
+    derive_legacy_lot_sizes,
+    normalize_legacy,
+    normalize_udiff,
+)
 
-DATASETS = ("fo_summary", "option_chain", "participant", "delivery")
+DATASETS = ("fo_summary", "option_chain", "participant", "delivery", "index_close")
+
+# Index names in NSE's daily index file -> symbols used here.
+INDEX_NAMES = {"Nifty 50": "NIFTY", "Nifty Bank": "BANKNIFTY", "India VIX": "INDIAVIX"}
 
 # Option contracts further out than this, or strikes further than this from the
 # underlying, are dropped from the stored chain: illiquid and never traded here.
@@ -58,20 +67,49 @@ def parse_fo(raw: bytes, filename: str) -> pd.DataFrame:
     return normalize_udiff(table) if filename.startswith("BhavCopy_") else normalize_legacy(table)
 
 
-def parse_participant(raw: bytes) -> pd.DataFrame:
-    """Participant-wise OI: one row per category (Client, DII, FII, Pro, TOTAL)."""
+def parse_participant(raw: bytes, day: date) -> pd.DataFrame:
+    """Participant-wise OI: one row per category (Client, DII, FII, Pro, TOTAL).
+
+    ``day`` comes from the file name: some files have an "as on <date>" title
+    line (month short or in full), some start straight at the header. When the
+    title is there it must agree with ``day``.
+    """
     text = raw.decode("utf-8", errors="replace")
-    match = re.search(r"as on ([A-Za-z]{3} \d{1,2}, \d{4})", text)
-    if not match:
-        raise ValueError("participant OI file without an 'as on <date>' title")
-    day = datetime.strptime(match.group(1), "%b %d, %Y").date()
-    table = pd.read_csv(io.StringIO(text), skiprows=1)
-    table.columns = [c.strip() for c in table.columns]
+    match = re.search(r"as on ([A-Za-z]{3})[A-Za-z]* (\d{1,2}), (\d{4})", text)
+    if match:
+        titled = datetime.strptime(" ".join(match.groups()), "%b %d %Y").date()
+        if titled != day:
+            raise ValueError(f"participant OI file for {day} says it is for {titled}")
+    lines = text.splitlines()
+    header = next((i for i, line in enumerate(lines) if line.strip().lower().startswith("client type")), None)
+    if header is None:
+        raise ValueError(f"participant OI file for {day} has no 'Client Type' header")
+    table = pd.read_csv(io.StringIO("\n".join(lines[header:])))
     table = table.dropna(subset=[table.columns[0]])
     out = pd.DataFrame({"trade_date": day, "category": table.iloc[:, 0].astype(str).str.strip()})
     for i, name in enumerate(PARTICIPANT_COLUMNS, start=1):
-        out[name] = pd.to_numeric(table.iloc[:, i], errors="coerce").astype("Int64")
+        values = pd.to_numeric(table.iloc[:, i].astype(str).str.replace(",", "").str.strip(), errors="coerce")
+        out[name] = values.round().astype("Int64")
     return out.reset_index(drop=True)
+
+
+def parse_index_close(raw: bytes, day: date) -> pd.DataFrame:
+    """Official OHLC (and volume, where NSE gives one) of the indices in ``INDEX_NAMES``."""
+    table = pd.read_csv(io.BytesIO(raw))
+    table.columns = [str(c).strip() for c in table.columns]
+    table["Index Name"] = table["Index Name"].astype(str).str.strip()
+    table = table[table["Index Name"].isin(INDEX_NAMES)]
+
+    def num(col: str) -> pd.Series:
+        return pd.to_numeric(table[col].astype(str).str.strip().replace("-", None), errors="coerce")
+
+    return pd.DataFrame({
+        "trade_date": day,
+        "symbol": table["Index Name"].map(INDEX_NAMES).to_numpy(),
+        "open": num("Open Index Value").to_numpy(), "high": num("High Index Value").to_numpy(),
+        "low": num("Low Index Value").to_numpy(), "close": num("Closing Index Value").to_numpy(),
+        "volume": num("Volume").to_numpy(),
+    })
 
 
 def parse_mto(raw: bytes) -> pd.DataFrame:
@@ -108,6 +146,7 @@ def fo_summary(fo: pd.DataFrame, symbols: Iterable[str] = SYMBOLS) -> pd.DataFra
         calls, puts = opt[opt["option_type"] == "CE"], opt[opt["option_type"] == "PE"]
         near = fut.iloc[0] if len(fut) else None
         underlying = pd.to_numeric(g["underlying_price"], errors="coerce").dropna()
+        lots = pd.to_numeric(fut["lot_size"], errors="coerce").dropna()
         call_oi, put_oi = float(calls["open_interest"].sum()), float(puts["open_interest"].sum())
         call_vol, put_vol = float(calls["contracts"].sum()), float(puts["contracts"].sum())
         out.append({
@@ -128,6 +167,8 @@ def fo_summary(fo: pd.DataFrame, symbols: Iterable[str] = SYMBOLS) -> pd.DataFra
             "put_contracts": put_vol,
             "pcr_volume": put_vol / call_vol if call_vol else np.nan,
             "opt_turnover": float(opt["turnover"].sum()),
+            # The new format states the lot; for the old one build_year derives it.
+            "lot_size": float(lots.iloc[0]) if len(lots) else np.nan,
         })
     return pd.DataFrame(out)
 
@@ -204,24 +245,31 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
     sessions = next_sessions(trading_days)
     year_days = [d for d in trading_days if d.year == year]
 
-    summaries, chains, participants, deliveries = [], [], [], []
+    summaries, chains, participants, deliveries, indices = [], [], [], [], []
     for day in year_days:
         fo_row = ok[(day, "fo")]
         fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
         summary = fo_summary(fo)
+        if summary["lot_size"].isna().any():
+            derived = derive_legacy_lot_sizes(fo)
+            summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(derived))
         summaries.append(summary)
         chains.append(option_chain(fo, summary))
         if (day, "participant") in ok:
             r = ok[(day, "participant")]
-            participants.append(parse_participant(raw_path(raw, "participant", day, r.url).read_bytes()))
+            participants.append(parse_participant(raw_path(raw, "participant", day, r.url).read_bytes(), day))
         if (day, "mto") in ok:
             r = ok[(day, "mto")]
             mto = parse_mto(raw_path(raw, "mto", day, r.url).read_bytes())
             deliveries.append(mto[(mto["series"] == "EQ") & mto["symbol"].isin(SYMBOLS)])
+        if (day, "indices") in ok:
+            r = ok[(day, "indices")]
+            indices.append(parse_index_close(raw_path(raw, "indices", day, r.url).read_bytes(), day))
 
     counts = {}
     for name, parts in (("fo_summary", summaries), ("option_chain", chains),
-                        ("participant", participants), ("delivery", deliveries)):
+                        ("participant", participants), ("delivery", deliveries),
+                        ("index_close", indices)):
         parts = [p for p in parts if len(p)]
         if not parts:
             counts[name] = 0

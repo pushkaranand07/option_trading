@@ -53,11 +53,21 @@ def fo_rows():
 
 @pytest.mark.unit
 def test_participant_file_parses_every_category_and_the_date():
-    df = ds.parse_participant(PARTICIPANT)
+    df = ds.parse_participant(PARTICIPANT, date(2026, 10, 16))
     assert list(df["category"]) == ["Client", "FII"]
     assert (df["trade_date"] == date(2026, 10, 16)).all()
     fii = df.set_index("category").loc["FII"]
     assert fii["fut_idx_short"] == 312965 and fii["total_short"] == 5689753
+
+
+@pytest.mark.unit
+def test_participant_files_without_a_title_or_with_a_full_month_name_parse():
+    untitled = PARTICIPANT.split(b"\n", 1)[1]
+    assert ds.parse_participant(untitled, date(2018, 6, 13))["trade_date"].iloc[0] == date(2018, 6, 13)
+    full_month = PARTICIPANT.replace(b"Oct 16, 2026", b"June 01, 2018")
+    assert len(ds.parse_participant(full_month, date(2018, 6, 1))) == 2
+    with pytest.raises(ValueError):
+        ds.parse_participant(PARTICIPANT, date(2026, 10, 15))   # title disagrees with the file name
 
 
 @pytest.mark.unit
@@ -141,3 +151,57 @@ def test_prices_are_normalised_stamped_and_quality_checked(tmp_path):
     px.save_prices(got, nse_days, root=tmp_path)
     loaded = px.load_prices(["NIFTY"], root=tmp_path)
     assert list(loaded["known_from"]) == [date(2026, 10, 16), date(2026, 10, 20)]
+
+
+INDEX_CLOSE = (
+    b"Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value,"
+    b"Points Change,Change(%),Volume,Turnover (Rs. Cr.),P/E,P/B,Div Yield\n"
+    b"Nifty 50,01-01-2018,10531.7,10537.85,10423.1,10435.55,-95.15,-.9,134532090,7546.56,26.68,3.51,1.09\n"
+    b"Nifty Next 50,01-01-2018,1,2,0.5,1.5,0,0,1,1,1,1,1\n"
+    b"Nifty Bank,01-01-2018,25565.75,25588,25271.55,25318.1,-221.35,-.87,57576913,2037.55,29.31,2.94,.18\n"
+    b"India VIX,01-01-2018,12.67,13.6125,12.545,13.35,.68,5.39,-,-,-,-,-\n"
+)
+
+
+@pytest.mark.unit
+def test_index_close_keeps_nifty_banknifty_and_vix_with_official_values():
+    df = ds.parse_index_close(INDEX_CLOSE, date(2018, 1, 1)).set_index("symbol")
+    assert set(df.index) == {"NIFTY", "BANKNIFTY", "INDIAVIX"}
+    assert df.loc["NIFTY", "close"] == 10435.55 and df.loc["BANKNIFTY", "open"] == 25565.75
+    assert df.loc["INDIAVIX", "close"] == 13.35 and pd.isna(df.loc["INDIAVIX", "volume"])
+
+
+@pytest.mark.unit
+def test_nse_index_bars_replace_yahoo_and_fill_its_gaps():
+    from tradingagents.analytics import prices as px
+
+    yahoo = px.normalize_history(yahoo_frame(["2018-01-02", "2018-01-03"], [10442.2, 10443.2]), "NIFTY")
+    nse = pd.DataFrame({"trade_date": [date(2018, 1, 1), date(2018, 1, 2)], "symbol": "NIFTY",
+                        "open": [10531.7, 10477.55], "high": [10537.85, 10495.2], "low": [10423.1, 10404.65],
+                        "close": [10435.55, 10442.2], "volume": [1.0, 1.0]})
+    merged = px.merge_nse_indices(yahoo, nse).set_index("trade_date")
+    assert list(merged.index) == [date(2018, 1, 1), date(2018, 1, 2), date(2018, 1, 3)]
+    assert merged.loc[date(2018, 1, 1), "close"] == 10435.55          # Yahoo had no 1-Jan bar
+    assert list(merged["source"]) == ["nse", "nse", "yahoo"]
+
+
+@pytest.mark.unit
+def test_a_missing_stock_session_is_filled_on_yahoos_adjusted_basis():
+    from tradingagents.analytics import prices as px
+
+    # Yahoo is split-adjusted 1:10 relative to NSE's traded prices, and lacks 2026-10-22.
+    frame = yahoo_frame(["2026-10-21", "2026-10-23"], [250.0, 260.0])
+    frame["Adj Close"] = frame["Close"] * 0.98                          # a past dividend
+    yahoo = px.normalize_history(frame, "TCS")
+    nse_days = {date(2026, 10, 21): 2500.0, date(2026, 10, 22): 2550.0, date(2026, 10, 23): 2600.0}
+
+    def fetch(d):
+        c = nse_days[d]
+        return pd.DataFrame({"symbol": ["TCS"], "open": [c], "high": [c], "low": [c], "close": [c], "volume": [9.0]})
+
+    filled = px.fill_stock_gaps(yahoo, list(nse_days), fetch).set_index("trade_date")
+    bar = filled.loc[date(2026, 10, 22)]
+    assert bar["close"] == pytest.approx(255.0)                         # NSE +2% applied to Yahoo's 250
+    assert bar["adj_close"] == pytest.approx(255.0 * 0.98)
+    assert bar["source"] == "nse_fill"
+    assert px.quality_report(filled.reset_index(), list(nse_days)).empty

@@ -295,3 +295,43 @@ def delivery_data(day: date, client=None) -> pd.DataFrame:
     df["DELIV_QTY"] = pd.to_numeric(df["DELIV_QTY"], errors="coerce")
     df.attrs["source"] = fetched.provenance()
     return df
+
+
+def legacy_equity_url(day: date) -> str:
+    mon = day.strftime("%b").upper()
+    return f"/content/historical/EQUITIES/{day:%Y}/{mon}/cm{day:%d}{mon}{day:%Y}bhav.csv.zip"
+
+
+def equity_bhavcopy(day: date, client=None) -> pd.DataFrame:
+    """Unadjusted EQ-series OHLC and volume for one session: ``symbol, open, high, low, close, volume``.
+
+    Uses the full bhavcopy (with delivery) where NSE has it, the legacy CM
+    bhavcopy otherwise. Prices are as traded that day, not split-adjusted.
+    """
+    from tradingagents.dataflows.vendors.nse.client import default_client
+
+    client = client or default_client()
+    try:
+        full = delivery_data(day, client)
+        return pd.DataFrame({
+            "symbol": full["SYMBOL"].to_numpy(),
+            "open": pd.to_numeric(full["OPEN_PRICE"], errors="coerce").to_numpy(),
+            "high": pd.to_numeric(full["HIGH_PRICE"], errors="coerce").to_numpy(),
+            "low": pd.to_numeric(full["LOW_PRICE"], errors="coerce").to_numpy(),
+            "close": pd.to_numeric(full["CLOSE_PRICE"], errors="coerce").to_numpy(),
+            "volume": pd.to_numeric(full["TTL_TRD_QNTY"], errors="coerce").to_numpy(),
+        })
+    except NoMarketDataError:
+        pass
+    try:
+        fetched = client.get_archive(legacy_equity_url(day))
+    except NSEDataNotPublishedError as exc:
+        raise NoMarketDataError("equity bhavcopy", detail=f"no file for {day:%d-%b-%Y}") from exc
+    raw = _unzip_csv(fetched.data).rename(columns=lambda c: str(c).strip())
+    raw = raw[raw["SERIES"].astype(str).str.strip() == "EQ"]
+    return pd.DataFrame({
+        "symbol": raw["SYMBOL"].astype(str).str.strip().to_numpy(),
+        "open": raw["OPEN"].to_numpy(dtype=float), "high": raw["HIGH"].to_numpy(dtype=float),
+        "low": raw["LOW"].to_numpy(dtype=float), "close": raw["CLOSE"].to_numpy(dtype=float),
+        "volume": raw["TOTTRDQTY"].to_numpy(dtype=float),
+    })

@@ -70,3 +70,13 @@ def test_percentage_capped_brokerage_and_cost_fraction():
 def test_unknown_segment_is_rejected():
     with pytest.raises(ValueError):
         round_trip("crypto", 1, 1, 1)
+
+
+@pytest.mark.unit
+def test_two_fills_add_up_to_a_round_trip():
+    from tradingagents.analytics.costs import fill_charges
+
+    both = fill_charges(OPTIONS, 75, 100, "buy") + fill_charges(OPTIONS, 75, 110, "sell")
+    assert both == pytest.approx(round_trip(OPTIONS, 75, 100, 110, slippage=None).charges)
+    with pytest.raises(ValueError):
+        fill_charges(OPTIONS, 1, 1, "hold")

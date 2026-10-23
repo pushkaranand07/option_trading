@@ -75,12 +75,16 @@ def garch_forecasts(
     n = len(r)
     method = "simulation" if model == "egarch" else "analytic"
     parts = []
+    params = None
     for k in range(min_train - 1, n, refit_every):
         end = min(k + refit_every, n)          # forecasts for dates k .. end-1
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             fitted = arch_model(r.iloc[: k + 1], mean="Constant", dist="t", **spec).fit(disp="off")
-            fixed = arch_model(r.iloc[:end], mean="Constant", dist="t", **spec).fix(fitted.params)
+            # An estimate the optimiser did not converge on is not trusted: keep the last good one.
+            if fitted.convergence_flag == 0 or params is None:
+                params = fitted.params
+            fixed = arch_model(r.iloc[:end], mean="Constant", dist="t", **spec).fix(params)
             kwargs = {"method": method}
             if method == "simulation":
                 # arch draws the Student-t shocks itself; seed numpy's global RNG it uses.
