@@ -5,6 +5,7 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 >
 > **Picking this up? Read [Start here tomorrow](#start-here-tomorrow) first.**
+> **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
 **Overall:** `███████████████████░░░░░░` 77% (68/88 tasks)
