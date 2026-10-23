@@ -277,7 +277,7 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None,
             fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
             summary = fo_summary(fo)
             if summary["lot_size"].isna().any():
-                lots = lots_from_open_interest(fo)
+                lots = lots_from_open_interest(fo, SYMBOLS)
                 summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(lots))
             summaries.append(summary)
             chains.append(option_chain(fo, summary))
@@ -329,7 +329,7 @@ def load(dataset: str, start: date | None = None, end: date | None = None,
     return df.reset_index(drop=True)
 
 
-def lots_from_open_interest(fo: pd.DataFrame) -> dict[str, int]:
+def lots_from_open_interest(fo: pd.DataFrame, symbols: Iterable[str] | None = None) -> dict[str, int]:
     """Lot size per symbol for files that do not state it.
 
     Open interest and its change are in units, i.e. whole lots, so their GCD over
@@ -339,19 +339,17 @@ def lots_from_open_interest(fo: pd.DataFrame) -> dict[str, int]:
     the multiple of the GCD nearest the turnover-based estimate, which is roughly
     right (+/- a few %) but never exact.
     """
-    import math
-    from functools import reduce
-
-    lots = {}
-    futures = fo[fo["instrument"].isin(FUTURES)]
-    near = futures.sort_values("expiry").groupby("symbol")["expiry"].first()
-    for symbol, expiry in near.items():
-        g = fo[(fo["symbol"] == symbol) & (fo["expiry"] == expiry)]
-        vals = np.concatenate([pd.to_numeric(g["open_interest"], errors="coerce").to_numpy(float),
-                               np.abs(pd.to_numeric(g["oi_change"], errors="coerce").to_numpy(float))])
-        vals = vals[np.isfinite(vals) & (vals > 0)]
-        if len(vals):
-            lots[symbol] = int(reduce(math.gcd, vals.astype(np.int64).tolist()))
+    if symbols is not None:
+        fo = fo[fo["symbol"].isin(set(symbols))]
+    near = fo[fo["instrument"].isin(FUTURES)].groupby("symbol")["expiry"].min().rename("near")
+    g = fo.join(near, on="symbol")
+    g = g[g["expiry"] == g["near"]]
+    vals = pd.concat([pd.to_numeric(g["open_interest"], errors="coerce"),
+                      pd.to_numeric(g["oi_change"], errors="coerce").abs()])
+    syms = pd.concat([g["symbol"], g["symbol"]])
+    keep = vals.notna() & (vals > 0)
+    vals, syms = vals[keep].astype(np.int64), syms[keep]
+    lots = {s: int(np.gcd.reduce(v.to_numpy())) for s, v in vals.groupby(syms.to_numpy())}
     estimate = derive_legacy_lot_sizes(fo)
     for symbol, g in lots.items():
         e = estimate.get(symbol)
