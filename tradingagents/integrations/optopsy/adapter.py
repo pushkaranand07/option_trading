@@ -10,7 +10,11 @@ an end-of-day approximation from the bhavcopy and says so:
   close; contracts whose close cannot be inverted (stale or below intrinsic)
   are dropped and counted.
 - Untraded contracts (zero contracts) are dropped: their close is a stale
-  reference, not a price anyone could trade at.
+  reference, not a price anyone could trade at. The exception is expiry day:
+  every contract then settles at intrinsic value against the underlying's
+  close (NSE final settlement), traded or not, so a position held to expiry
+  is valued at what it actually paid, and no trade vanishes because a
+  far wing went untraded on its last day.
 
 Every frame it returns carries ``attrs["approximations"]`` listing these.
 """
@@ -71,18 +75,33 @@ def bhavcopy_to_optopsy(
     rows, which carry no underlying price.
     """
     opts = bhav[(bhav["symbol"] == symbol) & bhav["option_type"].notna()].copy()
+    on_expiry = pd.to_datetime(opts["trade_date"]) == pd.to_datetime(opts["expiry"])
     traded = opts["contracts"].fillna(0) > 0
-    dropped_untraded = int((~traded).sum())
-    opts = opts[traded]
+    dropped_untraded = int((~traded & ~on_expiry).sum())
+    opts = opts[traded | on_expiry]
     if underlying is not None:
         mapped = opts["trade_date"].map(underlying)
         opts["underlying_price"] = mapped.where(mapped.notna(), opts["underlying_price"])
     opts = opts[pd.to_numeric(opts["underlying_price"], errors="coerce") > 0]
 
-    rows, dropped_iv = [], 0
+    rows, dropped_iv, settled = [], 0, 0
     for rec in opts.itertuples(index=False):
         is_call = rec.option_type == "CE"
         spot, strike, close = float(rec.underlying_price), float(rec.strike), float(rec.close)
+        if pd.Timestamp(rec.trade_date) == pd.Timestamp(rec.expiry):
+            intrinsic = max(0.0, (spot - strike) if is_call else (strike - spot))
+            in_the_money = intrinsic > 0
+            rows.append({
+                "underlying_symbol": symbol, "underlying_price": spot,
+                "option_type": "call" if is_call else "put",
+                "expiration": pd.Timestamp(rec.expiry), "quote_date": pd.Timestamp(rec.trade_date),
+                "strike": strike, "bid": intrinsic, "ask": intrinsic,
+                "delta": (1.0 if is_call else -1.0) if in_the_money else 0.0,
+                "implied_volatility": float("nan"), "volume": float(rec.contracts),
+                "open_interest": float(rec.open_interest),
+            })
+            settled += 1
+            continue
         # Expiry at 15:30 IST: count calendar days, at least a part-day on expiry itself.
         t = max((pd.Timestamp(rec.expiry) - pd.Timestamp(rec.trade_date)).days, 0.25) / 365.0
         vol = implied_vol(close, spot, strike, t, risk_free, is_call)
@@ -103,6 +122,7 @@ def bhavcopy_to_optopsy(
         "end-of-day close used as bid and ask (no historical bid/ask for NSE options)",
         f"delta from Black-Scholes IV solved from close, r={risk_free:.2%}",
         f"{dropped_untraded} untraded contracts dropped",
+        f"{settled} expiry-day contracts valued at intrinsic (NSE final settlement)",
         f"{dropped_iv} contracts dropped: close not invertible to an implied volatility",
     ]
     return chain
