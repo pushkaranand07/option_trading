@@ -228,11 +228,27 @@ def store_root() -> Path:
     return Path(get_config()["data_cache_dir"]) / "quant" / "store"
 
 
-def _write(df: pd.DataFrame, root: Path, dataset: str, year: int) -> Path:
-    path = root / dataset / f"{year}.parquet"
+def write_parquet(df: pd.DataFrame, path: Path, index: bool = False) -> Path:
+    """Write through a temp file beside ``path``, then swap it in: a reader, or a second job
+    writing the same file, sees the old file or the new one, never half of one. Unlike the
+    cache's ``replace_file``, a failure raises: a silently skipped write would leave stale
+    data that looks current."""
+    import os
+    import uuid
+
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(path, index=False)
+    temp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        df.to_parquet(temp, index=index)
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
     return path
+
+
+def _write(df: pd.DataFrame, root: Path, dataset: str, year: int) -> Path:
+    return write_parquet(df, root / dataset / f"{year}.parquet")
 
 
 def build_year(year: int, raw: Path | None = None, root: Path | None = None,
@@ -261,7 +277,7 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None,
             fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
             summary = fo_summary(fo)
             if summary["lot_size"].isna().any():
-                lots = lots_from_open_interest(fo)
+                lots = lots_from_open_interest(fo, SYMBOLS)
                 summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(lots))
             summaries.append(summary)
             chains.append(option_chain(fo, summary))
@@ -303,7 +319,10 @@ def load(dataset: str, start: date | None = None, end: date | None = None,
                  if (not start or int(f.stem) >= start.year) and (not end or int(f.stem) <= end.year)]
     if not files:
         return pd.DataFrame()
-    df = pd.concat((pd.read_parquet(f) for f in files), ignore_index=True)
+    # Filter symbols while reading: the option chain is ~15M rows across all symbols,
+    # and reading it whole to keep one index's rows costs gigabytes of memory.
+    filters = [("symbol", "in", sorted(set(symbols)))] if symbols is not None and dataset != "participant" else None
+    df = pd.concat((pd.read_parquet(f, filters=filters) for f in files), ignore_index=True)
     if start:
         df = df[df["trade_date"] >= start]
     if end:
@@ -313,7 +332,7 @@ def load(dataset: str, start: date | None = None, end: date | None = None,
     return df.reset_index(drop=True)
 
 
-def lots_from_open_interest(fo: pd.DataFrame) -> dict[str, int]:
+def lots_from_open_interest(fo: pd.DataFrame, symbols: Iterable[str] | None = None) -> dict[str, int]:
     """Lot size per symbol for files that do not state it.
 
     Open interest and its change are in units, i.e. whole lots, so their GCD over
@@ -323,22 +342,51 @@ def lots_from_open_interest(fo: pd.DataFrame) -> dict[str, int]:
     the multiple of the GCD nearest the turnover-based estimate, which is roughly
     right (+/- a few %) but never exact.
     """
-    import math
-    from functools import reduce
-
-    lots = {}
-    futures = fo[fo["instrument"].isin(FUTURES)]
-    near = futures.sort_values("expiry").groupby("symbol")["expiry"].first()
-    for symbol, expiry in near.items():
-        g = fo[(fo["symbol"] == symbol) & (fo["expiry"] == expiry)]
-        vals = np.concatenate([pd.to_numeric(g["open_interest"], errors="coerce").to_numpy(float),
-                               np.abs(pd.to_numeric(g["oi_change"], errors="coerce").to_numpy(float))])
-        vals = vals[np.isfinite(vals) & (vals > 0)]
-        if len(vals):
-            lots[symbol] = int(reduce(math.gcd, vals.astype(np.int64).tolist()))
+    if symbols is not None:
+        fo = fo[fo["symbol"].isin(set(symbols))]
+    near = fo[fo["instrument"].isin(FUTURES)].groupby("symbol")["expiry"].min().rename("near")
+    g = fo.join(near, on="symbol")
+    g = g[g["expiry"] == g["near"]]
+    vals = pd.concat([pd.to_numeric(g["open_interest"], errors="coerce"),
+                      pd.to_numeric(g["oi_change"], errors="coerce").abs()])
+    syms = pd.concat([g["symbol"], g["symbol"]])
+    keep = vals.notna() & (vals > 0)
+    vals, syms = vals[keep].astype(np.int64), syms[keep]
+    lots = {s: int(np.gcd.reduce(v.to_numpy())) for s, v in vals.groupby(syms.to_numpy())}
     estimate = derive_legacy_lot_sizes(fo)
     for symbol, g in lots.items():
         e = estimate.get(symbol)
         if e:
             lots[symbol] = g * max(1, round(e / g))
     return lots
+
+
+def despike_lots(lots: pd.Series, max_days: int = 5) -> pd.Series:
+    """Remove lot-size blips: a run shorter than ``max_days`` sessions with the same lot
+    on both sides takes that lot. Real lot changes last months; the GCD of very few
+    open-interest values (near expiry) can give a multiple of the lot for a day or two."""
+    s = lots.copy()
+    values = np.array(s.to_numpy(dtype=float), copy=True)   # pandas 3 hands out read-only arrays
+    run_id = np.concatenate([[0], np.cumsum(values[1:] != values[:-1])])
+    runs = pd.Series(values).groupby(run_id)
+    starts, sizes, vals = runs.head(1).index.to_numpy(), runs.size().to_numpy(), runs.first().to_numpy()
+    for k in range(1, len(sizes) - 1):
+        if sizes[k] < max_days and vals[k - 1] == vals[k + 1]:
+            values[starts[k]: starts[k] + sizes[k]] = vals[k - 1]
+    return pd.Series(values, index=s.index, name=s.name)
+
+
+def clean_lot_sizes(root: Path | None = None) -> int:
+    """Despike every symbol's lot history across all years of ``fo_summary``; returns rows changed."""
+    root = root or store_root()
+    files = sorted((root / "fo_summary").glob("*.parquet"))
+    if not files:
+        return 0
+    df = pd.concat({int(f.stem): pd.read_parquet(f) for f in files}, names=["year", "row"]).reset_index()
+    df = df.sort_values(["symbol", "trade_date"])
+    before = df["lot_size"].copy()
+    df["lot_size"] = df.groupby("symbol", group_keys=False)["lot_size"].apply(despike_lots)
+    changed = int((before.fillna(-1) != df["lot_size"].fillna(-1)).sum())
+    for year, part in df.groupby("year"):
+        write_parquet(part.sort_values("row").drop(columns=["year", "row"]), root / "fo_summary" / f"{year}.parquet")
+    return changed

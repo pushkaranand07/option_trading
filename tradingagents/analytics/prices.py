@@ -29,7 +29,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from tradingagents.analytics.datastore import add_known_from, next_sessions, store_root
+from tradingagents.analytics.datastore import (
+    add_known_from,
+    next_sessions,
+    store_root,
+    write_parquet,
+)
 from tradingagents.analytics.universe import HISTORY_START, YAHOO_TICKERS
 
 INDEX_SYMBOLS = ("NIFTY", "BANKNIFTY", "INDIAVIX")
@@ -160,10 +165,7 @@ def save_prices(prices: pd.DataFrame, trading_days: Iterable[date], root: Path |
     """Stamp ``known_from`` from NSE's trading calendar and write the Parquet file."""
     days = set(trading_days) | set(prices["trade_date"])
     df = add_known_from(prices, next_sessions(days))
-    path = prices_path(root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(path, index=False)
-    return path
+    return write_parquet(df, prices_path(root))
 
 
 def load_prices(symbols: Iterable[str] | None = None, root: Path | None = None) -> pd.DataFrame:

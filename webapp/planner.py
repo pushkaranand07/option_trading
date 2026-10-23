@@ -32,7 +32,7 @@ def backtest_intraday(frame: pd.DataFrame, target_r: float, cost_pct: float = 0.
     trade that only just reached its target can still be a loss after costs.
     """
     times, dates = frame.index.time, frame.index.date
-    o, h, l, c = (frame[k].to_numpy() for k in ("open", "high", "low", "close"))
+    o, h, lo, c = (frame[k].to_numpy() for k in ("open", "high", "low", "close"))
     side, risk = frame["side"].to_numpy(), frame["risk"].to_numpy()
     trades, pos, traded = [], None, set()
     for i in range(60, len(frame)):
@@ -41,9 +41,9 @@ def backtest_intraday(frame: pd.DataFrame, target_r: float, cost_pct: float = 0.
             r = None
             if dates[i] != pos["date"]:
                 r = (c[i - 1] - pos["entry"]) / pos["risk"] * (1 if buy else -1)
-            elif (l[i] <= pos["sl"]) if buy else (h[i] >= pos["sl"]):
+            elif (lo[i] <= pos["sl"]) if buy else (h[i] >= pos["sl"]):
                 r = -1.0  # stop checked first: the cautious reading of a bar that touched both
-            elif (h[i] >= pos["tgt"]) if buy else (l[i] <= pos["tgt"]):
+            elif (h[i] >= pos["tgt"]) if buy else (lo[i] <= pos["tgt"]):
                 r = target_r
             elif times[i] >= EXIT_BY:
                 r = (c[i] - pos["entry"]) / pos["risk"] * (1 if buy else -1)
@@ -71,9 +71,7 @@ def backtest_btst(frame: pd.DataFrame) -> list[dict]:
             continue
         entry, risk = float(x["close"]), float(x["risk"])
         sl, tgt = entry - risk, entry + risk
-        if nx["open"] >= tgt:
-            r = (nx["open"] - entry) / risk
-        elif nx["open"] <= sl:
+        if nx["open"] >= tgt or nx["open"] <= sl:
             r = (nx["open"] - entry) / risk
         elif nx["low"] <= sl:
             r = -1.0

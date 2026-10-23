@@ -35,6 +35,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--years", nargs="+", type=int)
     parser.add_argument("--skip-prices", action="store_true")
+    parser.add_argument("--skip-iv", action="store_true", help="keep the existing implied-vol table")
     parser.add_argument("--datasets", nargs="+", choices=ds.DATASETS, default=list(ds.DATASETS),
                         help="rebuild only these (e.g. index_close after downloading index files)")
     args = parser.parse_args()
@@ -53,6 +54,8 @@ def main() -> int:
         print(f"{year}: " + ", ".join(f"{k} {v:,}" for k, v in counts.items())
               + f" ({time.monotonic() - started:.0f}s)", flush=True)
 
+    if "fo_summary" in args.datasets:
+        print(f"  lot-size blips removed: {ds.clean_lot_sizes()} rows")
     summary = ds.load("fo_summary")
     print("\nData quality")
     for kind in ("participant", "mto", "indices"):
@@ -76,11 +79,10 @@ def main() -> int:
             print("  price issues by type:", issues.groupby("issue").size().to_dict())
             print("  most affected:", issues.groupby("symbol").size().nlargest(5).to_dict())
     # 30-day ATM implied vol per symbol, for the agents' quant report (fast to read, slow to compute).
-    iv = atm_iv_table(ds.load("option_chain"))
-    iv_path = ds.store_root() / "iv" / "iv30.parquet"
-    iv_path.parent.mkdir(parents=True, exist_ok=True)
-    iv.to_parquet(iv_path, index=False)
-    print(f"  implied vol: {len(iv):,} symbol-days -> {iv_path}")
+    if not args.skip_iv:
+        iv = atm_iv_table(ds.load("option_chain"))
+        iv_path = ds.write_parquet(iv, ds.store_root() / "iv" / "iv30.parquet")
+        print(f"  implied vol: {len(iv):,} symbol-days -> {iv_path}")
     print(f"\n{SURVIVORSHIP_NOTE}")
     return 0
 

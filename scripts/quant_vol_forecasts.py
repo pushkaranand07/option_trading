@@ -22,7 +22,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tradingagents.analytics import volatility_model as vm  # noqa: E402
-from tradingagents.analytics.datastore import store_root  # noqa: E402
+from tradingagents.analytics.datastore import store_root, write_parquet  # noqa: E402
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import SYMBOLS  # noqa: E402
 
@@ -42,11 +42,9 @@ def run_symbol(symbol: str) -> tuple[str, pd.DataFrame]:
     forecasts["ewma"] = vm.ewma_forecasts(r)
     wide = pd.concat(forecasts, axis=1)
     wide.columns.names = ["model", "horizon"]
-    path = store_root() / "vol_forecasts" / f"{symbol}.parquet"
-    path.parent.mkdir(parents=True, exist_ok=True)
     flat = wide.copy()
     flat.columns = [f"{m}_{h}" for m, h in flat.columns]
-    flat.to_parquet(path)
+    write_parquet(flat, store_root() / "vol_forecasts" / f"{symbol}.parquet", index=True)
     return symbol, wide
 
 

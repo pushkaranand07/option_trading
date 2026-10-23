@@ -30,7 +30,7 @@ Z_WINDOW = 252
 
 def vrp_series(iv30: pd.Series, garch_h21: pd.Series) -> pd.Series:
     """IV minus forecast, on the dates both exist (dated by the close they are known after)."""
-    both = pd.concat({"iv": iv30, "f": garch_h21}, axis=1).dropna()
+    both = pd.concat({"iv": iv30, "f": garch_h21}, axis=1, sort=True).dropna()   # rolling z-score needs time order
     return both["iv"] - both["f"]
 
 
@@ -90,6 +90,7 @@ def evaluate_condor(
     seed: int = 0,
     regimes: pd.Series | None = None,
     regimes_switched_off: frozenset[str] = frozenset(),
+    risk_fraction: float = 0.02,
     **sim_kwargs,
 ) -> CondorEvaluation:
     """Walk-forward over ``grid`` (keys: ``z`` plus any ``CondorParams`` field).
@@ -102,6 +103,12 @@ def evaluate_condor(
     ``regimes``: the regime label known at the start of each session (the
     label dated the previous close). Each out-of-sample trade is tagged with
     the label on its entry day, which feeds the regime gate.
+
+    ``risk_fraction``: share of capital at risk in one condor (its max loss). The
+    simulator measures P&L as a fraction of max risk; the gates compound returns
+    on capital, so the series is scaled by this before they see it. At 100%
+    (all capital in every condor) compounding daily marks of +/-50% would turn a
+    profitable trade list into a large "annual loss". Sharpe does not depend on it.
     """
     sessions = pd.to_datetime(pd.Index(sorted(set(pd.to_datetime(chain["trade_date"])))))
     runs = {}
@@ -110,7 +117,9 @@ def evaluate_condor(
         signal = vrp_signal(vrp, g["z"], sessions)
         runs[i] = cd.simulate(chain, spot, lots, signal, params, **sim_kwargs)
 
-    folds, oos_trades, is_srs, trial_srs = [], [], [], []
+    from tradingagents.analytics.evaluate import _neighbours
+
+    folds, oos_trades, is_srs, trial_srs, stability = [], [], [], [], []
     for split in walk_forward_splits(sessions, train, test, embargo=embargo):
         scored = []
         for i, (_, daily) in runs.items():
@@ -118,6 +127,10 @@ def evaluate_condor(
             scored.append((sharpe(tr), i))
             trial_srs.append(sharpe(tr, 1))
         best_sr, best = max(scored)
+        by_index = {i: sr for sr, i in scored}
+        nbrs = [by_index[grid.index(g)] for g in _neighbours(grid, grid[best])]
+        if nbrs and best_sr > 0:
+            stability.append(float(np.median(nbrs)) / best_sr)
         trades, _ = runs[best]
         lo, hi = split.test[0].date(), split.test[-1].date()
         oos_trades += [t for t in trades if lo <= t.entry_date <= hi]
@@ -160,12 +173,16 @@ def evaluate_condor(
         random_pct = float((np.array(rand) < oos_sr).mean())
         baselines["random_days_median"] = float(np.median(rand))
 
-    fold_returns = [float(oos.loc[f["test_start"]: f["test_end"]].sum()) for f in folds]
+    on_capital = oos * risk_fraction
+    fold_returns = [float((1 + on_capital.loc[f["test_start"]: f["test_end"]]).prod() - 1) for f in folds]
     by_regime = regime_expectancy(oos_trades, regimes) if regimes is not None else {}
-    evidence = Evidence(oos_returns=oos, fold_returns=fold_returns, n_oos_trades=len(oos_trades),
+    evidence = Evidence(oos_returns=on_capital, fold_returns=fold_returns, n_oos_trades=len(oos_trades),
                         deflated_sharpe=dsr, in_sample_sharpe=float(np.mean(is_srs)), oos_sharpe=oos_sr,
                         lookahead_mismatches=_signal_lookahead(vrp, sessions, folds[-1]["params"]["z"]),
-                        regime_expectancy=by_regime or None, regimes_switched_off=regimes_switched_off)
+                        regime_expectancy=by_regime or None, regimes_switched_off=regimes_switched_off,
+                        # Each fold's ratio is median(neighbours) / chosen; pass their mean against 1.
+                        chosen_sharpe=1.0 if stability else None,
+                        neighbour_sharpes=[float(np.mean(stability))] if stability else None)
     return CondorEvaluation(name, folds, oos, oos_trades, oos_sr, float(np.mean(is_srs)), dsr, verdict,
                             baselines, random_pct, check_gates(evidence))
 
