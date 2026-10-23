@@ -235,8 +235,17 @@ def _write(df: pd.DataFrame, root: Path, dataset: str, year: int) -> Path:
     return path
 
 
-def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> dict[str, int]:
-    """Parse one year's raw files into the four datasets. Returns row counts."""
+def build_year(year: int, raw: Path | None = None, root: Path | None = None,
+               datasets: tuple[str, ...] = DATASETS) -> dict[str, int]:
+    """Parse one year's raw files into the datasets named (all by default). Returns row counts.
+
+    Datasets not named are neither parsed nor rewritten, so e.g. ``("index_close",)``
+    adds newly downloaded index files without re-parsing a year of F&O bhavcopies.
+    """
+    unknown = set(datasets) - set(DATASETS)
+    if unknown:
+        raise ValueError(f"unknown datasets {sorted(unknown)}")
+    want_fo = bool({"fo_summary", "option_chain"} & set(datasets))
     raw = raw or raw_root()
     root = root or store_root()
     manifest = load_manifest(raw)
@@ -247,22 +256,23 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
 
     summaries, chains, participants, deliveries, indices = [], [], [], [], []
     for day in year_days:
-        fo_row = ok[(day, "fo")]
-        fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
-        summary = fo_summary(fo)
-        if summary["lot_size"].isna().any():
-            derived = derive_legacy_lot_sizes(fo)
-            summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(derived))
-        summaries.append(summary)
-        chains.append(option_chain(fo, summary))
-        if (day, "participant") in ok:
+        if want_fo:
+            fo_row = ok[(day, "fo")]
+            fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
+            summary = fo_summary(fo)
+            if summary["lot_size"].isna().any():
+                derived = derive_legacy_lot_sizes(fo)
+                summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(derived))
+            summaries.append(summary)
+            chains.append(option_chain(fo, summary))
+        if "participant" in datasets and (day, "participant") in ok:
             r = ok[(day, "participant")]
             participants.append(parse_participant(raw_path(raw, "participant", day, r.url).read_bytes(), day))
-        if (day, "mto") in ok:
+        if "delivery" in datasets and (day, "mto") in ok:
             r = ok[(day, "mto")]
             mto = parse_mto(raw_path(raw, "mto", day, r.url).read_bytes())
             deliveries.append(mto[(mto["series"] == "EQ") & mto["symbol"].isin(SYMBOLS)])
-        if (day, "indices") in ok:
+        if "index_close" in datasets and (day, "indices") in ok:
             r = ok[(day, "indices")]
             indices.append(parse_index_close(raw_path(raw, "indices", day, r.url).read_bytes(), day))
 
@@ -270,6 +280,8 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
     for name, parts in (("fo_summary", summaries), ("option_chain", chains),
                         ("participant", participants), ("delivery", deliveries),
                         ("index_close", indices)):
+        if name not in datasets:
+            continue
         parts = [p for p in parts if len(p)]
         if not parts:
             counts[name] = 0

@@ -205,3 +205,21 @@ def test_a_missing_stock_session_is_filled_on_yahoos_adjusted_basis():
     assert bar["adj_close"] == pytest.approx(255.0 * 0.98)
     assert bar["source"] == "nse_fill"
     assert px.quality_report(filled.reset_index(), list(nse_days)).empty
+
+
+@pytest.mark.unit
+def test_build_year_rebuilds_only_the_named_datasets(tmp_path):
+    from tradingagents.analytics.backfill import ManifestRow, _append_manifest
+
+    raw, root = tmp_path / "raw", tmp_path / "store"
+    day = date(2018, 1, 1)
+    (raw / "indices" / "2018").mkdir(parents=True)
+    (raw / "indices" / "2018" / "ind_close_all_01012018.csv").write_bytes(INDEX_CLOSE)
+    for kind, url in (("fo", "/x/fo01JAN2018bhav.csv.zip"), ("indices", "/x/ind_close_all_01012018.csv")):
+        _append_manifest(raw, ManifestRow(day, kind, "ok", url, 1, ""))
+    # The F&O file is not even on disk: asking for index_close only must not touch it.
+    counts = ds.build_year(2018, raw=raw, root=root, datasets=("index_close",))
+    assert counts == {"index_close": 3}
+    assert not (root / "fo_summary").exists()
+    with pytest.raises(ValueError):
+        ds.build_year(2018, raw=raw, root=root, datasets=("nope",))

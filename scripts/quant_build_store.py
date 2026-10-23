@@ -35,6 +35,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--years", nargs="+", type=int)
     parser.add_argument("--skip-prices", action="store_true")
+    parser.add_argument("--datasets", nargs="+", choices=ds.DATASETS, default=list(ds.DATASETS),
+                        help="rebuild only these (e.g. index_close after downloading index files)")
     args = parser.parse_args()
 
     manifest = load_manifest(raw_root())
@@ -47,7 +49,7 @@ def main() -> int:
 
     for year in years:
         started = time.monotonic()
-        counts = ds.build_year(year)
+        counts = ds.build_year(year, datasets=tuple(args.datasets))
         print(f"{year}: " + ", ".join(f"{k} {v:,}" for k, v in counts.items())
               + f" ({time.monotonic() - started:.0f}s)", flush=True)
 
