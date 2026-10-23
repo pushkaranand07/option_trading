@@ -24,7 +24,7 @@ are seen, not silently forward-filled.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -71,14 +71,23 @@ def normalize_history(raw: pd.DataFrame, symbol: str) -> pd.DataFrame:
     return df.dropna(subset=["close"]).drop_duplicates("trade_date", keep="last").reset_index(drop=True)
 
 
+MARKET_CLOSED_BY = 16   # NSE closes 15:30 IST; by 16:00 the day's bar is final
+
+
+def last_complete_session_date(now: datetime | None = None) -> date:
+    """Today once the market has closed, else yesterday: before the close today's bar is
+    a live, unfinished session and must not be stored as a finished day."""
+    now = now or datetime.now()
+    return now.date() if now.hour >= MARKET_CLOSED_BY else now.date() - timedelta(days=1)
+
+
 def fetch_prices(
     symbols: Iterable[str] | None = None,
     start: date = HISTORY_START,
     end: date | None = None,
     history: Callable[[str, date, date], pd.DataFrame] = _history,
 ) -> pd.DataFrame:
-    # Yesterday by default: today's bar may be a live, unfinished session.
-    end = end or date.today() - timedelta(days=1)
+    end = end or last_complete_session_date()
     symbols = list(symbols) if symbols is not None else list(YAHOO_TICKERS)
     frames = [normalize_history(history(YAHOO_TICKERS[s], start, end), s) for s in symbols]
     frames = [f for f in frames if len(f)]
