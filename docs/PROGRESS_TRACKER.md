@@ -5,20 +5,22 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `█████████░░░░░░░░░░░░░░░░` 36% (20/56 tasks)
+**Overall:** `██████████░░░░░░░░░░░░░░░` 41% (26/64 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `████████░░░░░░░░░░░░░░░░░` 31% (2,160/6,897 files)
+**NSE history download:** `███████░░░░░░░░░░░░░░░░░░` 29% (2,649/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 13:22_
+_Last updated: 2026-10-23 13:35_
 
 | Branch | Phase | Status |
 |---|---|---|
 | `quant/phase-0-1-foundation` | 0–1 Foundation | code done; waiting on full data build + contract-note check |
 | `quant/phase-2-harness` | 2 Harness | **exit gate passed** |
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; part 2 waiting on data |
+| `fix/windows-test-portability` | Bug fix | done, full suite green on Windows (1423 passed) |
+| `fix/option-backtester-exits` | Bug fix | done, 3 regression tests (fail before / pass after) |
 
 ---
 
@@ -137,6 +139,19 @@ _Last updated: 2026-10-23 13:22_
 - [ ] Kill switches and drift monitor
 - [ ] Monthly retrain with the same gates
 - [ ] Scale-up rules followed
+
+## Bug fixes (requested 2026-10-23)
+<!-- progress:phase -->
+`███████████████████░░░░░░` 75% (6/8)
+<!-- /progress:phase -->
+- [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
+- [x] option_backtester: early exits could land after the planned exit
+- [x] option_backtester: commission never deducted from realized P&L
+- [x] NSE adapter: expiry valued at last close / untraded wings dropped → now NSE settlement at intrinsic
+- [x] Index data gaps: NSE official NIFTY / BANKNIFTY / India VIX bars replace Yahoo
+- [x] Stock data gaps (e.g. TCS 22-Oct): filled from NSE equity bhavcopy on Yahoo's adjusted basis
+- [ ] Index files downloaded for 2018–2026 (runs after the main download)
+- [ ] "Something else" bug you mentioned (waiting for your description)
 
 ---
 

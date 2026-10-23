@@ -46,7 +46,7 @@ def render(text: str) -> str:
     out = []
     for section in sections:
         boxes = re.findall(r"(?m)^- \[([ xX])\]", section)
-        if section.startswith("## Phase") and boxes:
+        if section.startswith(("## Phase", "## Bug fixes")) and boxes:
             done = sum(b.lower() == "x" for b in boxes)
             all_done, all_total = all_done + done, all_total + len(boxes)
             section = re.sub(r"<!-- progress:phase -->.*?<!-- /progress:phase -->",
