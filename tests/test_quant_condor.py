@@ -127,3 +127,25 @@ def test_closing_a_spread_never_costs_more_than_its_width():
     assert capped and cost == pytest.approx(50.0 + 0.0)
     cost, capped = cd.close_cost({"long_put": 5.0, "short_put": 20.0, "short_call": 8.0, "long_call": 3.0}, strikes)
     assert not capped and cost == pytest.approx(15.0 + 5.0)
+
+
+@pytest.mark.unit
+def test_staggered_books_enter_more_often_and_their_shares_add_up():
+    import sys
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
+    from test_quant_vrp import rolling_market
+
+    chain, spot, lots, idx = rolling_market(n=200)
+    always = pd.Series(True, index=idx)
+    one, _ = cd.simulate(chain, spot, lots, always, rates=NO_COST, slippage=NO_SLIP)
+    four, daily = cd.simulate_staggered(chain, spot, lots, always, books=4, rates=NO_COST, slippage=NO_SLIP)
+    assert len(four) >= 2 * len(one)
+    # Each closed trade carries 1/4 of its P&L in the shared series ...
+    for t in four:
+        assert sum(t.daily.values()) == pytest.approx(t.return_on_risk / 4)
+    # ... and the series is the average of the four books simulated one by one.
+    weeks = np.asarray(pd.to_datetime(idx).isocalendar().week, dtype=int)
+    books = [cd.simulate(chain, spot, lots, always & pd.Series(weeks % 4 == j, index=idx),
+                         rates=NO_COST, slippage=NO_SLIP)[1] for j in range(4)]
+    expected = sum(b for b in books) / 4
+    assert np.allclose(daily.reindex(expected.index).to_numpy(), expected.to_numpy())

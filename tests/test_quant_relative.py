@@ -61,10 +61,10 @@ def test_perfect_foresight_picks_beat_the_universe_and_random_picks_do_not():
     dates = pd.DatetimeIndex(sorted(labels["date"].unique()))
     cost = pd.Series(0.0, index=data["close"].columns)
     oracle = labels.assign(p=labels["rel"])
-    excess, _, picks = mr.portfolio(oracle, data, 3, 5, cost, 0.0, dates)
+    excess, _, picks, _ = mr.portfolio(oracle, data, 3, 5, cost, 0.0, dates)
     assert excess.mean() > 0.002 and picks > 100
     random = labels.assign(p=np.random.default_rng(0).random(len(labels)))
-    rand_excess, _, _ = mr.portfolio(random, data, 3, 5, cost, 0.0, dates)
+    rand_excess, _, _, _ = mr.portfolio(random, data, 3, 5, cost, 0.0, dates)
     assert abs(rand_excess.mean()) < excess.mean() / 5
 
 
@@ -88,3 +88,18 @@ def test_a_planted_stock_specific_pattern_is_found():
     assert result.daily_auc > 0.53, result.summary()
     assert result.excess_sharpe > 1.0
     assert result.random_percentile >= 0.95
+
+
+@pytest.mark.unit
+def test_buffer_cuts_turnover_and_the_random_baseline_matches_it():
+    data = market(n=400, k=12, drift=0.0005, seed=7)
+    labels = mr.relative_labels(data["open"], horizon=10)
+    dates = pd.DatetimeIndex(sorted(labels["date"].unique()))
+    cost = pd.Series(0.004, index=data["close"].columns)
+    pred = labels.assign(p=np.random.default_rng(1).random(len(labels)))
+    _, _, picks_plain, _ = mr.portfolio(pred, data, 3, 10, cost, 0.0, dates)
+    _, _, picks_buffer, swaps = mr.portfolio(pred, data, 3, 10, cost, 0.0, dates, keep=6)
+    assert picks_buffer < picks_plain                                  # the buffer trades less
+    _, _, picks_random, random_swaps = mr.portfolio(pred, data, 3, 10, cost, 0.0, dates, swaps=swaps,
+                                                    rng=np.random.default_rng(2))
+    assert random_swaps == swaps and picks_random == picks_buffer      # same trading, different stocks

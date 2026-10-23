@@ -249,3 +249,13 @@ def test_lot_blips_are_removed_but_real_changes_kept():
     lots = pd.Series([75, 75, 75, 225, 75, 75, 50, 50, 50, 50, 50, 50, 25.0])
     out = ds.despike_lots(lots)
     assert list(out) == [75, 75, 75, 75, 75, 75, 50, 50, 50, 50, 50, 50, 25]   # 225 was a blip; 25 at the end stays
+
+
+@pytest.mark.unit
+def test_todays_bar_is_used_only_after_the_close():
+    from datetime import datetime
+
+    from tradingagents.analytics.prices import last_complete_session_date
+
+    assert last_complete_session_date(datetime(2026, 10, 23, 14, 0)) == date(2026, 10, 22)   # market open
+    assert last_complete_session_date(datetime(2026, 10, 23, 19, 30)) == date(2026, 10, 23)  # after the close

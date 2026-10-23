@@ -7,14 +7,14 @@
 > **Picking this up? Read [Start here tomorrow](#start-here-tomorrow) first.**
 
 <!-- progress:overall -->
-**Overall:** `███████████████████░░░░░░` 75% (61/81 tasks)
+**Overall:** `███████████████████░░░░░░` 78% (67/86 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:59_
+_Last updated: 2026-10-23 21:08_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -67,7 +67,7 @@ _Last updated: 2026-10-23 17:59_
 
 ## Phase 3 — Volatility engine (GARCH) and VRP condor
 <!-- progress:phase -->
-`█████████████████████████` 100% (7/7)
+`█████████████████████████` 100% (8/8)
 <!-- /progress:phase -->
 - [x] GARCH / GJR / EGARCH forecasts, expanding window, weekly refit, causal (tested)
 - [x] Exit check 1: GARCH beats historical vol out of sample (31/31 symbols)
@@ -76,6 +76,10 @@ _Last updated: 2026-10-23 17:59_
 - [x] VRP signal + walk-forward with "enter always" and "random days" baselines
 - [x] VRP condor run on NIFTY and BANKNIFTY with real data (2021-04 → 2026-05 out of sample, 18 settings, costs + slippage)
 - [x] Exit check 2: **rejected on both** — NIFTY 19 trades, OOS Sharpe 0.04 (IS 1.29), beats random 64%; BANKNIFTY 15 trades, +7.45%/trade on risk, OOS Sharpe 0.30, beats random 94%. **Why:** a monthly condor allows ≤12 trades/year and the VRP filter keeps ~3–4, so 5 years give 15–19 trades — the 100-trade gate cannot be met. BANKNIFTY hint: trades in *choppy* regimes averaged +49% of risk, calm −1.8% (too few to trust)
+- [x] Re-test fixing the cause (too few trades): 4 staggered books (a new monthly condor ~weekly), both indices pooled, 100 random runs.
+  **Pooled: 84 trades, 87% wins, +12.7% of risk/trade, OOS Sharpe 0.65 (IS 1.04), beats random 100%, profitable in all 3 regimes; entering whenever possible loses (−0.35).**
+  Still rejected: 84 < 100 trades, DSR 0.934 < 0.95 (and that counts 36 trials; 72 condor variants have now been run), 60% positive folds, parameter stability 0.41.
+  → **The strongest candidate so far.** Next step is new evidence, not more tuning: paper-trade it (Phase 10)
 
 ## Phase 4 — Regime detection (HMM)
 <!-- progress:phase -->
@@ -100,7 +104,7 @@ _Last updated: 2026-10-23 17:59_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`████████████████████░░░░░` 82% (9/11)
+`███████████████████████░░` 92% (11/12)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
@@ -112,7 +116,9 @@ _Last updated: 2026-10-23 17:59_
 - [ ] Exit gate: OOS AUC ≥ 0.55, calibrated, passes gates after costs — **not met** (AUC 0.506, DSR 0.935, OOS/IS 0.44)
 - [x] Second model built and verified: **relative strength** (beat the 29-stock average? top-5 book vs equal weight, hedged, after costs); tests: noise rejected, persistent planted edge found (a one-day edge was found but lost to costs)
 - [x] Relative-strength model on real data: **no edge** — same-day AUC 0.507, excess −1.2%/yr after costs and hedge (Sharpe −0.09), top-3/top-8 unstable, DSR 0.42 → rejected. ("Beats random picks 99%" reflects lower turnover, not skill: random picks pay full costs every rebalance)
-- [ ] Refinement: turnover-matched random baseline for the relative-strength test (so "beats random" measures skill only)
+- [x] Refinement: turnover-matched random baseline (random picks make exactly the model's swaps)
+- [x] Re-test fixing the cause (costs): keep a stock while in the top 10 → trades 695 → 286 (−59%), but excess still −1.0%/yr,
+  same-day AUC 0.510, beats turnover-matched random 94%, DSR 0.43 → **still rejected: the picks themselves don't beat the average**
 
 ## Phase 7 — Pretrained time-series models (optional)
 <!-- progress:phase -->
@@ -144,7 +150,7 @@ _Last updated: 2026-10-23 17:59_
 `██████░░░░░░░░░░░░░░░░░░░` 25% (1/4)
 <!-- /progress:phase -->
 - [x] Daily after-close refresh job (`quant_daily_update.py`: download → store → vol → regime → tracker); first end-to-end run OK in 6.6 min; **scheduled weekdays 19:30** (Windows Task Scheduler, `quant_daily_update.cmd`)
-- [ ] Record intended trades each day (needs an approved signal)
+- [ ] Record intended trades each day — **candidate: the pooled VRP condor** (paper only, to collect new out-of-sample trades)
 - [ ] ≥ 3 months and ≥ 50 paper trades
 - [ ] Hit rate inside the backtest band; slippage ≤ 1.5× model
 
@@ -158,7 +164,7 @@ _Last updated: 2026-10-23 17:59_
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`███████████████████████░░` 94% (15/16)
+`████████████████████████░` 95% (18/19)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -176,6 +182,9 @@ _Last updated: 2026-10-23 17:59_
 - [x] Store writes made atomic (a second job or a reader never sees half a file; failures raise)
 - [x] Webapp lint (ambiguous name, duplicate branch) — whole repo now ruff-clean; full suite 1536 passed
 - [x] Lot-size calculation sped up 100× (it would have taken ~50 min to rebuild 2018–2024)
+- [x] Scheduled refresh never ran: path with spaces (0x80070002), skipped on battery / no catch-up, closable console window (0xC000013A) → windowless `pythonw` + `--log`; verified by a real scheduled run (PR #12)
+- [x] Prices stopped at yesterday even after the close → today's bar included from 16:00 (regime was a day behind)
+- [x] Condor simulator 100× faster on repeated runs (chain prepared once, strikes memoised), identical results
 - [ ] "Something else" bug you mentioned (waiting for your description)
 
 ---
@@ -190,9 +199,11 @@ somewhere in-sample and fell apart out of sample or after costs.
 | Regime model (HMM) | ✅ **validated** (risk input) | next-month vol calm 11.5% vs choppy 15.1%, p=0.026; not a direction signal |
 | 50/200 MA trend | ❌ rejected | beats random timing only 6% |
 | VRP iron condor (NIFTY, BANKNIFTY) | ❌ rejected | only 15–19 trades in 5 yrs; BANKNIFTY closest (beats random 94%) |
+| VRP iron condor, 4 books, pooled (re-test) | 🟡 **close — not yet proven** | 84 trades, 87% wins, beats random 100%, DSR 0.934; needs more trades → paper trade |
 | LightGBM "will it rise" — price | ❌ rejected | same-day AUC 0.505; Sharpe 0.97 vs buy-and-hold 1.22 |
 | LightGBM "will it rise" — + NSE OI/PCR/delivery/FII/IV | ❌ rejected | same-day AUC 0.502; Sharpe 0.68 |
 | LightGBM "will it beat the other 28" | ❌ rejected | same-day AUC 0.507; excess −1.2%/yr after costs |
+| Relative strength + turnover buffer (re-test) | ❌ rejected | turnover −59% but excess still −1.0%/yr; AUC 0.510 |
 
 Public end-of-day data has not produced a tradable edge in these 29 large, heavily-watched stocks, consistent with
 how efficiently they are priced. Costs matter a lot: a delivery round trip is ~0.33%, so a strategy rotating 5 stocks
@@ -220,10 +231,13 @@ every 10 sessions pays ~16% a year before it earns anything.
   time on the evening of 23-Oct. If not (PC off or logged out), run `python scripts/quant_daily_update.py` once.
 
 ### Decisions waiting on you (pick any)
+0. **Paper-trade the pooled VRP condor?** It's the one candidate close to passing. Each day the refresh would log the
+   condors the rule *would* open (NIFTY/BANKNIFTY monthly, 4 books) and track them to exit; after enough new trades it is
+   re-judged on data it has never seen. No money involved. (You'd decide later whether to trade it on Dhan.)
 1. **Your own trading idea (Phase 5)**: the most promising next step. Describe a pattern you actually trade (entry,
    exit, stop, which data you look at); I code it exactly and run it through the same gates. Template: plan section 6.
-2. **Condors, more trades?** Pool NIFTY+BANKNIFTY, add the 29 stocks' monthly options, enter weekly into monthly
-   expiries, or use weekly expiries. Needed because 15–19 trades cannot prove anything.
+2. **Condors, more trades?** Done (4 books, pooled): 84 trades. Adding the 29 stocks' options would add more, but
+   every further variant raises the deflated-Sharpe bar; paper trading (decision 0) is the cleaner way to get evidence.
 3. **Widen the universe:** smaller, less-watched F&O stocks (less efficient), or event windows (results days, expiry
    weeks). Each new test raises the bar via the deflated Sharpe.
 4. **Phase 9 replay:** 50 historical dates through the full agent pipeline to check no invented numbers (costs LLM
@@ -256,4 +270,6 @@ every 10 sessions pays ~16% a year before it earns anything.
 - 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19); BANKNIFTY closest (beats random 94%).
 - 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502).
 - 2026-10-23 — Relative-strength model rejected (same-day AUC 0.507, excess −1.2%/yr).
+- 2026-10-23 (evening) — Scheduled refresh fixed and verified (PR #12). Re-tests of the two fixable rejections:
+  relative strength still rejected; pooled 4-book VRP condor close (84 trades, beats random 100%, DSR 0.934) → paper-trade candidate.
 - 2026-10-23 — Shipped: expected move in the quant report; daily refresh verified and scheduled (19:30 weekdays). PRs #8–#10 merged; everything in `main`.

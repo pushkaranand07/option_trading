@@ -38,6 +38,8 @@ def main() -> int:
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--horizon", type=int, default=10)
     parser.add_argument("--random-runs", type=int, default=300)
+    parser.add_argument("--keep", type=int, default=None,
+                        help="hold a stock while it ranks within the top KEEP (cuts turnover)")
     args = parser.parse_args()
 
     data = panel(load_prices(STOCKS))
@@ -48,17 +50,20 @@ def main() -> int:
     print(f"Feature leak check: {leaks} mismatching sessions", flush=True)
     feats = mf.build(data, context=ctx, extra=extra)
     labels = mr.relative_labels(data["open"], horizon=args.horizon)
-    n_trials = trial_log.trial_count(IDEA) + 1
+    idea = IDEA if args.keep is None else f"{IDEA}_keep{args.keep}"
+    # Every relative-strength variant counts toward the deflated Sharpe's N.
+    n_trials = sum(trial_log.trial_count(i) for i in {t.idea for t in trial_log.load()} if i.startswith(IDEA)) + 1
     print(f"Features {feats.shape}; labels {len(labels):,}; trial #{n_trials} of this idea", flush=True)
 
     result = mr.run(data, feats, labels, context=list(ctx), position_value=args.position_value, k=args.k,
-                    horizon=args.horizon, random_runs=args.random_runs, leak_mismatches=leaks,
+                    horizon=args.horizon, keep=args.keep, random_runs=args.random_runs, leak_mismatches=leaks,
                     regimes=regimes, n_trials=n_trials)
     print(result.summary())
     print(f"\n{SURVIVORSHIP_NOTE}")
     e = result.excess
     trial_log.record(trial_log.Trial(
-        idea=IDEA, params={"k": args.k, "horizon": args.horizon, "position_value": args.position_value},
+        idea=idea, params={"k": args.k, "horizon": args.horizon, "keep": args.keep,
+                           "position_value": args.position_value},
         universe="29 F&O stocks since 2018", data_start=str(e.index[0].date()), data_end=str(e.index[-1].date()),
         n_trials=1, n_oos_trades=result.picks, oos_sharpe=result.excess_sharpe, dsr=result.deflated_sharpe,
         verdict=result.verdict, gate_verdict=result.gates.verdict,
