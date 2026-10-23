@@ -363,12 +363,14 @@ def simulate_staggered(
     signal: pd.Series,
     params: CondorParams = DEFAULT_PARAMS,
     books: int = 4,
+    offset: int = 0,
     **kwargs,
 ) -> tuple[list[CondorTrade], pd.Series]:
     """``books`` staggered condor books: book *j* may enter only in ISO weeks with
     ``week % books == j``, so together they enter about weekly, each still holding at
     most one condor. Capital is split equally: each book's daily P&L counts 1/books
     (also inside each trade's ``daily``), while ``return_on_risk`` stays per trade.
+    ``offset`` shifts which weeks belong to which book (a stress test of the timing).
     """
     if books <= 1:
         return simulate(chain, spot, lots, signal, params, **kwargs)
@@ -376,7 +378,7 @@ def simulate_staggered(
     weeks = np.asarray(idx.isocalendar().week, dtype=int)
     trades, total = [], None
     for j in range(books):
-        book_signal = signal & pd.Series(weeks % books == j, index=signal.index)
+        book_signal = signal & pd.Series((weeks + offset) % books == j, index=signal.index)
         book_trades, daily = simulate(chain, spot, lots, book_signal, params, **kwargs)
         for t in book_trades:
             t.daily = {d: v / books for d, v in t.daily.items()}

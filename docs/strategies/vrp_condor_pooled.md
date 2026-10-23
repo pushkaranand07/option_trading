@@ -40,7 +40,8 @@ Dhan brokerage ₹20 per order (8 orders per round trip), STT, NSE transaction c
 2026 rates (`costs.py`); slippage 1 tick + 1% of premium per leg per fill.
 
 ## Sizing (live stages only)
-Max loss per condor = (widest wing − credit) × lot. Stage 4: ≤ 0.5% of capital per condor; ≤ 3% total open risk.
+Max loss per condor = (widest wing − credit) × lot. Up to 8 condors can be open at once (2 indices × 4 books), so
+**each condor ≤ 0.375% of capital** (8 × 0.375% = the 3% open-risk cap). Stage 5 may raise the cap only as the plan allows.
 
 ## Backtest evidence (Stage 1, 2021-04 → 2026-05, out of sample)
 84 trades, 87% wins, +12.7% of max risk per trade, OOS Sharpe 0.65 (in-sample 1.04), beats random entry days in
@@ -54,6 +55,20 @@ positive folds (60% < 70%), parameter stability (0.41 < 0.5).
 - **Tail events:** a gap through a wing loses the full defined risk; the stop fills a session late by design.
 - **Data:** settlement uses the index close from NSE's official index file; if missing, the last earlier close.
 
+## Stage 2 stress tests (2026-10-23, `scripts/quant_stress.py`): PASS
+| Test | Result |
+|---|---|
+| Costs ×2 (charges + slippage) | +9.71% of risk per trade (base +11.05%) |
+| Slippage ×3 on every leg | +9.62% |
+| Start 1 / 2 / 3 months later | +10.96% / +10.82% / +10.33% |
+| Block bootstrap, 95% interval of the mean | [+6.67%, +15.17%] |
+| Trade-order Monte Carlo, 95th-pct drawdown | 1.54 × one condor's max risk = 0.58% of capital at 0.375% |
+| Adani (Jan–Feb 2023) / election day (Jun 2024) | 1 / 7 condors open, no losses |
+| COVID 2020 (crash proxy: GARCH trained on 1 year so the signal exists) | in the crash window 1 condor, −33% (stopped); **then two max losses (−96%, −101%) in the May–June 2020 rebound**; all 7 condors Jun-2019→Jun-2020 sum to −1.73 × max risk (≈ −0.65% of capital) |
+
+**Known weakness found:** a sharp V-shaped rebound while IV is still elevated — the signal says "sell premium" just as
+the market rips through the call wing. Within the risk limits, but a loss. Watch for it in paper trading.
+
 ## Status
-Stage 1: narrowly not passed. Admitted to **Stage 3 (paper only)** to collect the missing trades on new data.
-Not eligible for Stage 4 until Stage 3 passes.
+Stage 1: narrowly not passed. Stage 2: passed. **Stage 3 (paper only) from Mon 2026-10-26** to collect the missing
+trades on new data. Not eligible for Stage 4 until Stage 3 passes.
