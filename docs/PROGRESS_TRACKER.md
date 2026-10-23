@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `████████████░░░░░░░░░░░░░` 47% (31/66 tasks)
+**Overall:** `█████████████░░░░░░░░░░░░` 52% (36/69 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `████████░░░░░░░░░░░░░░░░░` 31% (2,862/9,196 files)
+**NSE history download:** `█████████░░░░░░░░░░░░░░░░` 38% (3,462/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 13:40_
+_Last updated: 2026-10-23 13:55_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -20,6 +20,7 @@ _Last updated: 2026-10-23 13:40_
 | `quant/phase-2-harness` | 2 Harness | **exit gate passed** |
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; part 2 waiting on data |
 | `quant/phase-4-regime` | 4 Regime (HMM) | built and run; exit gate pending NSE VIX re-run |
+| `quant/phase-6-lgbm` | 6 LightGBM | pipeline built and verified; price-only model has no edge; derivatives features next |
 | `fix/windows-test-portability` | Bug fix | done, full suite green on Windows (1423 passed) |
 | `fix/option-backtester-exits` | Bug fix | done, 3 regression tests (fail before / pass after) |
 
@@ -94,12 +95,15 @@ _Last updated: 2026-10-23 13:40_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/5)
+`████████████████░░░░░░░░░` 62% (5/8)
 <!-- /progress:phase -->
-- [ ] Triple-barrier labels
-- [ ] Feature set (price, structure, derivatives, flows, regime, calendar)
-- [ ] Purged, embargoed walk-forward
-- [ ] Calibration (Brier, reliability curve)
+- [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
+- [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
+- [ ] Derivatives and flow features (OI, PCR, FII/DII positioning, delivery %) — needs the NSE store
+- [x] Purged, embargoed walk-forward; fit / early-stop / calibrate on separate slices
+- [x] Calibration (Platt), reliability table, same-day AUC (stock picking vs market timing)
+- [x] Price-only run: **no edge** — same-day AUC 0.505, Sharpe 0.97 vs buy-and-hold 1.22, rejected (stability 0.34)
+- [ ] Re-run with derivatives/flow features
 - [ ] Exit gate: OOS AUC ≥ 0.55, calibrated, passes gates after costs
 
 ## Phase 7 — Pretrained time-series models (optional)
@@ -165,3 +169,4 @@ _Last updated: 2026-10-23 13:40_
 ## Log
 - 2026-10-23 — Phases 0, 2 done; Phase 1 code done (download running); Phase 3 part 1 passed, part 2 coded.
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
+- 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.
