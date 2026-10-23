@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `████████████████░░░░░░░░░` 64% (47/74 tasks)
+**Overall:** `████████████████░░░░░░░░░` 65% (51/78 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `█████████████████████░░░░` 82% (7,565/9,196 files)
+**NSE history download:** `██████████████████████░░░` 90% (8,232/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 16:47_
+_Last updated: 2026-10-23 17:03_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -151,7 +151,7 @@ _Last updated: 2026-10-23 16:47_
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`█████████████████████░░░░` 83% (10/12)
+`██████████████████████░░░` 88% (14/16)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -165,6 +165,10 @@ _Last updated: 2026-10-23 16:47_
   regime gate passed single-regime periods · ML daily returns under-charged back-to-back trades · condor random baseline fired too rarely · condor trades vs daily series windows · expiry with no index close · ledger cost on resizes/flips
 - [x] Lot sizes for 2018–mid-2024 were estimated ±3% (NIFTY 72–77); now exact from open interest (99.6% match with NSE's stated lots)
 - [x] Condor: non-simultaneous end-of-day marks could make a spread cost more than its width (a trade lost 132% of max risk); capped
+- [x] Future-pandas breakage: `inplace` drops in the options engine; unsorted date joins under the VRP z-score and GARCH t-stats
+- [x] Store writes made atomic (a second job or a reader never sees half a file; failures raise)
+- [x] Webapp lint (ambiguous name, duplicate branch) — whole repo now ruff-clean; full suite 1536 passed
+- [x] Lot-size calculation sped up 100× (it would have taken ~50 min to rebuild 2018–2024)
 - [ ] "Something else" bug you mentioned (waiting for your description)
 
 ---
