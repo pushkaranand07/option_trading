@@ -44,3 +44,18 @@ def store_features(closes: pd.DataFrame) -> tuple[dict[str, pd.DataFrame], dict[
     iv = pd.read_parquet(iv_file) if iv_file.exists() else atm_iv_table(ds.load("option_chain", symbols=STOCKS))
     extra.update(md.from_iv(iv[iv["symbol"].isin(STOCKS)], closes))
     return extra, md.from_participant(ds.load("participant"))
+
+
+def garch_move_score(closes: pd.DataFrame, window: int = 60) -> pd.DataFrame:
+    """GARCH 10-session vol forecast / trailing ``window``-session vol, per stock, as known
+    before each session opens (the forecast made after the previous close). Above 1: GARCH
+    expects a busier stretch than usual; below 1: a quieter one."""
+    trailing = np.log(closes).diff().rolling(window, min_periods=window // 2).std().shift(1) * np.sqrt(252)
+    cols = {}
+    for s in closes.columns:
+        f = ds.store_root() / "vol_forecasts" / f"{s}.parquet"
+        if f.exists():
+            g = pd.read_parquet(f)["garch_h10"]
+            g.index = pd.to_datetime(g.index)
+            cols[s] = g.shift(1).reindex(closes.index)
+    return pd.DataFrame(cols) / trailing

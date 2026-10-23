@@ -15,33 +15,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tradingagents.analytics import trial_log  # noqa: E402
-from tradingagents.analytics.datastore import store_root  # noqa: E402
 from tradingagents.analytics.evaluate import panel  # noqa: E402
 from tradingagents.analytics.ml import features as mf, move_size as ms  # noqa: E402
-from tradingagents.analytics.ml.inputs import market_context, store_features  # noqa: E402
+from tradingagents.analytics.ml.inputs import garch_move_score, market_context, store_features  # noqa: E402
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import STOCKS, SURVIVORSHIP_NOTE  # noqa: E402
 
 IDEA = "move_size_h10_k1"
-
-
-def garch_benchmark(closes: pd.DataFrame) -> pd.DataFrame:
-    """GARCH 10-session forecast / trailing 60-session vol, as known before each session opens."""
-    trailing = np.log(closes).diff().rolling(ms.VOL_WINDOW, min_periods=30).std().shift(1) * np.sqrt(252)
-    cols = {}
-    for s in closes.columns:
-        f = store_root() / "vol_forecasts" / f"{s}.parquet"
-        if f.exists():
-            g = pd.read_parquet(f)["garch_h10"]
-            g.index = pd.to_datetime(g.index)
-            cols[s] = g.shift(1).reindex(closes.index)      # forecast after t-1's close, used on t
-    return pd.DataFrame(cols) / trailing
 
 
 def main() -> int:
@@ -55,7 +38,7 @@ def main() -> int:
     labels = ms.move_labels(data["open"], data["close"], horizon=10, k_sigma=1.0)
     print(f"Features {feats.shape}; labels {len(labels):,}, base rate {labels['label'].mean():.1%}", flush=True)
 
-    result = ms.run(feats, labels, context=list(ctx), benchmark=garch_benchmark(data["close"]))
+    result = ms.run(feats, labels, context=list(ctx), benchmark=garch_move_score(data["close"]))
     print(result.summary())
     print(f"\n{SURVIVORSHIP_NOTE}")
     p = result.predictions
