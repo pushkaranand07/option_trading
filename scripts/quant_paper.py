@@ -32,7 +32,7 @@ def main() -> int:
                   f"{counts['integrity']} integrity events", flush=True)
         rep = paper.report(s)
         print(rep.summary())
-        killed |= bool(rep.kill)
+        killed |= bool(rep.kill) and s.status == "candidate"     # observation-only strategies never fail the job
     return 1 if killed else 0
 
 

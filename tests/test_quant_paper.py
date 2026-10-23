@@ -67,3 +67,11 @@ def test_now_is_recorded_as_first_seen(tmp_path):
     import sqlite3
     first_seen = sqlite3.connect(db).execute("SELECT first_seen FROM trades").fetchone()[0]
     assert first_seen == "2026-11-03T19:45:00"
+
+
+@pytest.mark.unit
+def test_an_observation_only_strategy_is_never_reported_as_passing():
+    good = [0.2, 0.1, 0.15, -0.05] * 15
+    rep = paper.PaperReport("demo", date(2026, 11, 1), 0, good, 0, 0.12, 0.45, "observation", "holdout failed")
+    text = rep.summary()
+    assert "OBSERVATION ONLY" in text and "holdout failed" in text and "PASS" not in text

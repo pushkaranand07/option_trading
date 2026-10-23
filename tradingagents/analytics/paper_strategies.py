@@ -49,5 +49,10 @@ STRATEGIES = [
         # requires at least 30 forward trades.
         backtest_mean=0.111,
         backtest_sd=0.202,
+        # Rejected 2026-10-23: the backward holdout (2015 to Mar-2021, years the settings never
+        # saw) gave -5.6% of risk per trade over 95 trades, no better than random entry (60%).
+        # Kept as observation only, at the user's choice.
+        status="observation",
+        note="backward holdout failed: -5.6% of risk/trade 2015-21, beats random 60%",
     ),
 ]
