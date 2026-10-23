@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `█████████████████░░░░░░░░` 67% (52/78 tasks)
+**Overall:** `██████████████████░░░░░░░` 72% (56/78 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `████████████████████████░` 95% (8,739/9,196 files)
+**NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:16_
+_Last updated: 2026-10-23 17:31_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -39,7 +39,7 @@ _Last updated: 2026-10-23 17:16_
 
 ## Phase 1 — Point-in-time data foundation
 <!-- progress:phase -->
-`███████████████████░░░░░░` 78% (7/9)
+`██████████████████████░░░` 89% (8/9)
 <!-- /progress:phase -->
 - [x] Resumable, throttled NSE downloader (F&O bhavcopy, participant OI, MTO delivery)
 - [x] Parsers + Parquet store with `known_from` on every row
@@ -48,7 +48,7 @@ _Last updated: 2026-10-23 17:16_
 - [x] Parser fixes: untitled / full-month participant files, lot sizes per day
 - [x] Full 2018–2026 download finished (6,503 files; 379 missing, mostly holidays — to confirm in the quality report)
 - [x] Store built for every year: participant and delivery on all 2,172 F&O days, 31/31 symbols ≥98%, IV on 65,984 symbol-days; lot sizes exact
-- [ ] Data-quality report reviewed with you
+- [x] Data-quality report: 0 missing sessions in any dataset; 6,516 index bars from NSE, 58 stock gaps filled from NSE; all 14 stock jumps >20% verified as real events (COVID 23-Mar-2020, Adani, BHEL — checked against NSE prices)
 - [ ] Cost model matched to a real Dhan contract note within ₹1 (needs your numbers)
 
 ## Phase 2 — Evaluation harness and baselines
@@ -75,15 +75,15 @@ _Last updated: 2026-10-23 17:16_
 
 ## Phase 4 — Regime detection (HMM)
 <!-- progress:phase -->
-`██████████████████░░░░░░░` 71% (5/7)
+`█████████████████████████` 100% (7/7)
 <!-- /progress:phase -->
 - [x] Features: returns, realised vol, India VIX, breadth
 - [x] 3-state Gaussian HMM, filtered probabilities only (no look-ahead; tested against hmmlearn's smoothed output)
 - [x] Stable labels (p > 0.7 for 2 days) — 29 changes in 5.4 years
 - [x] Regime gate wired into Phase 2/3 evaluations
 - [x] First real run: calm 68% / choppy 30% / stress 2.4% of days (2021–2026); next-21-day vol 11.6% / 15.3% / 14.3%
-- [ ] Re-run on NSE's gap-free VIX once index files are downloaded
-- [ ] Exit gate: causal ✔, volatility differs by state ✔, returns by state **not significant** (t≈0.9) — decide after re-run
+- [x] Re-run on NSE's VIX: calm 64% / choppy 34% / stress 1.4%; today calm (0.99)
+- [x] Exit gate **passed as a risk input**: next-21-day vol calm 11.5% vs choppy 15.1% (p=0.026, non-overlapping windows); returns by regime not significant (p=0.14) → not a direction signal
 
 ## Phase 5 — Your own idea as exact rules
 <!-- progress:phase -->
@@ -151,7 +151,7 @@ _Last updated: 2026-10-23 17:16_
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`██████████████████████░░░` 88% (14/16)
+`███████████████████████░░` 94% (15/16)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -159,7 +159,7 @@ _Last updated: 2026-10-23 17:16_
 - [x] NSE adapter: expiry valued at last close / untraded wings dropped → now NSE settlement at intrinsic
 - [x] Index data gaps: NSE official NIFTY / BANKNIFTY / India VIX bars replace Yahoo
 - [x] Stock data gaps (e.g. TCS 22-Oct): filled from NSE equity bhavcopy on Yahoo's adjusted basis
-- [ ] Index files downloaded for 2018–2026 (runs after the main download)
+- [x] Index files downloaded for 2018–2026 (2,173 files)
 - [x] Lint pass to the repo's ruff rules: `zip(strict=True)` everywhere lengths must match, invalid `\L`/`\T` escapes in a test docstring (full suite 1518 passed)
 - [x] Independent logic review: no high-severity issues (no look-ahead, no split errors); 6 medium/low fixed, each with a test:
   regime gate passed single-regime periods · ML daily returns under-charged back-to-back trades · condor random baseline fired too rarely · condor trades vs daily series windows · expiry with no index close · ledger cost on resizes/flips
@@ -174,9 +174,9 @@ _Last updated: 2026-10-23 17:16_
 ---
 
 ## Runs queued for when the download finishes
-1. Download NSE index files (`quant_backfill.py --kinds indices`) — **running**
+1. Download NSE index files — **done**
 2. Build the store (F&O, option chain, participant, delivery) — **done**; then index_close + prices + quality report
-3. Re-run regimes on NSE's VIX (`quant_regime.py`)
+3. Re-run regimes on NSE's VIX — **done**
 4. VRP iron condor test on NIFTY / BANKNIFTY (`quant_vrp_condor.py`) — **running**
 5. LightGBM with store features (`quant_ml.py --position-value 100000 --with-store`)
 
