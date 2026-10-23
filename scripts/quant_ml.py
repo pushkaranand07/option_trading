@@ -70,7 +70,9 @@ def main() -> int:
     if args.with_store:
         extra.update(md.from_fo_summary(ds.load("fo_summary", symbols=STOCKS)))
         extra.update(md.from_delivery(ds.load("delivery", symbols=STOCKS)))
-        extra.update(md.from_iv(atm_iv_table(ds.load("option_chain", symbols=STOCKS)), data["close"]))
+        iv_file = store_root() / "iv" / "iv30.parquet"     # saved by quant_build_store.py
+        iv = pd.read_parquet(iv_file) if iv_file.exists() else atm_iv_table(ds.load("option_chain", symbols=STOCKS))
+        extra.update(md.from_iv(iv[iv["symbol"].isin(STOCKS)], data["close"]))
         ctx.update(md.from_participant(ds.load("participant")))
         print(f"Store features: {sorted(extra)} + {sorted(k for k in ctx if 'share' in k)}", flush=True)
     print(f"Panel: {len(data)} sessions x {data['close'].shape[1]} stocks; context: {sorted(ctx)}", flush=True)
