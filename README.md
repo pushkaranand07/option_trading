@@ -230,6 +230,25 @@ TradingAgents works with any market Yahoo Finance covers, using the exchange-suf
 - China A-shares: Shanghai `.SS`, Shenzhen `.SZ` (e.g. `600519.SS` for Kweichow Moutai)
 - Crypto: `BTC-USD`, `ETH-USD`
 
+#### Indian market (NSE) data quality
+
+Indian instruments (`*.NS`, `*.BO`, `^NSEI`, `^NSEBANK`, ...) get extra tools and safeguards; for other markets these tools answer "not applicable". Details and the problems each one solves are in [docs/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md](docs/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md) (section 13).
+
+| Tool (analyst) | What it gives the agents |
+|---|---|
+| `get_india_fii_dii_flows` (News) | FII/DII net flows with publication status; never presents yesterday's figures as today's |
+| `get_india_index_data_health` (Market) | Whether Yahoo's index volume is usable (for `^NSEI` it is not), a ₹-turnover proxy from point-in-time constituents, and sessions missing from the vendor series |
+| `get_india_fo_contract_info` (Market) | Lot size in force on the date and real expiry dates (from NSE's F&O bhavcopy) |
+| `get_india_delivery_data` (Market) | Delivered quantity and delivery % per session |
+
+Every complete report also ends with a SEBI-aware disclaimer, and phrases such as "guaranteed returns" or "sure-shot" are flagged (never silently rewritten).
+
+Check everything against live data with `python scripts/india_live_check.py`.
+
+#### Options engine
+
+The options backtesting engine from the optopsy project now lives in this repository as the `option_backtester` package (40 option strategies, ~100 entry signals, exits, metrics, simulator). It is licensed **AGPL-3.0** (see `option_backtester/LICENSE`), unlike the rest of TradingAgents (Apache-2.0). Use it through `tradingagents.integrations.optopsy`: `bhavcopy_to_optopsy()` turns NSE F&O bhavcopies into a chain and `OptopsyBridge().run_strategy(...)` backtests it. For vertical spreads pass distinct `leg1_delta`/`leg2_delta`; the engine's default puts both legs on the same strike.
+
 <p align="center">
   <img src="assets/cli/cli_init.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>

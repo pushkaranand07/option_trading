@@ -28,6 +28,10 @@ dependencies = [
     "stockstats>=0.6.5",
     "typing-extensions>=4.14.0",
     "yfinance>=1.7.0",
+    # options engine (option_backtester, moved in from optopsy): versions it was tested with
+    "pandas-ta-classic>=0.3.59,<0.4",
+    "empyrical-reloaded>=0.5.12,<0.6",
+    "pydantic>=2.0,<3.0",
 ]
 
 [project.optional-dependencies]
@@ -49,11 +53,12 @@ tradingagents = "cli.main:app"
 version = {attr = "tradingagents.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*", "cli*", "option_backtester*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]
 tradingagents = ["assets/*.svg"]
+option_backtester = ["LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -70,7 +75,8 @@ filterwarnings = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["results"]
+# option_backtester keeps its upstream (optopsy) style; it is not reformatted here.
+extend-exclude = ["results", "option_backtester"]
 
 [tool.ruff.lint]
 # Standard "good defaults" rule set (pyflakes + pycodestyle + isort + bugbear +
