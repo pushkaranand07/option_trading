@@ -12,6 +12,7 @@ Datasets (``<data_cache_dir>/quant/store/<dataset>/<year>.parquet``):
 - ``option_chain`` near-dated option contracts for the universe (for IV and backtests)
 - ``participant``  FII / DII / Pro / Client open interest by contract type
 - ``delivery``     traded and deliverable quantity, delivery % per stock
+- ``index_close``  NSE's official OHLC for NIFTY, BANKNIFTY and India VIX
 
 Raw files are parsed as NSE published them; nothing here calls the network.
 """
@@ -37,7 +38,10 @@ from tradingagents.dataflows.vendors.nse.derivatives import (
     normalize_udiff,
 )
 
-DATASETS = ("fo_summary", "option_chain", "participant", "delivery")
+DATASETS = ("fo_summary", "option_chain", "participant", "delivery", "index_close")
+
+# Index names in NSE's daily index file -> symbols used here.
+INDEX_NAMES = {"Nifty 50": "NIFTY", "Nifty Bank": "BANKNIFTY", "India VIX": "INDIAVIX"}
 
 # Option contracts further out than this, or strikes further than this from the
 # underlying, are dropped from the stored chain: illiquid and never traded here.
@@ -87,6 +91,25 @@ def parse_participant(raw: bytes, day: date) -> pd.DataFrame:
         values = pd.to_numeric(table.iloc[:, i].astype(str).str.replace(",", "").str.strip(), errors="coerce")
         out[name] = values.round().astype("Int64")
     return out.reset_index(drop=True)
+
+
+def parse_index_close(raw: bytes, day: date) -> pd.DataFrame:
+    """Official OHLC (and volume, where NSE gives one) of the indices in ``INDEX_NAMES``."""
+    table = pd.read_csv(io.BytesIO(raw))
+    table.columns = [str(c).strip() for c in table.columns]
+    table["Index Name"] = table["Index Name"].astype(str).str.strip()
+    table = table[table["Index Name"].isin(INDEX_NAMES)]
+
+    def num(col: str) -> pd.Series:
+        return pd.to_numeric(table[col].astype(str).str.strip().replace("-", None), errors="coerce")
+
+    return pd.DataFrame({
+        "trade_date": day,
+        "symbol": table["Index Name"].map(INDEX_NAMES).to_numpy(),
+        "open": num("Open Index Value").to_numpy(), "high": num("High Index Value").to_numpy(),
+        "low": num("Low Index Value").to_numpy(), "close": num("Closing Index Value").to_numpy(),
+        "volume": num("Volume").to_numpy(),
+    })
 
 
 def parse_mto(raw: bytes) -> pd.DataFrame:
@@ -222,7 +245,7 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
     sessions = next_sessions(trading_days)
     year_days = [d for d in trading_days if d.year == year]
 
-    summaries, chains, participants, deliveries = [], [], [], []
+    summaries, chains, participants, deliveries, indices = [], [], [], [], []
     for day in year_days:
         fo_row = ok[(day, "fo")]
         fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
@@ -239,10 +262,14 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None) -> 
             r = ok[(day, "mto")]
             mto = parse_mto(raw_path(raw, "mto", day, r.url).read_bytes())
             deliveries.append(mto[(mto["series"] == "EQ") & mto["symbol"].isin(SYMBOLS)])
+        if (day, "indices") in ok:
+            r = ok[(day, "indices")]
+            indices.append(parse_index_close(raw_path(raw, "indices", day, r.url).read_bytes(), day))
 
     counts = {}
     for name, parts in (("fo_summary", summaries), ("option_chain", chains),
-                        ("participant", participants), ("delivery", deliveries)):
+                        ("participant", participants), ("delivery", deliveries),
+                        ("index_close", indices)):
         parts = [p for p in parts if len(p)]
         if not parts:
             counts[name] = 0

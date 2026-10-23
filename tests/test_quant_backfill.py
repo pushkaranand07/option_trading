@@ -38,7 +38,7 @@ def test_backfill_saves_files_marks_holidays_and_skips_weekends(tmp_path):
     assert {d for d, _ in manifest} == {date(2026, 1, 23), date(2026, 1, 26), date(2026, 1, 27)}
     assert manifest[(date(2026, 1, 26), "mto")].status == "missing"
     assert manifest[(date(2026, 1, 27), "participant")].status == "ok"
-    assert (stats.fetched, stats.missing) == (6, 3)
+    assert (stats.fetched, stats.missing) == (8, 4)
     assert (tmp_path / "mto" / "2026" / "MTO_27012026.DAT").read_bytes().startswith(b"data:")
 
 
@@ -47,7 +47,7 @@ def test_backfill_resumes_without_refetching(tmp_path):
     backfill(FakeClient(), date(2026, 1, 5), date(2026, 1, 6), root=tmp_path)
     again = FakeClient()
     stats = backfill(again, date(2026, 1, 5), date(2026, 1, 7), root=tmp_path)
-    assert stats.skipped == 6 and stats.fetched == 3
+    assert stats.skipped == 8 and stats.fetched == 4
     assert all("07012026" in u or "20260107" in u or "07JAN2026" in u for u in again.calls)
 
 
@@ -58,7 +58,7 @@ def test_backfill_stops_cleanly_when_nse_goes_down(tmp_path):
     manifest = load_manifest(tmp_path)
     # Nothing is wrongly marked missing because of the outage.
     assert all(row.status == "ok" for row in manifest.values())
-    assert len(manifest) == 4
+    assert len(manifest) == 4   # stopped on the 5th fetch
 
 
 @pytest.mark.unit

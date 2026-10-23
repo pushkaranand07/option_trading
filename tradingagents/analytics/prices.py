@@ -9,9 +9,16 @@ compared with NSE's own prices (``underlying_price`` / ``fut_close`` in the
 Like the NSE datasets, a bar's ``known_from`` is the next session: a signal
 built on day *t*'s close can only be acted on from *t+1*.
 
-:func:`quality_report` compares Yahoo with NSE's trading calendar and flags
-missing sessions and unexplained one-day jumps, so gaps are seen, not silently
-forward-filled.
+Repairs, each marked in the ``source`` column:
+
+- :func:`merge_nse_indices` replaces Yahoo's NIFTY / BANKNIFTY / India VIX bars
+  with NSE's official daily values (``nse``); Yahoo stays only where NSE has none.
+- :func:`fill_stock_gaps` fills sessions Yahoo lacks for a stock from NSE's
+  equity bhavcopy (``nse_fill``): NSE's day-over-day move is applied to Yahoo's
+  adjusted previous bar, so the filled bar is on Yahoo's adjusted basis.
+
+:func:`quality_report` then lists what is still missing or suspicious, so gaps
+are seen, not silently forward-filled.
 """
 
 from __future__ import annotations
@@ -25,8 +32,9 @@ import pandas as pd
 from tradingagents.analytics.datastore import add_known_from, next_sessions, store_root
 from tradingagents.analytics.universe import HISTORY_START, YAHOO_TICKERS
 
+INDEX_SYMBOLS = ("NIFTY", "BANKNIFTY", "INDIAVIX")
 PRICE_COLUMNS = ["trade_date", "symbol", "open", "high", "low", "close", "adj_close", "volume",
-                 "dividend", "split"]
+                 "dividend", "split", "source"]
 JUMP_THRESHOLD = 0.20   # a one-day move this large with no split recorded is flagged
 
 
@@ -54,6 +62,7 @@ def normalize_history(raw: pd.DataFrame, symbol: str) -> pd.DataFrame:
         "dividend": raw.get("Dividends", pd.Series(0.0, index=raw.index)).to_numpy(dtype=float),
         "split": raw.get("Stock Splits", pd.Series(0.0, index=raw.index)).to_numpy(dtype=float),
     })
+    df["source"] = "yahoo"
     return df.dropna(subset=["close"]).drop_duplicates("trade_date", keep="last").reset_index(drop=True)
 
 
@@ -69,6 +78,78 @@ def fetch_prices(
     frames = [normalize_history(history(YAHOO_TICKERS[s], start, end), s) for s in symbols]
     frames = [f for f in frames if len(f)]
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=PRICE_COLUMNS)
+
+
+def merge_nse_indices(prices: pd.DataFrame, index_close: pd.DataFrame) -> pd.DataFrame:
+    """NSE's official index bars replace Yahoo's wherever NSE has the day."""
+    nse = index_close[index_close["symbol"].isin(INDEX_SYMBOLS)].dropna(subset=["close"])
+    if nse.empty:
+        return prices
+    nse = pd.DataFrame({
+        "trade_date": nse["trade_date"].to_numpy(), "symbol": nse["symbol"].to_numpy(),
+        "open": nse["open"].to_numpy(float), "high": nse["high"].to_numpy(float),
+        "low": nse["low"].to_numpy(float), "close": nse["close"].to_numpy(float),
+        "adj_close": nse["close"].to_numpy(float), "volume": nse["volume"].to_numpy(float),
+        "dividend": 0.0, "split": 0.0, "source": "nse",
+    })
+    keys = set(zip(nse["trade_date"], nse["symbol"]))
+    keep = [(d, s) not in keys for d, s in zip(prices["trade_date"], prices["symbol"])]
+    return (pd.concat([prices[keep], nse], ignore_index=True)
+            .sort_values(["symbol", "trade_date"]).reset_index(drop=True))
+
+
+def fill_stock_gaps(
+    prices: pd.DataFrame,
+    trading_days: Iterable[date],
+    fetch_day: Callable[[date], pd.DataFrame] | None = None,
+) -> pd.DataFrame:
+    """Fill NSE sessions Yahoo lacks, per stock, from NSE's unadjusted bhavcopy.
+
+    For a missing day *d* after Yahoo's bar on *p*: every NSE price on *d* is
+    scaled by ``yahoo_close(p) / nse_close(p)``, which puts it on Yahoo's split
+    basis, and ``adj_close`` keeps *p*'s dividend ratio. Runs of missing days are
+    filled in order, each from the one before.
+    """
+    if fetch_day is None:
+        from tradingagents.dataflows.vendors.nse.derivatives import equity_bhavcopy as fetch_day
+    days = sorted(set(trading_days))
+    cache: dict[date, pd.DataFrame | None] = {}
+
+    def nse(d: date) -> pd.DataFrame | None:
+        if d not in cache:
+            try:
+                cache[d] = fetch_day(d).drop_duplicates("symbol").set_index("symbol")
+            except Exception:       # a day NSE cannot serve stays a gap, and the report shows it
+                cache[d] = None
+        return cache[d]
+
+    stocks = [s for s in prices["symbol"].unique() if s not in INDEX_SYMBOLS]
+    added = []
+    for symbol in stocks:
+        g = prices[prices["symbol"] == symbol].set_index("trade_date").sort_index()
+        have = dict(g.to_dict("index"))
+        first, last = g.index[0], g.index[-1]
+        for i, d in enumerate(days):
+            if d in have or not (first < d <= last) or i == 0:
+                continue
+            prev = days[i - 1]
+            base = have.get(prev)
+            today, before = nse(d), nse(prev)
+            if base is None or today is None or before is None                     or symbol not in today.index or symbol not in before.index:
+                continue
+            scale = base["close"] / float(before.loc[symbol, "close"])
+            row = today.loc[symbol]
+            close = float(row["close"]) * scale
+            bar = {"open": float(row["open"]) * scale, "high": float(row["high"]) * scale,
+                   "low": float(row["low"]) * scale, "close": close,
+                   "adj_close": close * base["adj_close"] / base["close"],
+                   "volume": float(row["volume"]), "dividend": 0.0, "split": 0.0, "source": "nse_fill"}
+            have[d] = bar
+            added.append({"trade_date": d, "symbol": symbol, **bar})
+    if not added:
+        return prices
+    return (pd.concat([prices, pd.DataFrame(added)], ignore_index=True)
+            .sort_values(["symbol", "trade_date"]).reset_index(drop=True))
 
 
 def prices_path(root: Path | None = None) -> Path:
