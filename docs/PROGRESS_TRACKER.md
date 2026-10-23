@@ -3,16 +3,18 @@
 > Plan: [QUANT_SIGNAL_LAYER_PLAN.md](QUANT_SIGNAL_LAYER_PLAN.md).
 > Bars are recalculated from the checkboxes below (and the live NSE download log) by
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
+>
+> **Picking this up? Read [Start here tomorrow](#start-here-tomorrow) first.**
 
 <!-- progress:overall -->
-**Overall:** `███████████████████░░░░░░` 76% (61/80 tasks)
+**Overall:** `███████████████████░░░░░░` 75% (61/81 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 17:52_
+_Last updated: 2026-10-23 17:59_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -23,7 +25,7 @@ _Last updated: 2026-10-23 17:52_
 | `quant/phase-6-lgbm` | 6 LightGBM | no edge with price or with NSE derivatives/flow features | merged (via PR #8) |
 | `quant/phase-9-agent-tool` | 9 Agent integration + all later fixes | full suite green, ruff-clean | merged (PR #8) |
 | `quant/phase-6b-relative` | 6 relative-strength model | rejected on real data | merged (PR #9) |
-| `quant/phase-10-ship` | Ship what's validated | expected move in the report, daily refresh scheduled | PR open |
+| `quant/phase-10-ship` | Ship what's validated | expected move in the report, daily refresh scheduled | merged (PR #10) |
 | `fix/windows-test-portability` | Bug fix | done | merged (PR #5) |
 | `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
 
@@ -48,7 +50,7 @@ _Last updated: 2026-10-23 17:52_
 - [x] Yahoo prices through the data layer, stopping at yesterday
 - [x] Cost model at 2026 rates with sources (Dhan + statutory)
 - [x] Parser fixes: untitled / full-month participant files, lot sizes per day
-- [x] Full 2018–2026 download finished (6,503 files; 379 missing, mostly holidays — to confirm in the quality report)
+- [x] Full 2018–2026 download finished (6,503 files; the 379 "missing" are market holidays — confirmed: 0 missing sessions)
 - [x] Store built for every year: participant and delivery on all 2,172 F&O days, 31/31 symbols ≥98%, IV on 65,984 symbol-days; lot sizes exact
 - [x] Data-quality report: 0 missing sessions in any dataset; 6,516 index bars from NSE, 58 stock gaps filled from NSE; all 14 stock jumps >20% verified as real events (COVID 23-Mar-2020, Adani, BHEL — checked against NSE prices)
 - [ ] Cost model matched to a real Dhan contract note within ₹1 (needs your numbers)
@@ -98,7 +100,7 @@ _Last updated: 2026-10-23 17:52_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`██████████████████████░░░` 90% (9/10)
+`████████████████████░░░░░` 82% (9/11)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
@@ -109,7 +111,8 @@ _Last updated: 2026-10-23 17:52_
 - [x] Re-run with derivatives/flow features (OI, PCR, delivery %, FII/Client positioning, stock IV; leak check 0): **no edge** — same-day AUC 0.502, top features all market-wide, beats random timing 40%, Sharpe 0.68 vs buy-and-hold 1.22
 - [ ] Exit gate: OOS AUC ≥ 0.55, calibrated, passes gates after costs — **not met** (AUC 0.506, DSR 0.935, OOS/IS 0.44)
 - [x] Second model built and verified: **relative strength** (beat the 29-stock average? top-5 book vs equal weight, hedged, after costs); tests: noise rejected, persistent planted edge found (a one-day edge was found but lost to costs)
-- [x] Relative-strength model on real data: **no edge** — same-day AUC 0.507, excess −1.2%/yr after costs and hedge (Sharpe −0.09), top-3/top-8 unstable, DSR 0.42 → rejected. ("Beats random picks 99%" reflects lower turnover, not skill: random picks pay full costs every rebalance — to refine: a turnover-matched random baseline)
+- [x] Relative-strength model on real data: **no edge** — same-day AUC 0.507, excess −1.2%/yr after costs and hedge (Sharpe −0.09), top-3/top-8 unstable, DSR 0.42 → rejected. ("Beats random picks 99%" reflects lower turnover, not skill: random picks pay full costs every rebalance)
+- [ ] Refinement: turnover-matched random baseline for the relative-strength test (so "beats random" measures skill only)
 
 ## Phase 7 — Pretrained time-series models (optional)
 <!-- progress:phase -->
@@ -131,7 +134,7 @@ _Last updated: 2026-10-23 17:52_
 <!-- progress:phase -->
 `███████████████████░░░░░░` 75% (3/4)
 <!-- /progress:phase -->
-- [x] `get_quant_signal_report` tool (regime, vol forecasts, IV vs forecast, gate verdicts; only data known before the date)
+- [x] `get_quant_signal_report` tool (regime, vol forecasts, **expected move**, IV vs forecast, gate verdicts; only data known before the date)
 - [x] Market analyst told to quote it; portfolio manager discounts any unvalidated quant signal
 - [x] "VI. Quant Context" section in the Markdown and HTML reports (skipped outside the universe; never breaks a report)
 - [ ] Exit gate: 50-date replay, no invented numbers (needs LLM runs — your call on cost)
@@ -177,42 +180,80 @@ _Last updated: 2026-10-23 17:52_
 
 ---
 
-## Runs after the download
-1. Download NSE index files — **done** (2,173 files)
-2. Build the store, index data, prices, quality report — **done**
-3. Re-run regimes on NSE's VIX — **done**
-4. VRP iron condor test on NIFTY / BANKNIFTY — **done: rejected** (see Phase 3)
-5. LightGBM with store features — **done: rejected** (see Phase 6)
+## Where this leaves us (end of 2026-10-23)
+**No trading signal has passed the gates yet.** That is the system doing its job: every one of these looked good
+somewhere in-sample and fell apart out of sample or after costs.
 
-## Where this leaves us (2026-10-23)
-No signal has passed the gates yet. What *has* been validated: GARCH volatility forecasts (beat historical vol on 31/31
-symbols) and the regime model as a risk input (next-month volatility differs, p=0.026). Rejected: 50/200 MA trend,
-VRP iron condors (too few trades), LightGBM on price and on NSE derivatives/flow data (both "will it rise"
-and "will it beat the other 28"). Across 6 rigorous tests, public end-of-day data has not produced a tradable edge
-in these 29 large, heavily-watched stocks — consistent with how efficient they are.
+| Tested | Verdict | Key numbers |
+|---|---|---|
+| GARCH volatility forecasts | ✅ **validated** (risk input) | beat historical vol on 31/31 symbols out of sample |
+| Regime model (HMM) | ✅ **validated** (risk input) | next-month vol calm 11.5% vs choppy 15.1%, p=0.026; not a direction signal |
+| 50/200 MA trend | ❌ rejected | beats random timing only 6% |
+| VRP iron condor (NIFTY, BANKNIFTY) | ❌ rejected | only 15–19 trades in 5 yrs; BANKNIFTY closest (beats random 94%) |
+| LightGBM "will it rise" — price | ❌ rejected | same-day AUC 0.505; Sharpe 0.97 vs buy-and-hold 1.22 |
+| LightGBM "will it rise" — + NSE OI/PCR/delivery/FII/IV | ❌ rejected | same-day AUC 0.502; Sharpe 0.68 |
+| LightGBM "will it beat the other 28" | ❌ rejected | same-day AUC 0.507; excess −1.2%/yr after costs |
 
-## Shipped (2026-10-23) — what you can use now
-- **Agents' quant report** (every run on these 31 symbols, and section VI of each saved report): regime, GARCH
-  volatility forecasts, **expected move** (e.g. RELIANCE ±5.0% / ±Rs 60 over 10 sessions), implied vol vs forecast,
-  and every signal's verdict. The portfolio manager is told not to base a direction on unvalidated signals.
-- **For your Dhan trading:** use the expected move for stop distance and option strike width; size with
-  `sizing.py` (¼-Kelly, max 1% of your capital at risk) once a signal has a measured edge.
-- **Daily refresh** after the close keeps all of it current (log: `~/.tradingagents/cache/quant/daily_update.log`).
-  Remove with `schtasks /Delete /TN "TradingAgents quant daily update" /F`.
+Public end-of-day data has not produced a tradable edge in these 29 large, heavily-watched stocks, consistent with
+how efficiently they are priced. Costs matter a lot: a delivery round trip is ~0.33%, so a strategy rotating 5 stocks
+every 10 sessions pays ~16% a year before it earns anything.
+
+## Shipped — what you can use now
+- **Agents' quant report** (every analysis of the 29 stocks, NIFTY, BANKNIFTY; section VI of each saved report):
+  regime, GARCH volatility forecasts, **expected move** (e.g. RELIANCE ±5.0% / ±Rs 60 over 10 sessions), implied vol
+  vs forecast, and every signal's verdict. The portfolio manager is told not to base a direction on unvalidated signals.
+- **For your Dhan trading:** expected move for stop distance and option strike width; `sizing.py` (¼-Kelly, max 1% of
+  capital at risk) once a signal has a measured edge.
+- **Daily refresh** weekdays 19:30 keeps it all current. Log: `~/.tradingagents/cache/quant/daily_update.log`;
+  status: `~/.tradingagents/cache/quant/daily_status.json`. Remove: `schtasks /Delete /TN "TradingAgents quant daily update" /F`.
+
+---
+
+## Start here tomorrow
+### State
+- **Git:** everything is merged into GitHub `main` (PRs #1–#10). Start new work on a new branch from `main`:
+  `git checkout main`, `git pull`, `git checkout -b quant/<next-thing>`.
+- **Data:** NSE store complete 2018-01-01 to 2026-10-22 (F&O, option chain, participant OI, delivery, index closes,
+  prices, IV, exact lot sizes) in `~/.tradingagents/cache/quant/store/`. Tonight's 19:30 refresh adds 23-Oct.
+- **Tests:** full suite 1,544 passed on Windows; whole repo ruff-clean.
+- **First check tomorrow:** did the 19:30 refresh run? `daily_status.json` should show `"ok": true` with a finish
+  time on the evening of 23-Oct. If not (PC off or logged out), run `python scripts/quant_daily_update.py` once.
+
+### Decisions waiting on you (pick any)
+1. **Your own trading idea (Phase 5)**: the most promising next step. Describe a pattern you actually trade (entry,
+   exit, stop, which data you look at); I code it exactly and run it through the same gates. Template: plan section 6.
+2. **Condors, more trades?** Pool NIFTY+BANKNIFTY, add the 29 stocks' monthly options, enter weekly into monthly
+   expiries, or use weekly expiries. Needed because 15–19 trades cannot prove anything.
+3. **Widen the universe:** smaller, less-watched F&O stocks (less efficient), or event windows (results days, expiry
+   weeks). Each new test raises the bar via the deflated Sharpe.
+4. **Phase 9 replay:** 50 historical dates through the full agent pipeline to check no invented numbers (costs LLM
+   money): run 50, 10, or skip.
+5. **Dhan contract note:** one trade's charges, to confirm the cost model within Rs 1 (closes Phase 1).
+6. **"Something else" bug:** ticked on 23-Oct but never described.
+
+### Suggested order for tomorrow
+1. Verify the overnight refresh (2 min).
+2. You: describe your idea (decision 1) and/or send the contract note (decision 5).
+3. Me: code and test your idea; meanwhile the small refinement (turnover-matched random baseline).
 
 ## Open items needing you
-- **Phase 3 decision:** test more condor trades so the evidence can count — pool both indices, add the 29 stocks' options, enter weekly into monthly expiries, or use weekly expiries (you chose monthly indices; each option changes that)
-- Numbers from one Dhan contract note (segment, quantity, buy/sell price, each charge line)
-- Your own trading idea for Phase 5 (use the template in the plan, section 6)
+- Your trading idea (Phase 5)
+- Condor decision (more trades, or leave rejected)
+- Phase 9 replay decision (50 / 10 / skip)
+- Dhan contract note numbers
+- The "something else" bug description
 
 ## Log
-- 2026-10-23 — Phases 0, 2 done; Phase 1 code done (download running); Phase 3 part 1 passed, part 2 coded.
-- 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
-- 2026-10-23 — Main NSE download finished; logic-review fixes merged into the branch; store build started.
+- 2026-10-23 — Plan written; Phase 0 gates and trial log; NSE downloader started; Phase 1 code done.
+- 2026-10-23 — Phase 2 harness: random signal rejected, planted edge found; MA trend rejected.
+- 2026-10-23 — Phase 3 part 1: GARCH beats historical vol on 31/31 symbols; ATM IV tracks India VIX.
+- 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run.
 - 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
-- 2026-10-23 — Shipped: expected move in the quant report; daily refresh verified and scheduled (19:30 weekdays). Local `main` synced (PRs #8, #9 merged).
+- 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade became +0.47%). Price-only model: no edge.
+- 2026-10-23 — Main NSE download finished; independent logic review (6 medium/low issues fixed); store built.
+- 2026-10-23 — Lot sizes made exact (GCD of open interest); condor spread cap; atomic store writes; future-pandas fixes.
+- 2026-10-23 — All NSE data downloaded, built and verified (0 missing sessions). Regimes re-run on NSE VIX: Phase 4 passes as a risk input.
+- 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19); BANKNIFTY closest (beats random 94%).
+- 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502).
 - 2026-10-23 — Relative-strength model rejected (same-day AUC 0.507, excess −1.2%/yr).
-- 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502). No signal has passed the gates.
-- 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19) to prove an edge; BANKNIFTY closest (beats random 94%).
-- 2026-10-23 — All NSE data downloaded, built and verified (0 missing sessions; exact lot sizes). Regimes re-run on NSE VIX: Phase 4 passes as a risk input. Condor test started; fixed its gates (returns on capital, parameter stability).
-- 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.
+- 2026-10-23 — Shipped: expected move in the quant report; daily refresh verified and scheduled (19:30 weekdays). PRs #8–#10 merged; everything in `main`.
