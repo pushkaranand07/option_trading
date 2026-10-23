@@ -1,6 +1,7 @@
 """Phase 1 of the quant plan: raw NSE file parsers and the point-in-time store."""
 
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -223,3 +224,21 @@ def test_build_year_rebuilds_only_the_named_datasets(tmp_path):
     assert not (root / "fo_summary").exists()
     with pytest.raises(ValueError):
         ds.build_year(2018, raw=raw, root=root, datasets=("nope",))
+
+
+@pytest.mark.unit
+def test_parquet_writes_are_whole_or_not_at_all(tmp_path, monkeypatch):
+    path = tmp_path / "x" / "a.parquet"
+    ds.write_parquet(pd.DataFrame({"v": [1, 2]}), path)
+    assert list(pd.read_parquet(path)["v"]) == [1, 2]
+
+    def broken(self, target, **kwargs):
+        Path(target).write_bytes(b"half a file")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", broken)
+    with pytest.raises(OSError):
+        ds.write_parquet(pd.DataFrame({"v": [9]}), path)
+    monkeypatch.undo()
+    assert list(pd.read_parquet(path)["v"]) == [1, 2]            # the old file is intact
+    assert [p.name for p in path.parent.iterdir()] == ["a.parquet"]  # no temp file left behind

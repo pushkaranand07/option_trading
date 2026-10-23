@@ -30,7 +30,7 @@ Z_WINDOW = 252
 
 def vrp_series(iv30: pd.Series, garch_h21: pd.Series) -> pd.Series:
     """IV minus forecast, on the dates both exist (dated by the close they are known after)."""
-    both = pd.concat({"iv": iv30, "f": garch_h21}, axis=1).dropna()
+    both = pd.concat({"iv": iv30, "f": garch_h21}, axis=1, sort=True).dropna()   # rolling z-score needs time order
     return both["iv"] - both["f"]
 
 

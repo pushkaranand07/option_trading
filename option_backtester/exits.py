@@ -93,7 +93,7 @@ def _apply_single_leg_exits(
     )
 
     if intermediates.empty:
-        result.drop(columns=["_trade_id"], inplace=True)
+        result = result.drop(columns=["_trade_id"])
         return result
 
     # Merge entry price and entry date onto intermediates
@@ -120,7 +120,7 @@ def _apply_single_leg_exits(
     if not triggered.empty:
         result = _replace_exits_single_leg(result, triggered, data, side_value)
 
-    result.drop(columns=["_trade_id"], inplace=True)
+    result = result.drop(columns=["_trade_id"])
     return result
 
 
@@ -199,7 +199,7 @@ def _apply_multi_leg_exits(
         )
 
         if intermediates.empty:
-            result.drop(columns=["_trade_id"], inplace=True)
+            result = result.drop(columns=["_trade_id"])
             return result
 
         # Get entry price for this leg
@@ -231,7 +231,7 @@ def _apply_multi_leg_exits(
         combined = combined.merge(li, on=["_trade_id", "quote_date"], how="inner")
 
     if combined.empty:
-        result.drop(columns=["_trade_id"], inplace=True)
+        result = result.drop(columns=["_trade_id"])
         return result
 
     # Merge entry date for max_hold_days calculation
@@ -273,7 +273,7 @@ def _apply_multi_leg_exits(
     if not triggered.empty:
         result = _replace_exits_multi_leg(result, triggered, data, leg_def)
 
-    result.drop(columns=["_trade_id"], inplace=True)
+    result = result.drop(columns=["_trade_id"])
     return result
 
 

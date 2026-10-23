@@ -228,11 +228,27 @@ def store_root() -> Path:
     return Path(get_config()["data_cache_dir"]) / "quant" / "store"
 
 
-def _write(df: pd.DataFrame, root: Path, dataset: str, year: int) -> Path:
-    path = root / dataset / f"{year}.parquet"
+def write_parquet(df: pd.DataFrame, path: Path, index: bool = False) -> Path:
+    """Write through a temp file beside ``path``, then swap it in: a reader, or a second job
+    writing the same file, sees the old file or the new one, never half of one. Unlike the
+    cache's ``replace_file``, a failure raises: a silently skipped write would leave stale
+    data that looks current."""
+    import os
+    import uuid
+
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(path, index=False)
+    temp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        df.to_parquet(temp, index=index)
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
     return path
+
+
+def _write(df: pd.DataFrame, root: Path, dataset: str, year: int) -> Path:
+    return write_parquet(df, root / dataset / f"{year}.parquet")
 
 
 def build_year(year: int, raw: Path | None = None, root: Path | None = None,

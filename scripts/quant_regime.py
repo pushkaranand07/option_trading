@@ -19,7 +19,12 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tradingagents.analytics import regime as rg  # noqa: E402
-from tradingagents.analytics.datastore import add_known_from, next_sessions, store_root  # noqa: E402
+from tradingagents.analytics.datastore import (  # noqa: E402
+    add_known_from,
+    next_sessions,
+    store_root,
+    write_parquet,
+)
 from tradingagents.analytics.evaluate import buy_and_hold, evaluate, moving_average_trend, panel  # noqa: E402
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import STOCKS  # noqa: E402
@@ -41,9 +46,7 @@ def main() -> int:
     out = probs.assign(regime=labels).reset_index(names="trade_date")
     out["trade_date"] = out["trade_date"].dt.date
     out = add_known_from(out, next_sessions(out["trade_date"]))
-    path = store_root() / "regime" / "regime.parquet"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    out.to_parquet(path, index=False)
+    path = write_parquet(out, store_root() / "regime" / "regime.parquet")
     print(f"Saved {len(out)} days of regimes -> {path}")
     print(f"Current regime ({labels.index[-1]:%Y-%m-%d}): {labels.iloc[-1]} "
           f"({probs.iloc[-1].round(2).to_dict()})")

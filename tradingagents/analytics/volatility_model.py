@@ -147,7 +147,9 @@ def compare(forecasts: dict[str, pd.DataFrame], realised: pd.DataFrame, baseline
     rows = []
     for col in realised.columns:
         h = int(col[1:])
-        frame = pd.concat({m: f[col] for m, f in forecasts.items()} | {"_rv": realised[col]}, axis=1).dropna()
+        # sort=True: time order matters for the Newey-West statistic below.
+        frame = pd.concat({m: f[col] for m, f in forecasts.items()} | {"_rv": realised[col]},
+                          axis=1, sort=True).dropna()
         if frame.empty:
             continue
         losses = {m: qlike(frame["_rv"], frame[m]) for m in forecasts}
