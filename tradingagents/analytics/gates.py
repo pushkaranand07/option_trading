@@ -186,10 +186,13 @@ def check_gates(ev: Evidence, gates: Gates = DEFAULT_GATES, periods: int = 252) 
         add(_result("regime stability", None, None, f">= {gates.min_positive_regimes} positive regimes"))
     else:
         # Plan, Phase 0: positive in at least N regimes, or explicitly switched off
-        # in every regime where it loses.
+        # in every regime where it loses. A test period that only ever saw one regime
+        # proves nothing about the others: "switched off" counts only when a regime
+        # really was switched off.
         positive = sum(v > 0 for v in ev.regime_expectancy.values())
         traded = [v for k, v in ev.regime_expectancy.items() if k not in ev.regimes_switched_off]
-        switched_off_losers = bool(traded) and all(v > 0 for v in traded)
+        switched_off_losers = (bool(ev.regimes_switched_off) and bool(traded)
+                               and all(v > 0 for v in traded))
         add(_result("regime stability", positive >= gates.min_positive_regimes or switched_off_losers,
                     float(positive),
                     f">= {gates.min_positive_regimes} positive regimes, or off where it loses",

@@ -130,3 +130,9 @@ def test_trial_log_keeps_every_run_and_counts_trials(tmp_path):
     assert rows[0].verdict == "not_significant" and rows[0].id == 1
     assert trial_log.trial_count("fii-reversal", path) == 18
     assert trial_log.trial_count(path=path) == 19
+
+
+@pytest.mark.unit
+def test_a_test_period_that_saw_one_regime_does_not_pass_the_regime_gate():
+    one_regime = good_evidence(regime_expectancy={"calm": 0.01})
+    assert status(check_gates(one_regime), "regime stability") == FAIL
