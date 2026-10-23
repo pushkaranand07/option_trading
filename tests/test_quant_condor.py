@@ -117,3 +117,13 @@ def test_each_trades_daily_share_sums_to_its_return_and_a_missing_expiry_close_s
     assert sum(t.daily.values()) == pytest.approx(daily.sum())
     assert any("last earlier close" in f for f in t.flags)
     assert t.pnl == pytest.approx(t.credit * t.lot)               # all legs expire worthless at 1000
+
+
+@pytest.mark.unit
+def test_closing_a_spread_never_costs_more_than_its_width():
+    strikes = {"long_put": 900.0, "short_put": 950.0, "short_call": 1050.0, "long_call": 1100.0}
+    # Non-simultaneous marks: short put 80 (traded), long put 10 (stale settle) -> 70 > width 50.
+    cost, capped = cd.close_cost({"long_put": 10.0, "short_put": 80.0, "short_call": 2.0, "long_call": 3.0}, strikes)
+    assert capped and cost == pytest.approx(50.0 + 0.0)
+    cost, capped = cd.close_cost({"long_put": 5.0, "short_put": 20.0, "short_call": 8.0, "long_call": 3.0}, strikes)
+    assert not capped and cost == pytest.approx(15.0 + 5.0)

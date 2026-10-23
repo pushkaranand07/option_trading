@@ -261,8 +261,8 @@ def build_year(year: int, raw: Path | None = None, root: Path | None = None,
             fo = parse_fo(raw_path(raw, "fo", day, fo_row.url).read_bytes(), fo_row.url.rsplit("/", 1)[-1])
             summary = fo_summary(fo)
             if summary["lot_size"].isna().any():
-                derived = derive_legacy_lot_sizes(fo)
-                summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(derived))
+                lots = lots_from_open_interest(fo)
+                summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(lots))
             summaries.append(summary)
             chains.append(option_chain(fo, summary))
         if "participant" in datasets and (day, "participant") in ok:
@@ -311,3 +311,34 @@ def load(dataset: str, start: date | None = None, end: date | None = None,
     if symbols is not None and "symbol" in df:
         df = df[df["symbol"].isin(set(symbols))]
     return df.reset_index(drop=True)
+
+
+def lots_from_open_interest(fo: pd.DataFrame) -> dict[str, int]:
+    """Lot size per symbol for files that do not state it.
+
+    Open interest and its change are in units, i.e. whole lots, so their GCD over
+    the contracts expiring with the nearest future is the lot or a divisor of it
+    (only that expiry: longer-dated contracts keep the lot they were listed with).
+    Around a lot change the GCD can be a divisor (75 and 50 -> 25), so the answer is
+    the multiple of the GCD nearest the turnover-based estimate, which is roughly
+    right (+/- a few %) but never exact.
+    """
+    import math
+    from functools import reduce
+
+    lots = {}
+    futures = fo[fo["instrument"].isin(FUTURES)]
+    near = futures.sort_values("expiry").groupby("symbol")["expiry"].first()
+    for symbol, expiry in near.items():
+        g = fo[(fo["symbol"] == symbol) & (fo["expiry"] == expiry)]
+        vals = np.concatenate([pd.to_numeric(g["open_interest"], errors="coerce").to_numpy(float),
+                               np.abs(pd.to_numeric(g["oi_change"], errors="coerce").to_numpy(float))])
+        vals = vals[np.isfinite(vals) & (vals > 0)]
+        if len(vals):
+            lots[symbol] = int(reduce(math.gcd, vals.astype(np.int64).tolist()))
+    estimate = derive_legacy_lot_sizes(fo)
+    for symbol, g in lots.items():
+        e = estimate.get(symbol)
+        if e:
+            lots[symbol] = g * max(1, round(e / g))
+    return lots

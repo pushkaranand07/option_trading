@@ -150,6 +150,22 @@ def choose_strikes(day_chain: pd.DataFrame, params: CondorParams) -> tuple[dict,
     return strikes, prices, flags
 
 
+def close_cost(marks: dict, strikes: dict) -> tuple[float, bool]:
+    """Per-unit cost to buy back the condor, each spread capped at its width.
+
+    A put or call spread can never cost more than its width to close (at worst it
+    expires there), but end-of-day marks are not simultaneous: an untraded wing at
+    NSE's settlement price next to a short leg's last trade can imply more. The
+    cap removes that artefact; ``True`` says it was needed.
+    """
+    put_w = strikes["short_put"] - strikes["long_put"]
+    call_w = strikes["long_call"] - strikes["short_call"]
+    put = marks["short_put"] - marks["long_put"]
+    call = marks["short_call"] - marks["long_call"]
+    capped_put, capped_call = min(max(put, 0.0), put_w), min(max(call, 0.0), call_w)
+    return capped_put + capped_call, (capped_put != put or capped_call != call)
+
+
 def _fill(price: float, buying: bool, slip: Slippage) -> float:
     s = slip.option_ticks * slip.option_tick_size + slip.option_premium_pct * price
     return price + s if buying else max(price - s, 0.0)
@@ -203,7 +219,7 @@ def simulate(
 
     def close_out(day: date, trade: CondorTrade, prices: dict, reason: str, at_expiry: bool) -> None:
         trade.exit_date, trade.exit_reason = day, reason
-        debit, charges = 0.0, trade.charges
+        charges = trade.charges
         for leg in LEGS:
             p = prices[leg]
             if at_expiry:
@@ -214,7 +230,10 @@ def simulate(
                 fill = _fill(p, buying=SIGN[leg] < 0, slip=slippage)
                 charges += fill_charges(OPTIONS, trade.lot, fill, "buy" if SIGN[leg] < 0 else "sell", rates)
             trade.exit_prices[leg] = fill
-            debit += -SIGN[leg] * fill          # cost to buy back shorts, minus proceeds of longs
+        # Cost to buy back the shorts minus the longs' proceeds, each spread capped at its width.
+        debit, capped = close_cost(trade.exit_prices, trade.strikes)
+        if capped:
+            trade.flags.append(f"{day}: exit marks implied a spread wider than its strikes; capped")
         trade.charges = charges
         trade.pnl = (trade.credit - debit) * trade.lot - charges
 
@@ -245,7 +264,7 @@ def simulate(
                 else:
                     # Premium P&L per unit decides the exits; the daily series also
                     # carries the entry charges (t.charges holds only those until exit).
-                    value = t.credit + sum(SIGN[leg] * marks[leg] for leg in LEGS)
+                    value = t.credit - close_cost(marks, t.strikes)[0]
                     if value >= params.take_profit * t.credit:
                         exit_tomorrow = "take_profit"
                     elif -value >= params.stop_loss * t.credit:
