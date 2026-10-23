@@ -7,14 +7,14 @@
 > **Picking this up? Read [Start here tomorrow](#start-here-tomorrow) first.**
 
 <!-- progress:overall -->
-**Overall:** `███████████████████░░░░░░` 78% (67/86 tasks)
+**Overall:** `███████████████████░░░░░░` 77% (68/88 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 21:08_
+_Last updated: 2026-10-23 21:18_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -104,7 +104,7 @@ _Last updated: 2026-10-23 21:08_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`███████████████████████░░` 92% (11/12)
+`█████████████████████░░░░` 86% (12/14)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
@@ -119,6 +119,10 @@ _Last updated: 2026-10-23 21:08_
 - [x] Refinement: turnover-matched random baseline (random picks make exactly the model's swaps)
 - [x] Re-test fixing the cause (costs): keep a stock while in the top 10 → trades 695 → 286 (−59%), but excess still −1.0%/yr,
   same-day AUC 0.510, beats turnover-matched random 94%, DSR 0.43 → **still rejected: the picks themselves don't beat the average**
+- [x] **Approach A, step 1 — predict move *size*, not direction** (label: 10-session move > 1× expected move):
+  LightGBM same-day AUC **0.503** (no skill; it leaned on market-wide features that can't rank stocks) vs
+  **ranking by the GARCH forecast alone: 0.573** → move size *is* predictable, by GARCH, not by the fitted model
+- [ ] Approach A, step 2 — iron condors on the 5 stocks GARCH predicts quietest (stock options; vs 5 random, vs all) — **running**
 
 ## Phase 7 — Pretrained time-series models (optional)
 <!-- progress:phase -->
@@ -204,6 +208,7 @@ somewhere in-sample and fell apart out of sample or after costs.
 | LightGBM "will it rise" — + NSE OI/PCR/delivery/FII/IV | ❌ rejected | same-day AUC 0.502; Sharpe 0.68 |
 | LightGBM "will it beat the other 28" | ❌ rejected | same-day AUC 0.507; excess −1.2%/yr after costs |
 | Relative strength + turnover buffer (re-test) | ❌ rejected | turnover −59% but excess still −1.0%/yr; AUC 0.510 |
+| LightGBM "how big will the move be" | ❌ no skill | same-day AUC 0.503 — but **GARCH alone ranks it at 0.573** ✅ |
 
 Public end-of-day data has not produced a tradable edge in these 29 large, heavily-watched stocks, consistent with
 how efficiently they are priced. Costs matter a lot: a delivery round trip is ~0.33%, so a strategy rotating 5 stocks
@@ -270,6 +275,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 - 2026-10-23 — VRP condor rejected on NIFTY and BANKNIFTY: too few trades (15–19); BANKNIFTY closest (beats random 94%).
 - 2026-10-23 — LightGBM with NSE derivatives/flow features: no edge (same-day AUC 0.502).
 - 2026-10-23 — Relative-strength model rejected (same-day AUC 0.507, excess −1.2%/yr).
+- 2026-10-23 (night) — Approach A: move size is predictable by GARCH (same-day AUC 0.573), not by LightGBM (0.503); step 2 (condors on GARCH-quietest stocks) started.
 - 2026-10-23 (evening) — Scheduled refresh fixed and verified (PR #12). Re-tests of the two fixable rejections:
   relative strength still rejected; pooled 4-book VRP condor close (84 trades, beats random 100%, DSR 0.934) → paper-trade candidate.
 - 2026-10-23 — Shipped: expected move in the quant report; daily refresh verified and scheduled (19:30 weekdays). PRs #8–#10 merged; everything in `main`.
