@@ -5,20 +5,21 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `██████████░░░░░░░░░░░░░░░` 41% (26/64 tasks)
+**Overall:** `████████████░░░░░░░░░░░░░` 47% (31/66 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `███████░░░░░░░░░░░░░░░░░░` 29% (2,649/9,196 files)
+**NSE history download:** `████████░░░░░░░░░░░░░░░░░` 31% (2,862/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 13:35_
+_Last updated: 2026-10-23 13:40_
 
 | Branch | Phase | Status |
 |---|---|---|
 | `quant/phase-0-1-foundation` | 0–1 Foundation | code done; waiting on full data build + contract-note check |
 | `quant/phase-2-harness` | 2 Harness | **exit gate passed** |
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; part 2 waiting on data |
+| `quant/phase-4-regime` | 4 Regime (HMM) | built and run; exit gate pending NSE VIX re-run |
 | `fix/windows-test-portability` | Bug fix | done, full suite green on Windows (1423 passed) |
 | `fix/option-backtester-exits` | Bug fix | done, 3 regression tests (fail before / pass after) |
 
@@ -72,13 +73,15 @@ _Last updated: 2026-10-23 13:35_
 
 ## Phase 4 — Regime detection (HMM)
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/5)
+`██████████████████░░░░░░░` 71% (5/7)
 <!-- /progress:phase -->
-- [ ] Features: returns, realised vol, India VIX, breadth
-- [ ] 3-state Gaussian HMM, filtered probabilities only (no look-ahead)
-- [ ] Stable labels (p > 0.7 for 2 days)
-- [ ] Regime gate wired into Phase 2/3 evaluations
-- [ ] Exit gate: causal, states differ out of sample, strategy results differ by state
+- [x] Features: returns, realised vol, India VIX, breadth
+- [x] 3-state Gaussian HMM, filtered probabilities only (no look-ahead; tested against hmmlearn's smoothed output)
+- [x] Stable labels (p > 0.7 for 2 days) — 29 changes in 5.4 years
+- [x] Regime gate wired into Phase 2/3 evaluations
+- [x] First real run: calm 68% / choppy 30% / stress 2.4% of days (2021–2026); next-21-day vol 11.6% / 15.3% / 14.3%
+- [ ] Re-run on NSE's gap-free VIX once index files are downloaded
+- [ ] Exit gate: causal ✔, volatility differs by state ✔, returns by state **not significant** (t≈0.9) — decide after re-run
 
 ## Phase 5 — Your own idea as exact rules
 <!-- progress:phase -->
@@ -161,3 +164,4 @@ _Last updated: 2026-10-23 13:35_
 
 ## Log
 - 2026-10-23 — Phases 0, 2 done; Phase 1 code done (download running); Phase 3 part 1 passed, part 2 coded.
+- 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).

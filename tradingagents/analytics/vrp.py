@@ -88,6 +88,8 @@ def evaluate_condor(
     embargo: int = 45,
     random_runs: int = 100,
     seed: int = 0,
+    regimes: pd.Series | None = None,
+    regimes_switched_off: frozenset[str] = frozenset(),
     **sim_kwargs,
 ) -> CondorEvaluation:
     """Walk-forward over ``grid`` (keys: ``z`` plus any ``CondorParams`` field).
@@ -96,6 +98,10 @@ def evaluate_condor(
     the point with the best training Sharpe and keeps its test-window days and
     the trades entered in them. The embargo (default 45 sessions) exceeds the
     longest condor, so no training trade is still open in the test window.
+
+    ``regimes``: the regime label known at the start of each session (the
+    label dated the previous close). Each out-of-sample trade is tagged with
+    the label on its entry day, which feeds the regime gate.
     """
     sessions = pd.to_datetime(pd.Index(sorted(set(pd.to_datetime(chain["trade_date"])))))
     runs = {}
@@ -144,11 +150,22 @@ def evaluate_condor(
         baselines["random_days_median"] = float(np.median(rand))
 
     fold_returns = [float(oos.loc[f["test_start"]: f["test_end"]].sum()) for f in folds]
+    by_regime = regime_expectancy(oos_trades, regimes) if regimes is not None else {}
     evidence = Evidence(oos_returns=oos, fold_returns=fold_returns, n_oos_trades=len(oos_trades),
                         deflated_sharpe=dsr, in_sample_sharpe=float(np.mean(is_srs)), oos_sharpe=oos_sr,
-                        lookahead_mismatches=_signal_lookahead(vrp, sessions, folds[-1]["params"]["z"]))
+                        lookahead_mismatches=_signal_lookahead(vrp, sessions, folds[-1]["params"]["z"]),
+                        regime_expectancy=by_regime or None, regimes_switched_off=regimes_switched_off)
     return CondorEvaluation(name, folds, oos, oos_trades, oos_sr, float(np.mean(is_srs)), dsr, verdict,
                             baselines, random_pct, check_gates(evidence))
+
+
+def regime_expectancy(trades: list[cd.CondorTrade], regimes: pd.Series) -> dict[str, float]:
+    """Mean return on risk of the trades entered in each regime."""
+    labels = regimes.copy()
+    labels.index = pd.to_datetime(labels.index)
+    rows = [(labels.asof(pd.Timestamp(t.entry_date)), t.return_on_risk) for t in trades]
+    frame = pd.DataFrame(rows, columns=["regime", "r"]).dropna()
+    return frame.groupby("regime")["r"].mean().to_dict() if len(frame) else {}
 
 
 def _signal_lookahead(vrp: pd.Series, sessions: pd.Index, z: float, samples: int = 40) -> int:

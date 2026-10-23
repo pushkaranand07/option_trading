@@ -65,3 +65,16 @@ def test_condor_walk_forward_runs_end_to_end_and_reports_baselines():
     assert "enter_whenever_possible" in result.baselines and "random_days_median" in result.baselines
     assert result.gates.verdict in {"rejected", "incomplete"}   # regimes are not evaluated before Phase 4
     assert "== vrp-smoke ==" in result.summary()
+
+
+@pytest.mark.unit
+def test_trades_are_tagged_with_the_regime_known_on_their_entry_day():
+    from tradingagents.analytics.condor import CondorTrade
+
+    def trade(day, pnl):
+        return CondorTrade(day, day, {}, {}, 1, credit=10.0, max_risk=100.0, pnl=pnl)
+
+    regimes = pd.Series(["calm", "stress"], index=pd.to_datetime(["2026-01-01", "2026-01-10"]))
+    got = vp.regime_expectancy([trade(date(2026, 1, 5), 20.0), trade(date(2026, 1, 6), 40.0),
+                                trade(date(2026, 1, 12), -50.0)], regimes)
+    assert got == {"calm": pytest.approx(0.30), "stress": pytest.approx(-0.50)}

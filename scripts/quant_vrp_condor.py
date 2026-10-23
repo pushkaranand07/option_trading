@@ -50,12 +50,20 @@ def main() -> int:
     parser.add_argument("--symbols", nargs="+", default=["NIFTY", "BANKNIFTY"])
     parser.add_argument("--random-runs", type=int, default=100)
     args = parser.parse_args()
+    regimes = None
+    regime_file = ds.store_root() / "regime" / "regime.parquet"
+    if regime_file.exists():
+        r = pd.read_parquet(regime_file)
+        # The label known at the start of session t is the one dated t-1.
+        regimes = pd.Series(r["regime"].to_numpy(), index=pd.to_datetime(r["trade_date"])).shift(1).dropna()
+    else:
+        print("No regimes yet (run scripts/quant_regime.py): the regime gate will read not_evaluated.")
     for symbol in args.symbols:
         chain, spot, lots, vrp = inputs(symbol)
         print(f"{symbol}: {chain['trade_date'].nunique()} sessions of options, VRP on {len(vrp)} days, "
               f"mean VRP {vrp.mean():+.3f}", flush=True)
         result = evaluate_condor(f"vrp_condor_{symbol}", chain, spot, lots, vrp, GRID,
-                                 random_runs=args.random_runs)
+                                 random_runs=args.random_runs, regimes=regimes)
         print(result.summary(), "\n", flush=True)
         r = result.oos_daily
         trial_log.record(trial_log.Trial(
