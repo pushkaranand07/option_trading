@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -56,7 +55,7 @@ def main() -> int:
           + (f"short history: {short.to_dict()}" if len(short) else "all present on >=98% of days"))
 
     if not args.skip_prices:
-        prices = fetch_prices(end=date.today())
+        prices = fetch_prices()
         path = save_prices(prices, trading_days)
         issues = quality_report(prices, trading_days)
         issues.to_csv(ds.store_root() / "quality_report.csv", index=False)

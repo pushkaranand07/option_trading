@@ -31,12 +31,9 @@ JUMP_THRESHOLD = 0.20   # a one-day move this large with no split recorded is fl
 
 
 def _history(ticker: str, start: date, end: date) -> pd.DataFrame:
-    import yfinance as yf
+    from tradingagents.dataflows.vendors.yahoo.market import get_daily_history
 
-    from tradingagents.dataflows.vendors.yahoo.common import yf_retry
-
-    return yf_retry(lambda: yf.Ticker(ticker).history(
-        start=start.isoformat(), end=(end + timedelta(days=1)).isoformat(), auto_adjust=False, actions=True))
+    return get_daily_history(ticker, start.isoformat(), (end + timedelta(days=1)).isoformat())
 
 
 def normalize_history(raw: pd.DataFrame, symbol: str) -> pd.DataFrame:
@@ -66,7 +63,8 @@ def fetch_prices(
     end: date | None = None,
     history: Callable[[str, date, date], pd.DataFrame] = _history,
 ) -> pd.DataFrame:
-    end = end or date.today()
+    # Yesterday by default: today's bar may be a live, unfinished session.
+    end = end or date.today() - timedelta(days=1)
     symbols = list(symbols) if symbols is not None else list(YAHOO_TICKERS)
     frames = [normalize_history(history(YAHOO_TICKERS[s], start, end), s) for s in symbols]
     frames = [f for f in frames if len(f)]

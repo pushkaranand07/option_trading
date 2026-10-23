@@ -272,6 +272,13 @@ def get_closes(symbol: str, start_date: str, end_date: str) -> pd.Series:
     return history["Close"] if history is not None and "Close" in history else pd.Series(dtype=float)
 
 
+def get_daily_history(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """Unadjusted daily OHLCV plus Adj Close, dividends and splits, ``start_date``
+    up to, not including, ``end_date``. ``ticker`` is a Yahoo ticker as-is."""
+    return yf_retry(lambda: yf.Ticker(ticker).history(
+        start=start_date, end=end_date, auto_adjust=False, actions=True))
+
+
 def get_stock_stats(
     symbol: Annotated[str, "ticker symbol for the company"],
     indicator: Annotated[
