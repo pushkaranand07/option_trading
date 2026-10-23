@@ -61,3 +61,16 @@ def test_symbols_outside_the_universe_get_no_numbers(store):
 def test_missing_outputs_are_said_plainly(tmp_path):
     text = qr.quant_signal_text("TCS.NS", date(2026, 10, 23), root=tmp_path, trial_path=tmp_path / "t.sqlite")
     assert "Regime: not available" in text and "Volatility forecast: not available" in text
+
+
+@pytest.mark.unit
+def test_market_analyst_is_offered_the_report_and_the_pm_discounts_unvalidated_signals():
+    import inspect
+
+    from tradingagents.agents.analysts import market_analyst
+    from tradingagents.agents.managers import portfolio_manager
+    from tradingagents.agents.tools import get_quant_signal_report
+
+    assert get_quant_signal_report in market_analyst.TOOLS
+    assert "get_quant_signal_report" in inspect.getsource(market_analyst)
+    assert "Approved signals" in inspect.getsource(portfolio_manager)

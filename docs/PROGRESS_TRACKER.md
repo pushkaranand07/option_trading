@@ -5,14 +5,14 @@
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 
 <!-- progress:overall -->
-**Overall:** `█████████████░░░░░░░░░░░░` 54% (37/69 tasks)
+**Overall:** `██████████████░░░░░░░░░░░` 57% (39/69 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `██████████░░░░░░░░░░░░░░░` 38% (3,524/9,196 files)
+**NSE history download:** `██████████████░░░░░░░░░░░` 56% (5,123/9,196 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 13:57_
+_Last updated: 2026-10-23 14:38_
 
 | Branch | Phase | Status |
 |---|---|---|
@@ -21,6 +21,7 @@ _Last updated: 2026-10-23 13:57_
 | `quant/phase-3-garch` | 3 Volatility / VRP condor | part 1 passed; part 2 waiting on data |
 | `quant/phase-4-regime` | 4 Regime (HMM) | built and run; exit gate pending NSE VIX re-run |
 | `quant/phase-6-lgbm` | 6 LightGBM | pipeline built and verified; price-only model has no edge; derivatives features next |
+| `quant/phase-9-agent-tool` | 9 Agent integration | tool + prompts done; main merged in, full suite green (1517) |
 | `fix/windows-test-portability` | Bug fix | done, full suite green on Windows (1423 passed) |
 | `fix/option-backtester-exits` | Bug fix | done, 3 regression tests (fail before / pass after) |
 
@@ -124,12 +125,12 @@ _Last updated: 2026-10-23 13:57_
 
 ## Phase 9 — Agent integration
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/4)
+`████████████░░░░░░░░░░░░░` 50% (2/4)
 <!-- /progress:phase -->
-- [ ] `get_quant_signal_report` tool
-- [ ] Risk manager refuses non-significant signals
+- [x] `get_quant_signal_report` tool (regime, vol forecasts, IV vs forecast, gate verdicts; only data known before the date)
+- [x] Market analyst told to quote it; portfolio manager discounts any unvalidated quant signal
 - [ ] Report in the HTML output
-- [ ] Exit gate: 50-date replay, no invented numbers
+- [ ] Exit gate: 50-date replay, no invented numbers (needs LLM runs — your call on cost)
 
 ## Phase 10 — Paper trading
 <!-- progress:phase -->
@@ -176,4 +177,5 @@ _Last updated: 2026-10-23 13:57_
 ## Log
 - 2026-10-23 — Phases 0, 2 done; Phase 1 code done (download running); Phase 3 part 1 passed, part 2 coded.
 - 2026-10-23 — Bug fixes on two fix branches + data repairs; Phase 4 regime model built, first real run (calm today).
+- 2026-10-23 — Local `main` synced with GitHub (PRs #2–#7 merged). Phase 9 agent tool built.
 - 2026-10-23 — Phase 6 pipeline built. Caught 3 problems before trusting results: barrier-width label artifact, `month` feature fitting noise, merged back-to-back trades inflating returns (+6%/trade → +0.47%). Price-only model: no edge.
