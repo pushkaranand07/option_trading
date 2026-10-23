@@ -51,7 +51,7 @@ positive folds (60% < 70%), parameter stability (0.41 < 0.5).
 ## Known risks
 - **Parameter instability:** the walk-forward's choice moved between folds (e.g. NIFTY's last fold chose 2% wings and
   z 0.5). The frozen setting is the modal one; forward results may differ from the backtest more than usual.
-- **Rare signal:** ~15 trades a year → Stage 3 needs ~3 years to reach the evidence bar.
+- **Rare signal:** ~17 trades a year → Stage 3 needs ~21 months to reach the plan's 30 forward trades.
 - **Tail events:** a gap through a wing loses the full defined risk; the stop fills a session late by design.
 - **Data:** settlement uses the index close from NSE's official index file; if missing, the last earlier close.
 
