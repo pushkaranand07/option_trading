@@ -40,6 +40,15 @@ dev = [
     "pytest>=8.0",
     "pytest-subtests>=0.13",
 ]
+# Quant signal layer (docs/QUANT_SIGNAL_LAYER_PLAN.md): volatility, regime and
+# ML models plus the Parquet data store. CPU-only: pip install "tradingagents[quant]".
+quant = [
+    "arch>=7.0",
+    "hmmlearn>=0.3",
+    "lightgbm>=4.3",
+    "scikit-learn>=1.5",
+    "pyarrow>=16",
+]
 # Amazon Bedrock support (AWS SigV4 auth + boto3). Optional so the core install
 # stays lean: pip install "tradingagents[bedrock]".
 bedrock = [
