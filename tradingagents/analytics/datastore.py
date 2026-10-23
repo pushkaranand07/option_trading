@@ -319,7 +319,10 @@ def load(dataset: str, start: date | None = None, end: date | None = None,
                  if (not start or int(f.stem) >= start.year) and (not end or int(f.stem) <= end.year)]
     if not files:
         return pd.DataFrame()
-    df = pd.concat((pd.read_parquet(f) for f in files), ignore_index=True)
+    # Filter symbols while reading: the option chain is ~15M rows across all symbols,
+    # and reading it whole to keep one index's rows costs gigabytes of memory.
+    filters = [("symbol", "in", sorted(set(symbols)))] if symbols is not None and dataset != "participant" else None
+    df = pd.concat((pd.read_parquet(f, filters=filters) for f in files), ignore_index=True)
     if start:
         df = df[df["trade_date"] >= start]
     if end:
