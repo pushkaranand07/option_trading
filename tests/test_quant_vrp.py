@@ -92,3 +92,18 @@ def test_condor_gates_see_returns_on_capital_and_parameter_stability():
     dd = names["drawdown vs return"]
     # On capital at 2% risk per trade, daily moves are small: no -100% compounding artefacts.
     assert dd.status == "not_evaluated" or "max DD" not in dd.detail or "-100" not in dd.detail
+
+
+@pytest.mark.unit
+def test_pooling_two_underlyings_adds_their_trades_and_averages_their_returns():
+    evals = []
+    for seed in (0, 5):
+        chain, spot, lots, idx = rolling_market(seed=seed)
+        vrp = pd.Series(np.random.default_rng(seed).normal(0.02, 0.01, len(idx)), index=idx)
+        evals.append(vp.evaluate_condor(f"u{seed}", chain, spot, lots, vrp, [{"z": 0.0}, {"z": 1.0}],
+                                        train=150, test=60, embargo=45, random_runs=3))
+    pooled = vp.pool(evals, n_trials=4)
+    assert len(pooled.oos_trades) == sum(len(e.oos_trades) for e in evals)
+    both = pd.concat([e.on_capital for e in evals], axis=1).fillna(0.0).mean(axis=1)
+    assert np.allclose(pooled.on_capital.reindex(both.index).to_numpy(), both.to_numpy())
+    assert pooled.random_percentile is not None and "pooled: u0 + u5" in pooled.summary()

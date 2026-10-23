@@ -171,6 +171,35 @@ def _fill(price: float, buying: bool, slip: Slippage) -> float:
     return price + s if buying else max(price - s, 0.0)
 
 
+# Prepared chains, keyed by the caller's object: a walk-forward runs dozens of simulations
+# on the same chain, and re-indexing it each time dominated the run time. The entry holds
+# the chain itself, so a recycled id() can never match a different frame.
+_PREPARED: dict[int, tuple[pd.DataFrame, dict]] = {}
+
+
+def _prepare(chain: pd.DataFrame) -> dict:
+    hit = _PREPARED.get(id(chain))
+    if hit is not None and hit[0] is chain:
+        return hit[1]
+    c = chain.copy()
+    c["trade_date"] = pd.to_datetime(c["trade_date"]).dt.date
+    c["expiry"] = pd.to_datetime(c["expiry"]).dt.date
+    traded = (c["contracts"] > 0) & (c["close"] > 0)
+    price = np.where(traded, c["close"], np.where(c["settle"] > 0, c["settle"], np.nan))
+    keys = zip(c["trade_date"], c["expiry"], c["option_type"], c["strike"], strict=True)
+    prepared = {
+        "monthly": monthly_expiries(c),
+        "by_day": dict(iter(c.groupby("trade_date"))),
+        "marks": dict(zip(keys, price.astype(float), strict=True)),
+        "strikes": {},                       # memo of choose_strikes per (day, expiry, params)
+    }
+    prepared["days"] = sorted(prepared["by_day"])
+    if len(_PREPARED) > 8:                   # a handful of underlyings at a time is plenty
+        _PREPARED.clear()
+    _PREPARED[id(chain)] = (chain, prepared)
+    return prepared
+
+
 def simulate(
     chain: pd.DataFrame,
     spot: pd.Series,
@@ -186,12 +215,8 @@ def simulate(
     by date (expiry settlement). ``lots``: lot size by date. ``signal``: bool by
     date, already lagged (True on *t* means "enter during *t*").
     """
-    chain = chain.copy()
-    chain["trade_date"] = pd.to_datetime(chain["trade_date"]).dt.date
-    chain["expiry"] = pd.to_datetime(chain["expiry"]).dt.date
-    monthly = monthly_expiries(chain)
-    by_day = dict(iter(chain.groupby("trade_date")))
-    days = sorted(by_day)
+    prep = _prepare(chain)
+    monthly, by_day, days, marks_of = prep["monthly"], prep["by_day"], prep["days"], prep["marks"]
     spot = spot.copy()
     spot.index = pd.to_datetime(spot.index).date
     spot_items = sorted(spot.items())
@@ -207,15 +232,13 @@ def simulate(
     exit_tomorrow = ""
 
     def leg_marks(day: date, trade: CondorTrade) -> dict | None:
-        g = by_day[day]
-        g = g[g["expiry"] == trade.expiry].set_index(["option_type", "strike"])
         marks = {}
         for leg, k in trade.strikes.items():
-            if (TYPE[leg], k) not in g.index:
+            v = marks_of.get((day, trade.expiry, TYPE[leg], k))
+            if v is None or not np.isfinite(v):
                 return None
-            row = g.loc[(TYPE[leg], k)]
-            marks[leg] = _price(row.iloc[0] if isinstance(row, pd.DataFrame) else row)
-        return marks if all(np.isfinite(v) for v in marks.values()) else None
+            marks[leg] = v
+        return marks
 
     def close_out(day: date, trade: CondorTrade, prices: dict, reason: str, at_expiry: bool) -> None:
         trade.exit_date, trade.exit_reason = day, reason
@@ -290,7 +313,10 @@ def simulate(
         if not candidates or not np.isfinite(lot):
             continue
         expiry = candidates[0]
-        built = choose_strikes(g[g["expiry"] == expiry], params)
+        key = (day, expiry, params.short_delta, params.wing_pct, params.risk_free)
+        if key not in prep["strikes"]:
+            prep["strikes"][key] = choose_strikes(g[g["expiry"] == expiry], params)
+        built = prep["strikes"][key]
         if built is None:
             continue
         strikes, prices, flags = built
@@ -322,3 +348,33 @@ def summarize(trades: list[CondorTrade]) -> dict:
             "avg_return_on_risk": float(r.mean()), "median_return_on_risk": float(np.median(r)),
             "worst_return_on_risk": float(r.min()), "total_pnl_per_lot_basis": float(pnl.sum()),
             "exit_reasons": reasons, "flagged": sum(bool(t.flags) for t in trades)}
+
+
+def simulate_staggered(
+    chain: pd.DataFrame,
+    spot: pd.Series,
+    lots: pd.Series,
+    signal: pd.Series,
+    params: CondorParams = DEFAULT_PARAMS,
+    books: int = 4,
+    **kwargs,
+) -> tuple[list[CondorTrade], pd.Series]:
+    """``books`` staggered condor books: book *j* may enter only in ISO weeks with
+    ``week % books == j``, so together they enter about weekly, each still holding at
+    most one condor. Capital is split equally: each book's daily P&L counts 1/books
+    (also inside each trade's ``daily``), while ``return_on_risk`` stays per trade.
+    """
+    if books <= 1:
+        return simulate(chain, spot, lots, signal, params, **kwargs)
+    idx = pd.to_datetime(signal.index)
+    weeks = np.asarray(idx.isocalendar().week, dtype=int)
+    trades, total = [], None
+    for j in range(books):
+        book_signal = signal & pd.Series(weeks % books == j, index=signal.index)
+        book_trades, daily = simulate(chain, spot, lots, book_signal, params, **kwargs)
+        for t in book_trades:
+            t.daily = {d: v / books for d, v in t.daily.items()}
+        trades += book_trades
+        total = daily / books if total is None else total.add(daily / books, fill_value=0.0)
+    trades.sort(key=lambda t: t.entry_date)
+    return trades, total

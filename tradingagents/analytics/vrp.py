@@ -11,7 +11,7 @@ entering on random days?" Both baselines use the same condor rules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
@@ -55,6 +55,10 @@ class CondorEvaluation:
     baselines: dict[str, float]
     random_percentile: float | None
     gates: GateReport
+    random_dailies: list = field(default_factory=list)   # each random run's OOS series (for pooling)
+    in_sample_sharpes: list = field(default_factory=list)
+    stability: list = field(default_factory=list)
+    on_capital: pd.Series | None = None
 
     def summary(self) -> str:
         s = cd.summarize(self.oos_trades)
@@ -91,6 +95,7 @@ def evaluate_condor(
     regimes: pd.Series | None = None,
     regimes_switched_off: frozenset[str] = frozenset(),
     risk_fraction: float = 0.02,
+    books: int = 1,
     **sim_kwargs,
 ) -> CondorEvaluation:
     """Walk-forward over ``grid`` (keys: ``z`` plus any ``CondorParams`` field).
@@ -109,13 +114,16 @@ def evaluate_condor(
     on capital, so the series is scaled by this before they see it. At 100%
     (all capital in every condor) compounding daily marks of +/-50% would turn a
     profitable trade list into a large "annual loss". Sharpe does not depend on it.
+
+    ``books``: staggered condor books (``condor.simulate_staggered``); more than one
+    enters about weekly into the same monthly expiries, multiplying the trade count.
     """
     sessions = pd.to_datetime(pd.Index(sorted(set(pd.to_datetime(chain["trade_date"])))))
     runs = {}
     for i, g in enumerate(grid):
         params = replace(cd.CondorParams(), **{k: v for k, v in g.items() if k != "z"})
         signal = vrp_signal(vrp, g["z"], sessions)
-        runs[i] = cd.simulate(chain, spot, lots, signal, params, **sim_kwargs)
+        runs[i] = cd.simulate_staggered(chain, spot, lots, signal, params, books=books, **sim_kwargs)
 
     from tradingagents.analytics.evaluate import _neighbours
 
@@ -155,9 +163,10 @@ def evaluate_condor(
     # Baselines on the same out-of-sample days, same condor rules.
     base_params = replace(cd.CondorParams(), **{k: v for k, v in folds[-1]["params"].items() if k != "z"})
     always = pd.Series(True, index=sessions)
-    _, always_daily = cd.simulate(chain, spot, lots, always, base_params, **sim_kwargs)
+    _, always_daily = cd.simulate_staggered(chain, spot, lots, always, base_params, books=books, **sim_kwargs)
     baselines = {"enter_whenever_possible": sharpe(always_daily.reindex(oos.index).fillna(0.0))}
     random_pct = None
+    random_dailies = []
     if random_runs:
         rng = np.random.default_rng(seed)
         # The real signal's entry rate in each fold's test window, where it is used. Over
@@ -168,8 +177,10 @@ def evaluate_condor(
         rand = []
         for _ in range(random_runs):
             sig = pd.Series(rng.random(len(sessions)) < on_share, index=sessions)
-            _, d = cd.simulate(chain, spot, lots, sig, base_params, **sim_kwargs)
-            rand.append(sharpe(d.reindex(oos.index).fillna(0.0)))
+            _, d = cd.simulate_staggered(chain, spot, lots, sig, base_params, books=books, **sim_kwargs)
+            rand_daily = d.reindex(oos.index).fillna(0.0)
+            random_dailies.append(rand_daily)
+            rand.append(sharpe(rand_daily))
         random_pct = float((np.array(rand) < oos_sr).mean())
         baselines["random_days_median"] = float(np.median(rand))
 
@@ -184,7 +195,47 @@ def evaluate_condor(
                         chosen_sharpe=1.0 if stability else None,
                         neighbour_sharpes=[float(np.mean(stability))] if stability else None)
     return CondorEvaluation(name, folds, oos, oos_trades, oos_sr, float(np.mean(is_srs)), dsr, verdict,
-                            baselines, random_pct, check_gates(evidence))
+                            baselines, random_pct, check_gates(evidence), random_dailies, is_srs, stability,
+                            on_capital)
+
+
+def pool(evaluations: list[CondorEvaluation], n_trials: int, regimes: pd.Series | None = None) -> CondorEvaluation:
+    """One verdict for several underlyings traded side by side, capital split equally.
+
+    The pooled series is the average of each underlying's out-of-sample series (on
+    capital); trades are the union; random runs are paired run-by-run and averaged
+    the same way; ``n_trials`` should count every grid point on every underlying.
+    """
+    index = evaluations[0].on_capital.index
+    for e in evaluations[1:]:
+        index = index.union(e.on_capital.index)
+    on_capital = sum(e.on_capital.reindex(index).fillna(0.0) for e in evaluations) / len(evaluations)
+    on_risk = sum(e.oos_daily.reindex(index).fillna(0.0) for e in evaluations) / len(evaluations)
+    trades = sorted((t for e in evaluations for t in e.oos_trades), key=lambda t: t.entry_date)
+    sr = sharpe(on_capital)
+    trial_srs = [x for e in evaluations for x in e.in_sample_sharpes if np.isfinite(x)]
+    dsr = deflated_sharpe_ratio(on_capital, n_trials)
+    runs = min(len(e.random_dailies) for e in evaluations)
+    random_pct = None
+    if runs:
+        rand = [sharpe(sum(e.random_dailies[i].reindex(index).fillna(0.0) for e in evaluations) / len(evaluations))
+                for i in range(runs)]
+        random_pct = float((np.array(rand) < sr).mean())
+    folds = [f for e in evaluations for f in e.folds]
+    fold_returns = [float((1 + on_capital.loc[f["test_start"]: f["test_end"]]).prod() - 1) for f in folds]
+    by_regime = regime_expectancy(trades, regimes) if regimes is not None else {}
+    stability = [x for e in evaluations for x in e.stability]
+    evidence = Evidence(oos_returns=on_capital, fold_returns=fold_returns, n_oos_trades=len(trades),
+                        deflated_sharpe=dsr, in_sample_sharpe=float(np.mean(trial_srs)) if trial_srs else None,
+                        oos_sharpe=sr, lookahead_mismatches=0, regime_expectancy=by_regime or None,
+                        chosen_sharpe=1.0 if stability else None,
+                        neighbour_sharpes=[float(np.mean(stability))] if stability else None)
+    baselines = {k: float(np.mean([e.baselines.get(k, np.nan) for e in evaluations]))
+                 for k in evaluations[0].baselines}
+    name = "pooled: " + " + ".join(e.name for e in evaluations)
+    return CondorEvaluation(name, folds, on_risk, trades, sr, float(np.mean(trial_srs)) if trial_srs else float("nan"),
+                            dsr, evidence_verdict(len(trades), dsr), baselines, random_pct, check_gates(evidence),
+                            [], trial_srs, stability, on_capital)
 
 
 def regime_expectancy(trades: list[cd.CondorTrade], regimes: pd.Series) -> dict[str, float]:
