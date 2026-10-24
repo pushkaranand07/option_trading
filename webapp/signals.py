@@ -6,7 +6,7 @@ the win rates the page shows are the record of exactly the rule it applies now.
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -40,9 +40,25 @@ def now_ist() -> datetime:
     return datetime.now(IST)
 
 
-def market_open(at: datetime | None = None) -> bool:
+_calendar = {"day": None, "cal": None}
+
+
+def nse_calendar():
+    """NSE's calendar (holidays, special and Muhurat sessions), fetched once a day."""
+    from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
+
+    today = now_ist().date()
+    if _calendar["day"] != today:
+        _calendar["cal"], _calendar["day"] = NSECalendar.from_nse(), today
+    return _calendar["cal"]
+
+
+def market_open(at: datetime | None = None, calendar=None) -> bool:
+    """True during NSE's regular session: not on holidays, and not on a Muhurat day's regular hours."""
+    from tradingagents.dataflows.vendors.nse.calendar import SessionState
+
     at = at or now_ist()
-    return at.weekday() < 5 and time(9, 15) <= at.time() <= time(15, 30)
+    return (calendar or nse_calendar()).session_state(at) == SessionState.OPEN
 
 
 # ---------- intraday ----------

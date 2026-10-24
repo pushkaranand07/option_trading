@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `███████████████████████░░` 92% (92/100 tasks)
+**Overall:** `███████████████████████░░` 93% (93/100 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 14:16_
+_Last updated: 2026-10-24 14:21_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -185,7 +185,7 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`██████████████████████░░░` 88% (22/25)
+`███████████████████████░░` 92% (23/25)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -212,7 +212,8 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 **Found while writing the docs (2026-10-24), not fixed yet** — each needs its own change:
 - [x] `NSECalendar.from_nse()` never loaded special sessions → now the 11 verified weekend sessions plus NSE's
   `*`-marked Muhurat holidays (2026-11-08 found live) ([PA-27](PA_27-calendar-special-sessions.md))
-- [ ] Web app hard-codes lot sizes (NIFTY 75, BANKNIFTY 35; current 65 / 30) and shows the market open on holidays
+- [x] Web app hard-coded lot sizes (NIFTY 75, BANKNIFTY 35; current 65 / 30) and showed the market open on holidays →
+  live lots from Dhan's scrip master, market status from the NSE calendar ([PA-30](PA_30-webapp-lots-and-holidays.md))
 - [x] Option backtester's NSE adapter set bid = ask = close, so slippage did nothing → modelled bid/ask from the
   cost model ([PA-28](PA_28-backtester-modelled-bid-ask.md))
 - [x] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` was ignored → now forwarded (dropped for non-reasoning
