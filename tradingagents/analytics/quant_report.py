@@ -161,3 +161,57 @@ def quant_signal_text(ticker: str, on: str | date, root: Path | None = None,
              *_regime_lines(day, root), *vol, *_iv_lines(symbol, day, garch21, root),
              *_validation_lines(trial_path), SURVIVORSHIP_NOTE]
     return "\n".join(parts)
+
+
+# ---------------------------------------------------------------- structured (web app)
+
+def quant_signal_data(ticker: str, on: str | date, root: Path | None = None) -> dict:
+    """The same numbers as ``quant_signal_text``, as a dict for the web app. Same timing rule: only
+    values published before ``on`` opens. Missing pieces are ``None`` (never estimated)."""
+    root = root or store_root()
+    day = pd.Timestamp(on).date()
+    symbol = store_symbol(ticker)
+    out = {"symbol": symbol, "in_universe": symbol is not None, "as_of_open": str(day),
+           "regime": None, "vol": None, "expected_move": None, "iv": None}
+    f = root / "regime" / "regime.parquet"
+    if f.exists():
+        known = _known_rows(pd.read_parquet(f), day)
+        if len(known):
+            last = known.iloc[-1]
+            since = known[known["regime"] != last["regime"]]
+            start = known.loc[since.index[-1] + 1, "trade_date"] if len(since) else known["trade_date"].iloc[0]
+            out["regime"] = {"name": str(last["regime"]), "since": str(start), "as_of": str(last["trade_date"]),
+                             "p": {k: float(last[f"p_{k}"]) for k in ("calm", "choppy", "stress")}}
+    if symbol is None:
+        return out
+    f = root / "vol_forecasts" / f"{symbol}.parquet"
+    garch21 = None
+    if f.exists():
+        known = _known_rows(pd.read_parquet(f), day)
+        if len(known):
+            last, when = known.iloc[-1], known.index[-1]
+            garch21 = float(last["garch_h21"])
+            out["vol"] = {"as_of": f"{when:%Y-%m-%d}", "historical_20d": float(last["hist_h21"]),
+                          **{f"h{h}": {m: float(last[f"{m}_h{h}"]) for m in ("garch", "gjr", "ewma")}
+                             for h in (5, 10, 21)}}
+            close = None
+            pf = root / "prices" / "prices.parquet"
+            if pf.exists():
+                p = _known_rows(pd.read_parquet(pf, filters=[("symbol", "==", symbol)]), day)
+                if len(p):
+                    close = float(p.sort_values("trade_date")["close"].iloc[-1])
+            moves = {}
+            for h in (5, 10, 21):
+                pct = float(last[f"garch_h{h}"]) * (h / 252) ** 0.5
+                moves[f"h{h}"] = {"pct": pct, "rupees": close * pct if close else None}
+            out["expected_move"] = {"close": close, **moves}
+    f = root / "iv" / "iv30.parquet"
+    if f.exists():
+        iv = _known_rows(pd.read_parquet(f).query("symbol == @symbol"), day)
+        if len(iv):
+            last = iv.iloc[-1]
+            hist = iv["iv30"].iloc[-252:]
+            out["iv"] = {"as_of": str(last["trade_date"]), "iv30": float(last["iv30"]),
+                         "minus_garch21": float(last["iv30"]) - garch21 if garch21 is not None else None,
+                         "percentile_1y": float((hist < last["iv30"]).mean()) if len(hist) > 60 else None}
+    return out

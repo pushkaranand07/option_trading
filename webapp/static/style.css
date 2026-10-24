@@ -131,7 +131,9 @@ table.t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-
 .t th:first-child, .t td:first-child { text-align: left; }
 .t tr.pick td { background: var(--up-soft); font-weight: 600; }
 .t tr:last-child td { border-bottom: 0; }
-.trades { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 10px; }
+.trades { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.trades .trade { display: grid; justify-items: center; gap: 2px; }
+.trades small { font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .trades span { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
 .trades .w { background: var(--up); } .trades .l { background: var(--down); }
 .note { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
@@ -195,3 +197,43 @@ table.oc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
   .chart { height: 340px; }
   .ltp { font-size: 22px; }
 }
+
+/* tabs */
+.tabs { position: sticky; top: 51px; z-index: 15; display: flex; gap: 4px; padding: 0 20px; overflow-x: auto; scrollbar-width: none;
+  background: var(--panel); border-bottom: 1px solid var(--border); }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button { flex: none; border: 0; background: none; padding: 12px 14px; cursor: pointer; font-size: 14px; font-weight: 600;
+  color: var(--muted); border-bottom: 2px solid transparent; }
+.tabs button:hover { color: var(--text); }
+.tabs button.active { color: var(--text); border-bottom-color: var(--brand); }
+.tab { display: flex; flex-direction: column; gap: 16px; }
+.tab-intro { margin: 0; color: var(--muted); max-width: 820px; }
+.page-inner { max-width: 1120px; margin: 0 auto; padding: 16px 20px 0; }
+#instArea .inst { margin-bottom: -4px; }
+
+/* simple building blocks used by the new tabs */
+.big { font-size: 26px; font-weight: 800; margin: 0 0 4px; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.prob { display: grid; grid-template-columns: 70px 1fr 48px; align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+.stats .stat b { font-size: 17px; }
+.tools { display: grid; gap: 10px; }
+.tool { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--up-soft); }
+.tool .tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--up); color: #fff; font-weight: 800; flex: none; }
+.steps-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.step { font-size: 12px; padding: 3px 9px; border-radius: 99px; background: var(--panel-2); }
+.step.ok { background: var(--up-soft); color: var(--up); } .step.bad { background: var(--down-soft); color: var(--down); }
+.map-frame { width: 100%; height: calc(100vh - 210px); min-height: 560px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+.journal-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.journal-controls .btn { cursor: pointer; }
+#costCard .oc td, #costCard .oc th { text-align: center; }
+@media (max-width: 720px) { .tabs { top: 0; position: relative; } .tabs button { padding: 10px 10px; font-size: 13px; } }
+.x-scroll { overflow-x: auto; }
+.t td.left, .t th.left { text-align: left; }
+.t.research td { vertical-align: top; }
+/* keep wide tables inside their card on small screens */
+.page { min-width: 0; }
+.tab, .tab > *, .card { min-width: 0; max-width: 100%; }
+.card .body { overflow-x: auto; }
+@media (max-width: 720px) { .page { padding: 14px 12px 32px; } .page-inner { padding: 12px 12px 0; } .big { font-size: 22px; } }
+.t td.num { white-space: nowrap; }

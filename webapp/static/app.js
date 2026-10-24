@@ -3,7 +3,8 @@
 const $ = (s, el = document) => el.querySelector(s);
 const IST_OFFSET = 19800; // lightweight-charts draws UTC; shift so the axis reads Indian time
 
-const S = { sym: store("sym") || "NIFTY", tf: "5m", indices: [], quotes: {}, status: {}, plan: null, expiry: null, aiJob: null };
+const S = { sym: store("sym") || "NIFTY", tf: "5m", indices: [], quotes: {}, status: {}, plan: null, expiry: null, aiJob: null,
+  tab: "today" };
 
 function store(k, v) {
   try {
@@ -93,8 +94,7 @@ function selectSymbol(sym) {
   ["#mood", "#record", "#btst", "#history"].forEach((id) => ($(id).innerHTML = ""));
   renderChips(); renderInst();
   firstLoad = true; loadCandles(); loadQuotes(); loadPlan();
-  if ($("#ocBox").open) loadOptions();
-  if ($("#aiBox").open) renderAI();
+  showTab(S.tab, true);
   scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -241,12 +241,20 @@ function renderRecord(p) {
     <td>${t}× risk${+t === r.chosen ? " ✓" : ""}</td><td>${x.trades}</td><td>${x.win_rate ?? "—"}${x.win_rate != null ? "%" : ""}</td>
     <td class="${cls(x.avg_r)}">${x.avg_r != null ? sign(x.avg_r) + x.avg_r : "—"}</td></tr>`).join("");
   const side = (k, label) => { const x = r.by_side[k]; return x.trades ? `${label}: <b>${x.win_rate}%</b> of ${x.trades}` : `${label}: none`; };
-  const chips = r.last.slice().reverse().map((t) => `<span class="${t.r > 0 ? "w" : "l"}" title="${esc(t.time.slice(0, 16))} ${t.side} → ${sign(t.r)}${t.r}× risk">${t.r > 0 ? "W" : "L"}</span>`).join("");
+  const recent = r.last.slice().reverse();                                    // oldest first
+  const won = recent.filter((t) => t.r > 0).length;
+  const chips = recent.map((t) => `<div class="trade" title="${esc(t.time.slice(0, 10))} · ${t.side === "BUY" ? "buy" : "sell"} setup · ${sign(t.r)}${t.r}× risk after costs">
+      <span class="${t.r > 0 ? "w" : "l"}">${t.r > 0 ? "W" : "L"}</span><small class="${cls(t.r)}">${sign(t.r)}${t.r}</small></div>`).join("");
+  const target = r.by_target[String(r.chosen)] || {};
   $("#record").innerHTML = `<div class="card-head"><h2>Track record of this setup</h2></div>
     <div class="body"><p class="small muted" style="margin-top:0">We replayed this exact rule over the last ${r.days} trading days: one trade a day, entry after 9:45 AM, exit by 3:15 PM, ${r.cost_pct}% costs included.</p>
       <table class="t"><thead><tr><th>Profit target</th><th>Trades</th><th>Win rate</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="small" style="margin:10px 0 0">${side("BUY", "Buy setups")} · ${side("SELL", "Sell setups")}</p>
-      ${chips ? `<div class="small muted" style="margin-top:10px">Latest trades (oldest → newest)</div><div class="trades">${chips}</div>` : ""}
+      ${chips ? `<div class="small" style="margin-top:12px"><b>The last ${recent.length} of these ${target.trades ?? recent.length} trades</b> (${r.chosen}× risk target), oldest → newest:
+        ${won} won, ${recent.length - won} lost</div>
+        <div class="trades">${chips}</div>
+        <div class="small muted"><b class="up">W</b> = the trade made money after costs · <b class="down">L</b> = it lost money.
+        The number under each box is the result in units of risk: +1.5 = gained 1.5× what was risked, −1.0 = lost the full risk. Hover a box for its date.</div>` : ""}
       <p class="note">"Avg result" is the average gain per trade as a share of what you risked: +0.10 means you made 10% of your risk per trade on average. A big win rate with a negative average still loses money.</p></div>`;
 }
 
@@ -337,18 +345,19 @@ $("#tfSeg").onclick = (e) => {
 };
 
 // ---------- option chain ----------
-$("#ocBox").addEventListener("toggle", () => { if ($("#ocBox").open) loadOptions(); });
 $("#expirySel").onchange = (e) => { S.expiry = e.target.value; loadChain(); };
 async function loadOptions() {
   const notice = $("#ocNotice");
   $("#ocTable tbody").innerHTML = ""; $("#ocStats").innerHTML = "";
-  if (!isIndex(S.sym)) { notice.hidden = false; notice.textContent = "Option chains are shown for indices. Pick NIFTY, BANKNIFTY or another index above."; return; }
+  const hideChain = (msg) => { notice.hidden = false; notice.textContent = msg; $(".oc-scroll", $("#ocTable").closest(".pad")).hidden = true; $("#expirySel").closest("label").hidden = true; };
+  $(".oc-scroll", $("#ocTable").closest(".pad")).hidden = false; $("#expirySel").closest("label").hidden = false;
+  if (!isIndex(S.sym)) { hideChain("The live option chain is shown for indices. Pick NIFTY, BANKNIFTY or another index above — the trading costs below work for stocks too."); return; }
   try {
     const exps = await api("/api/expiries/" + S.sym);
     S.expiry = S.expiry && exps.includes(S.expiry) ? S.expiry : exps[0];
     $("#expirySel").innerHTML = exps.map((x) => `<option ${x === S.expiry ? "selected" : ""}>${x}</option>`).join("");
     notice.hidden = true; loadChain();
-  } catch (e) { notice.hidden = false; notice.textContent = e.message; }
+  } catch (e) { hideChain(e.message.includes("Dhan") ? "The live option chain needs a Dhan connection (DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN in .env). The trading costs below work without it." : e.message); }
 }
 let chainBusy = false, chainCentered = null;
 async function loadChain() {
@@ -379,7 +388,6 @@ function renderChain(c) {
 
 // ---------- AI ----------
 const aiJobs = JSON.parse(store("aiJobs") || "{}");
-$("#aiBox").addEventListener("toggle", () => { if ($("#aiBox").open) renderAI(); });
 function renderAI() {
   const btn = $("#aiBtn"), notice = $("#aiNotice");
   btn.textContent = `Run AI analysis on ${nameOf(S.sym)}`;
@@ -422,15 +430,237 @@ async function pollAI(jobId, sym) {
   }
 }
 
+// ---------- tabs ----------
+const TABS = ["today", "risk", "options", "ai", "map", "research", "trades"];
+const INSTRUMENT_TABS = ["today", "risk", "options", "ai"];
+const loaded = {};
+
+function showTab(tab, force = false) {
+  if (!TABS.includes(tab)) tab = "today";
+  const changed = S.tab !== tab;
+  S.tab = tab; store("tab", tab);
+  if (location.hash.slice(1) !== tab) history.replaceState(null, "", "#" + tab);
+  document.querySelectorAll("#tabs button").forEach((b) => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle("active", on); b.setAttribute("aria-selected", on);
+  });
+  document.querySelectorAll(".tab").forEach((t) => (t.hidden = t.dataset.tab !== tab));
+  $("#instArea").hidden = !INSTRUMENT_TABS.includes(tab);
+  const key = INSTRUMENT_TABS.includes(tab) ? tab + ":" + S.sym : tab;
+  if (!force && !changed && loaded[key]) return;
+  loaded[key] = true;
+  if (tab === "today") loadCandles();
+  if (tab === "risk") loadRisk();
+  if (tab === "options") { loadOptions(); loadCosts(); }
+  if (tab === "ai") renderAI();
+  if (tab === "map") loadMap();
+  if (tab === "research") loadResearch();
+  if (tab === "trades") loadJournalFiles();
+}
+$("#tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) showTab(b.dataset.tab); };
+addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+
+const pc = (x, d = 1) => (x == null || isNaN(x) ? "—" : `${(x * 100).toFixed(d)}%`);
+const card = (title, body, extra = "") => `<section class="card"><div class="card-head"><h2>${title}</h2>${extra}</div><div class="body">${body}</div></section>`;
+
+// ---------- risk & volatility ----------
+const REGIME_TEXT = {
+  calm: ["Calm", "up", "Moves are smaller than usual. Option sellers face less risk; tight stops get hit less often."],
+  choppy: ["Choppy", "warn", "Moves are bigger than usual. Use wider stops and smaller size."],
+  stress: ["Stress", "down", "Rare, violent markets. Defined-risk trades only, and small size."],
+};
+
+async function loadRisk() {
+  const sym = S.sym;
+  $("#riskBody").innerHTML = `<div class="loading"><span class="spinner"></span>Loading…</div>`;
+  let r;
+  try { r = await api("/api/risk/" + encodeURIComponent(sym)); }
+  catch (e) { $("#riskBody").innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
+  if (sym !== S.sym) return;
+  let html = "";
+  const g = r.regime;
+  if (g) {
+    const [label, tone, meaning] = REGIME_TEXT[g.name] || [g.name, "flat", ""];
+    const bars = ["calm", "choppy", "stress"].map((k) => `<div class="prob"><span>${REGIME_TEXT[k][0]}</span>
+      <div class="meter"><i style="width:${Math.round(g.p[k] * 100)}%;background:var(--${REGIME_TEXT[k][1] === "warn" ? "warn" : REGIME_TEXT[k][1]})"></i></div>
+      <b class="num">${Math.round(g.p[k] * 100)}%</b></div>`).join("");
+    html += card("How calm is the market?", `<p class="big">${label}</p><p>${meaning}</p>
+      <p class="small muted">Whole-market reading (NIFTY), ${label.toLowerCase()} since ${esc(g.since)}, as of the close of ${esc(g.as_of)}.</p>${bars}
+      <p class="note">The regime tells you how <b>big</b> moves tend to be next, not which <b>way</b>: next-month volatility was 11.5% in calm markets vs 15.1% in choppy ones (2021–26).</p>`,
+      `<span class="badge ${tone}">${label}</span>`);
+  }
+  if (!r.in_universe) {
+    html += `<div class="notice">Volatility forecasts exist for the research universe only: the 29 large F&amp;O stocks, NIFTY and BANKNIFTY.
+      ${esc(sym)} is not in it. Pick NIFTY, BANKNIFTY or a large stock such as RELIANCE, HDFCBANK, INFY.</div>`;
+    $("#riskBody").innerHTML = html; return;
+  }
+  const m = r.expected_move;
+  if (m) {
+    const rows = [5, 10, 21].map((h) => {
+      const x = m["h" + h], lo = m.close ? m.close - x.rupees : null, hi = m.close ? m.close + x.rupees : null;
+      return `<tr><td>Next ${h} trading days${h === 5 ? " (a week)" : h === 21 ? " (a month)" : " (two weeks)"}</td>
+        <td class="num"><b>±${pc(x.pct)}</b></td><td class="num">${x.rupees != null ? "±₹" + fmt0(x.rupees) : "—"}</td>
+        <td class="num">${lo != null ? `${fmt0(lo)} – ${fmt0(hi)}` : "—"}</td></tr>`;
+    }).join("");
+    html += card("How far could it move?", `<table class="t"><thead><tr><th>Period</th><th>Move</th><th>In ₹</th><th>Likely range</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="note">About <b>2 times in 3</b> the price stays inside this range (one standard deviation from the GARCH forecast, last close ₹${fmt(m.close)}).
+      Use it for <b>stop distance</b> (a stop inside the 5-day move gets hit by normal noise), <b>option strike width</b> and <b>position size</b>.</p>`,
+      `<span class="small muted">GARCH, made after the close of ${esc(r.vol?.as_of || "")}</span>`);
+  }
+  const v = r.vol;
+  if (v) {
+    const row = (h) => `<tr><td>Next ${h} days</td><td class="num"><b>${pc(v["h" + h].garch)}</b></td><td class="num">${pc(v["h" + h].ewma)}</td></tr>`;
+    html += card("Volatility forecast (yearly terms)", `<table class="t"><thead><tr><th>Period</th><th>GARCH (validated)</th><th>Simple average</th></tr></thead>
+      <tbody>${row(5)}${row(10)}${row(21)}</tbody></table>
+      <p class="note">Last 20 days actually moved at ${pc(v.historical_20d)} a year. GARCH beat that simple history on 31 of 31 symbols in testing.</p>`);
+  }
+  const iv = r.iv;
+  if (iv) {
+    const rich = iv.minus_garch21;
+    const verdict = rich == null ? "" : rich > 0.03 ? "Options are priced <b>above</b> the forecast: expensive (better for sellers, worse for buyers)."
+      : rich < -0.03 ? "Options are priced <b>below</b> the forecast: cheap (better for buyers)." : "Options are priced close to the forecast: fair.";
+    html += card("Are options cheap or expensive?", `<div class="stats">
+        <div class="stat"><span>Implied vol (30 days)</span><b class="num">${pc(iv.iv30)}</b></div>
+        <div class="stat"><span>Above / below the GARCH forecast</span><b class="num">${rich == null ? "—" : (rich > 0 ? "+" : "") + pc(rich)}</b></div>
+        <div class="stat"><span>Higher than this share of the past year</span><b class="num">${pc(iv.percentile_1y, 0)}</b></div></div>
+      <p>${verdict}</p><p class="small muted">From NSE's option closes on ${esc(iv.as_of)}. Context only: selling options when they look expensive was tested and did not beat costs on its own.</p>`);
+  }
+  $("#riskBody").innerHTML = html || `<div class="notice">No research numbers available yet.</div>`;
+}
+
+// ---------- options: measured costs ----------
+async function loadCosts() {
+  const sym = S.sym;
+  $("#costCard").innerHTML = `<div class="loading"><span class="spinner"></span>Loading trading costs…</div>`;
+  let r;
+  try { r = await api("/api/spreads/" + encodeURIComponent(sym)); }
+  catch (e) { $("#costCard").innerHTML = `<div class="pad notice">${esc(e.message)}</div>`; return; }
+  if (sym !== S.sym) return;
+  if (!r.available) { $("#costCard").innerHTML = `<div class="card-head"><h2>What it costs to trade</h2></div><div class="body"><p class="muted">${esc(r.message || "No quotes yet.")}</p></div>`; return; }
+  const tabsHtml = r.expiries.map((e, i) => `<button data-i="${i}" class="${i ? "" : "active"}">${esc(e.expiry)}</button>`).join("");
+  $("#costCard").innerHTML = `<div class="card-head"><h2>What it costs to trade (bid–ask spread)</h2><div class="seg" id="costSeg">${tabsHtml}</div></div><div class="body" id="costBody"></div>`;
+  const show = (i) => {
+    const e = r.expiries[i];
+    const cell = (x) => (x ? `<td class="num">${fmt(x.bid)} / ${fmt(x.ask)}</td><td class="num ${x.spread_pct > 0.05 ? "down" : x.spread_pct > 0.02 ? "warn-c" : ""}">${pc(x.spread_pct)}</td>` : "<td>—</td><td>—</td>");
+    const rows = e.rows.map((x) => `<tr class="${x.strike === e.atm ? "atm" : ""}">${cell(x.ce)}<td class="strike">${fmt0(x.strike)}</td>${cell(x.pe)}</tr>`).join("");
+    const level = e.real_vs_model <= 1 ? "normal" : e.real_vs_model <= 2 ? "a bit costly" : "costly";
+    $("#costBody").innerHTML = `<p>Typical spread here: <b>${pc(e.median_spread_pct)}</b> of the premium — <b>${level}</b>
+        (${e.real_vs_model.toFixed(2)}× our cost model; under 1 is cheaper than we assume).</p>
+      <div class="oc-scroll"><table class="oc"><thead><tr><th>Call bid / ask</th><th>Spread</th><th class="strike">Strike</th><th>Put bid / ask</th><th>Spread</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">You pay roughly <b>half the spread</b> each time you buy or sell. A 4-leg trade opened and closed pays it 8 times —
+      that is why the results-day butterfly lost money even though its idea was right. Closing quotes of ${esc(r.snapshot)}; updated every evening.</p>`;
+    document.querySelectorAll("#costSeg button").forEach((b) => b.classList.toggle("active", +b.dataset.i === i));
+  };
+  $("#costSeg").onclick = (ev) => { const b = ev.target.closest("button"); if (b) show(+b.dataset.i); };
+  show(0);
+}
+
+// ---------- market map ----------
+function loadMap() {
+  if ($("#mapBody").dataset.ready) return;
+  $("#mapBody").dataset.ready = "1";
+  $("#mapBody").innerHTML = `<iframe class="map-frame" src="/market-map" title="India Market Map"></iframe>`;
+}
+
+// ---------- research ----------
+async function loadResearch() {
+  let r;
+  try { r = await api("/api/research"); }
+  catch (e) { $("#researchBody").innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
+  const inUse = r.in_use.map((x) => `<div class="tool"><div class="tick">✓</div><div><b>${esc(x.name)}</b>
+    <div class="small">${esc(x.evidence)}</div><div class="small muted">Use it for: ${esc(x.use)}</div></div></div>`).join("");
+  const nicer = (s) => s.replace(/_/g, " ");
+  const label = (t) => (t.passed ? ["Passed", "up"] : /predictive|kept/.test(t.verdict) ? ["Insight only", "flat"] : ["Rejected", "down"]);
+  const rows = r.tested.map((t) => { const [lb, tone] = label(t);
+    return `<tr><td><b>${esc(t.name)}</b>${t.what ? `<div class="small muted">${esc(t.what)}</div>` : ""}</td>
+    <td><span class="badge ${tone}">${lb}</span></td><td class="left small">${esc(t.result || t.verdict)}</td>
+    <td class="num small">${t.trades != null ? fmt0(t.trades) + " " + esc(t.unit) : "—"}</td></tr>`; }).join("");
+  const paper = r.paper.map((p) => `<div class="body"><b>${esc(nicer(p.name))}</b> — ${p.status === "observation" ? "<span class='badge flat'>observation only</span>" : "<span class='badge up'>candidate</span>"}
+    <div class="small">Started ${esc(p.start)} · ${p.closed ?? 0} closed, ${p.open ?? 0} open trades</div>
+    ${p.note ? `<div class="small muted">${esc(p.note)}</div>` : ""}</div>`).join("") || `<div class="body muted">No paper strategies.</div>`;
+  const d = r.daily_job;
+  const steps = d?.steps ? d.steps.map((s) => `<span class="step ${s.exit_code === 0 ? "ok" : "bad"}">${esc(s.step)}</span>`).join("") : "";
+  const when = (s) => (s ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+  const daily = d ? `<p>Last run ${esc(when(d.finished || d.started))}: <b class="${d.ok ? "up" : "down"}">${d.ok ? "all steps OK" : "a step failed"}</b></p><div class="steps-row">${steps}</div>`
+    : `<p class="muted">No run recorded yet.</p>`;
+  $("#researchBody").innerHTML =
+    card("What works — in use now", `<div class="tools">${inUse}</div>`) +
+    card(r.approved.length ? `Approved signals: ${esc(r.approved.join(", "))}` : "Trading signals: none has passed yet",
+      `<p>${r.approved.length ? "" : "No buy/sell idea has survived all the tests (unseen years, real costs, better than random entry). That is the system protecting you, not a failure."}</p>
+       <div class="x-scroll"><table class="t research"><thead><tr><th>Idea tested</th><th>Verdict</th><th class="left">What happened</th><th>Tested on</th></tr></thead><tbody>${rows}</tbody></table></div>`) +
+    `<div class="two">${card("Paper trading (no money)", paper)}${card("Nightly update (weekdays 7:30 PM)", daily)}</div>`;
+}
+
+// ---------- my trades (journal) ----------
+S.jrHorizon = "all";
+async function loadJournalFiles(select) {
+  const files = await api("/api/journal/files").catch(() => []);
+  $("#jrFile").innerHTML = files.map((f) => `<option ${f.name === select ? "selected" : ""}>${esc(f.name)}</option>`).join("");
+  if (!files.length) {
+    $("#jrBody").innerHTML = card("No tradebook yet", `<ol class="steps">
+      <li><span>In Dhan, open <b>Reports</b> and download your <b>tradebook</b> for the last 6–12 months (Excel or CSV).</span></li>
+      <li><span>Click <b>Add a tradebook…</b> above and choose the file.</span></li>
+      <li><span>Optional: add a <b>Reason</b> column with one word per trade (PCR, breakout, news, VWAP) to see which reasons make money.</span></li></ol>`);
+    return;
+  }
+  loadJournal();
+}
+$("#jrFile").onchange = () => loadJournal();
+$("#jrHorizon").onclick = (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  S.jrHorizon = b.dataset.h;
+  document.querySelectorAll("#jrHorizon button").forEach((x) => x.classList.toggle("active", x === b));
+  loadJournal();
+};
+$("#jrUpload").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const n = $("#jrNotice"); n.hidden = true;
+  try {
+    const r = await api("/api/journal/upload?name=" + encodeURIComponent(f.name), { method: "POST", body: await f.arrayBuffer() });
+    await loadJournalFiles(r.name);
+  } catch (err) { n.hidden = false; n.textContent = err.message; }
+  e.target.value = "";
+};
+const money = (x) => (x == null ? "—" : (x < 0 ? "−" : "") + "₹" + fmt0(Math.abs(x)));
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const COLS = [["trades", "Trades", (x) => x], ["win_rate", "Won", (x) => pc(x, 0)], ["avg_win", "Avg win", money],
+  ["avg_loss", "Avg loss", money], ["net_per_trade", "Per trade", money], ["total_net", "Total", money],
+  ["charges_share_of_gross_profit", "Charges ÷ profit", (x) => pc(x, 0)]];
+function jrTable(rows) {
+  if (!rows.length) return `<p class="muted small">No trades in this group.</p>`;
+  return `<div class="oc-scroll"><table class="t"><thead><tr><th></th>${COLS.map((c) => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>${rows.map((r) =>
+    `<tr><td><b>${esc(r.group === "all" ? "All trades" : cap(r.group))}</b></td>${COLS.map(([k, , f]) => `<td class="num ${k.includes("net") ? cls(r[k]) : ""}">${f(r[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+async function loadJournal() {
+  const name = $("#jrFile").value; if (!name) return;
+  const n = $("#jrNotice"); n.hidden = true;
+  $("#jrBody").innerHTML = `<div class="loading"><span class="spinner"></span>Reading your trades…</div>`;
+  let r;
+  try { r = await api(`/api/journal?name=${encodeURIComponent(name)}&horizon=${S.jrHorizon}`); }
+  catch (e) { $("#jrBody").innerHTML = ""; n.hidden = false; n.textContent = e.message; return; }
+  const o = r.sections["Overall"][0];
+  const few = r.round_trips < 30 ? `<div class="notice">Only ${r.round_trips} completed trades: treat this as a first look, not proof. 30–50 trades start to mean something.</div>` : "";
+  let html = card("Summary", `<p>${r.trades} orders from ${esc(r.from)} to ${esc(r.to)} → <b>${r.round_trips} completed trades</b>${r.still_open ? `, ${r.still_open} still open (not counted)` : ""}. Charges ${esc(r.charges)}.</p>
+    ${o ? `<div class="stats"><div class="stat"><span>Won</span><b class="num">${pc(o.win_rate, 0)}</b></div><div class="stat"><span>Average per trade</span><b class="num ${cls(o.net_per_trade)}">${money(o.net_per_trade)}</b></div>
+    <div class="stat"><span>Total</span><b class="num ${cls(o.total_net)}">${money(o.total_net)}</b></div><div class="stat"><span>Charges paid</span><b class="num">${money(o.charges)}</b></div></div>` : ""}${few}`);
+  if (r.horizon === "all") html += card("By how long you held", jrTable(r.sections["By holding period"]));
+  for (const [title, key] of [["Buying vs selling", "By style"], ["By instrument", "By instrument"], ["By stock / index", "By underlying"],
+    ["By time you entered", "By hour of entry"], ["By day of week", "By day of week"], ["By your reason", "By your reason"]]) {
+    if (r.sections[key]?.length) html += card(title, jrTable(r.sections[key]));
+  }
+  $("#jrBody").innerHTML = html;
+}
+
 // ---------- start ----------
 (async function init() {
   applyChartTheme();
   await loadStatus();
   renderChips(); renderInst();
+  showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("tab") || "today");
   loadQuotes(); loadCandles(); loadPlan();
   setInterval(loadQuotes, 3000);
   setInterval(loadCandles, 5000);
   setInterval(loadPlan, 15000);
-  setInterval(() => { if ($("#ocBox").open) loadChain(); }, 4000);
+  setInterval(() => { if (S.tab === "options") loadChain(); }, 4000);
   setInterval(loadStatus, 60000);
 })();

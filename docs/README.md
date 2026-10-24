@@ -78,6 +78,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-29](PA_29-azure-reasoning-effort.md) | Azure: the reasoning-effort setting is applied | Done |
 | [PA-30](PA_30-webapp-lots-and-holidays.md) | Web app: live lot sizes, holiday-aware market status | Done |
 | [PA-31](PA_31-small-fixes-prompt-env-test-markers.md) | News-analyst prompt, `.env.example`, unit markers on 8 test files | Done |
+| [PA-32](PA_32-webapp-tabs.md) | Web app in seven simple tabs: Today, Risk, Options, AI, Market Map, Research, My Trades | Done |
 
 ---
 
