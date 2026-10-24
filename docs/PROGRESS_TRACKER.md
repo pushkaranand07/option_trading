@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `█████████████████████░░░░` 82% (83/101 tasks)
+**Overall:** `█████████████████████░░░░` 84% (85/101 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 10:34_
+_Last updated: 2026-10-24 10:52_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -30,8 +30,9 @@ _Last updated: 2026-10-24 10:34_
 | `fix/windows-test-portability` | Bug fix | done | merged (PR #5) |
 | `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
 | `quant/holdout-2015` (+ stress, paper) | Proof plan Stages 0–2, backward holdout | VRP condor **rejected** by holdout; paper = observation | merged (PRs #11–#16) |
-| `quant/market-map` | Market Map 2021–26 (timeline, impact map, network) | built; page under `reports/market_map/` | **open PR** |
-| `quant/weekend-sessions` | Bug fix: weekend NSE sessions never downloaded | 11 sessions recovered, store + IV + GARCH + regime rebuilt | **open PR** |
+| `quant/market-map` | Market Map 2021–26 (timeline, impact map, network) | built; page under `reports/market_map/` | merged (PR #21) |
+| `quant/weekend-sessions` | Bug fix: weekend NSE sessions never downloaded | 11 sessions recovered, store + IV + GARCH + regime rebuilt | merged (PR #20) |
+| `quant/phase-7-chronos` | 7 Pretrained time-series model | Chronos-Bolt **not kept** (GARCH better) | **open PR** |
 
 ---
 
@@ -132,10 +133,13 @@ _Last updated: 2026-10-24 10:34_
 
 ## Phase 7 — Pretrained time-series models (optional)
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/2)
+`█████████████████████████` 100% (2/2)
 <!-- /progress:phase -->
-- [ ] Chronos / TimesFM features tested
-- [ ] Kept only if they improve OOS results
+- [x] Chronos-Bolt-Small (Amazon, free, CPU) tested on 31 symbols, same dates and QLIKE as GARCH; rule fixed in
+  advance (`chronos_vol.py`): keep only if pooled QLIKE < GARCH at 10 sessions and beats GARCH on ≥ 2/3 of symbols
+- [x] **Not kept.** 10-session QLIKE: GARCH 0.336 · EWMA 0.370 · Chronos calibrated 0.382 (beats GARCH on 8/31, none
+  significantly; significantly worse on 5) · Chronos raw 0.449 (≈ 20-day historical vol 0.448). Same at 5 and 21
+  sessions. A general-purpose pretrained model does not beat a model built for volatility clustering
 
 ## Phase 8 — Ensemble, meta-labelling, sizing
 <!-- progress:phase -->
@@ -249,6 +253,7 @@ somewhere in-sample and fell apart out of sample or after costs.
 | Relative strength + turnover buffer (re-test) | ❌ rejected | turnover −59% but excess still −1.0%/yr; AUC 0.510 |
 | LightGBM "how big will the move be" | ❌ no skill | same-day AUC 0.503 — but **GARCH alone ranks it at 0.573** ✅ |
 | Condors on the 5 GARCH-quietest stocks | ❌ rejected | Sharpe −0.44: stock condors lose money; GARCH only makes them lose less |
+| Chronos-Bolt pretrained model (Phase 7) | ❌ not kept | volatility QLIKE 0.382 vs GARCH 0.336; beats GARCH on 8/31 symbols |
 
 Public end-of-day data has not produced a tradable edge in these 29 large, heavily-watched stocks, consistent with
 how efficiently they are priced. Costs matter a lot: a delivery round trip is ~0.33%, so a strategy rotating 5 stocks
@@ -267,8 +272,8 @@ every 10 sessions pays ~16% a year before it earns anything.
 
 ## Start here tomorrow
 ### State
-- **Git:** PRs #1–#16 merged. Open: `quant/market-map`, `quant/weekend-sessions` — merge both, then
-  `git checkout main` and `git pull` (the 19:30 job runs whatever is checked out). Start new work on a new branch from `main`:
+- **Git:** PRs #1–#21 merged. Open: `quant/phase-7-chronos` — merge it, then `git checkout main` and `git pull`
+  (the 19:30 job runs whatever is checked out). Start new work on a new branch from `main`:
   `git checkout main`, `git pull`, `git checkout -b quant/<next-thing>`.
 - **Data:** NSE store complete 2018-01-01 to 2026-10-22 (F&O, option chain, participant OI, delivery, index closes,
   prices, IV, exact lot sizes) in `~/.tradingagents/cache/quant/store/`. Tonight's 19:30 refresh adds 23-Oct.
@@ -303,6 +308,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 - The "something else" bug description
 
 ## Log
+- 2026-10-24 — Phase 7: Chronos-Bolt volatility forecasts tested against GARCH on 31 symbols → not kept (QLIKE 0.382 vs 0.336).
 - 2026-10-24 — Market Map 2021–26 built in the project (107 researched events + data-detected ones, impact measured
   from NSE). Its news cross-check exposed a data bug: weekend NSE sessions were never downloaded → fixed, 11 sessions
   recovered (incl. Sunday 1-Feb-2026 Budget), store rebuilt.
