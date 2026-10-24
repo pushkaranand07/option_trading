@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `█████████████████████░░░░` 85% (88/104 tasks)
+**Overall:** `█████████████████████░░░░` 85% (89/105 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 11:30_
+_Last updated: 2026-10-24 11:41_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -35,6 +35,7 @@ _Last updated: 2026-10-24 11:30_
 | `quant/phase-7-chronos` | 7 Pretrained time-series model | Chronos-Bolt **not kept** (GARCH better) | merged (PR #22) |
 | `quant/results-iron-fly` | Event window: results-day IV crush | spec frozen first; **rejected** (costs > edge) | merged (PR #23) |
 | `quant/results-fly-overpriced` | Re-test: only overpriced events | spec frozen first; **rejected** (−4.7%/trade) | **open PR** |
+| `quant/option-quotes` | Measured option spreads, captured nightly | first snapshot: real ≈ 0.85× model on fly legs | **open PR** (includes the one above) |
 
 ---
 
@@ -50,7 +51,7 @@ _Last updated: 2026-10-24 11:30_
 
 ## Phase 1 — Point-in-time data foundation
 <!-- progress:phase -->
-`██████████████████████░░░` 89% (8/9)
+`██████████████████████░░░` 90% (9/10)
 <!-- /progress:phase -->
 - [x] Resumable, throttled NSE downloader (F&O bhavcopy, participant OI, MTO delivery)
 - [x] Parsers + Parquet store with `known_from` on every row
@@ -61,6 +62,10 @@ _Last updated: 2026-10-24 11:30_
 - [x] Store built for every year: participant and delivery on all 2,172 F&O days, 31/31 symbols ≥98%, IV on 65,984 symbol-days; lot sizes exact
 - [x] Data-quality report: 0 missing sessions in any dataset; 6,516 index bars from NSE, 58 stock gaps filled from NSE; all 14 stock jumps >20% verified as real events (COVID 23-Mar-2020, Adani, BHEL — checked against NSE prices)
 - [ ] Cost model matched to a real Dhan contract note within ₹1 (needs your numbers)
+- [x] **Slippage measured, not assumed** (2026-10-24): NSE's closing bid/ask captured every evening (`quotes.py`,
+  last step of the 19:30 job; 31 symbols × 3 expiries). First snapshot: on the results-fly legs real half-spreads are
+  **0.85× the model** (ATM 1.1% of premium, wings 1.6%) → the model is about right, slightly harsh; the fly needs 0.5×,
+  so the rejection stands. Worst: SUNPHARMA 4.8×, JSWSTEEL 4.1×, DIVISLAB 3.1× the model
 
 ## Phase 2 — Evaluation harness and baselines
 <!-- progress:phase -->
@@ -284,7 +289,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 
 ## Start here tomorrow
 ### State
-- **Git:** PRs #1–#23 merged. Open: `quant/results-fly-overpriced` — merge it, then `git checkout main` and `git pull`
+- **Git:** PRs #1–#23 merged. Open: `quant/results-fly-overpriced`, then `quant/option-quotes` (built on it) — merge both, then `git checkout main` and `git pull`
   (the 19:30 job runs whatever is checked out). Start new work on a new branch from `main`:
   `git checkout main`, `git pull`, `git checkout -b quant/<next-thing>`.
 - **Data:** NSE store complete 2018-01-01 to 2026-10-22 (F&O, option chain, participant OI, delivery, index closes,
@@ -320,6 +325,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 - The "something else" bug description
 
 ## Log
+- 2026-10-24 — Real option spreads measured from NSE's closing bid/ask (0.85× the slippage model on fly legs); captured nightly from now on.
 - 2026-10-24 — Results fly cost diagnosis (break-even at ½ the assumed slippage) and overpriced-only re-test: rejected (−4.7%/trade).
 - 2026-10-24 — Event-window test: results-day iron butterfly rejected (984 trades, −6.5%/trade); IV crush real but smaller than trading friction.
 - 2026-10-24 — Phase 7: Chronos-Bolt volatility forecasts tested against GARCH on 31 symbols → not kept (QLIKE 0.382 vs 0.336).

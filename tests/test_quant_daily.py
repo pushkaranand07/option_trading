@@ -15,7 +15,7 @@ _spec.loader.exec_module(daily)
 @pytest.mark.unit
 def test_steps_run_in_order_and_the_download_rechecks_recent_missing_days():
     plan = daily.steps(date(2026, 10, 23))
-    assert [name for name, _ in plan] == ["download", "store", "volatility", "regime", "tracker", "market_map", "paper"]
+    assert [name for name, _ in plan] == ["download", "store", "volatility", "regime", "tracker", "market_map", "paper", "quotes"]
     download = plan[0][1]
     assert "--retry-missing" in download and download[download.index("--start") + 1] == "2026-10-13"
     assert plan[1][1][-1] == "2026"
