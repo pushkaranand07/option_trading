@@ -43,6 +43,14 @@ MARKET_CLOSE = time(15, 30)
 # The capital-market segment's list governs equity and index sessions.
 HOLIDAY_SEGMENT = "CM"
 
+# Weekend sessions NSE actually held, each verified by downloading its official files (F&O bhavcopy and
+# index closes): Budget days, Diwali Muhurat sessions on a weekend, and the 2024 special live sessions.
+# NSE's holiday list covers only the current year, so past sessions come from here.
+KNOWN_SPECIAL_SESSIONS = frozenset({
+    date(2015, 2, 28), date(2016, 10, 30), date(2019, 10, 27), date(2020, 2, 1), date(2020, 11, 14),
+    date(2023, 11, 12), date(2024, 1, 20), date(2024, 3, 2), date(2024, 5, 18), date(2025, 2, 1), date(2026, 2, 1),
+})
+
 
 class SessionState(StrEnum):
     NO_SESSION = "no_session"       # weekend or exchange holiday
@@ -55,23 +63,34 @@ class SessionState(StrEnum):
 class NSECalendar:
     """Sessions of the NSE capital market, from an explicit holiday list."""
 
-    def __init__(self, holidays: dict[date, str] | None = None, special_sessions: set[date] | None = None):
+    def __init__(self, holidays: dict[date, str] | None = None, special_sessions: set[date] | None = None,
+                 muhurat_days: set[date] | None = None):
         self.holidays = dict(holidays or {})
         # Sessions on days that are otherwise closed (e.g. a weekend Muhurat or budget-day session).
         self.special_sessions = set(special_sessions or ())
+        # Holidays with a one-hour Muhurat session at a time NSE announces separately: they count as
+        # sessions (files are published), but the regular hours never apply.
+        self.muhurat_days = set(muhurat_days or ())
+        self.special_sessions |= self.muhurat_days
 
     @classmethod
     def from_nse(cls, client=None) -> NSECalendar:
-        """The calendar from NSE's holiday master (cached a day); weekends-only if NSE is unreachable."""
+        """The calendar from NSE's holiday master (cached a day), plus the verified special sessions.
+
+        NSE marks a holiday with a Muhurat session with "*" (e.g. "Diwali Laxmi Pujan*"); those are
+        sessions too. Weekends and the known special sessions only, if NSE is unreachable.
+        """
         from tradingagents.dataflows.vendors.nse.client import default_client
 
         client = client or default_client()
         try:
             fetched = client.get_json("/api/holiday-master", {"type": "trading"}, ttl=86400)
         except VendorError as exc:
-            logger.warning("NSE holiday list unavailable (%s); using weekends only", exc)
-            return cls()
-        return cls(parse_holiday_master(fetched.data))
+            logger.warning("NSE holiday list unavailable (%s); using weekends and known special sessions", exc)
+            return cls(special_sessions=set(KNOWN_SPECIAL_SESSIONS))
+        holidays = parse_holiday_master(fetched.data)
+        muhurat = {d for d, name in holidays.items() if name.endswith("*")}
+        return cls(holidays, special_sessions=set(KNOWN_SPECIAL_SESSIONS), muhurat_days=muhurat)
 
     def is_trading_day(self, day: date) -> bool:
         if day in self.special_sessions:
@@ -111,6 +130,9 @@ class NSECalendar:
         if not self.is_trading_day(local.date()):
             return SessionState.NO_SESSION
         clock = local.time()
+        if local.date() in self.muhurat_days:
+            # Closed during regular hours; the Muhurat hour itself is not modelled (its time varies).
+            return SessionState.PRE_MARKET if clock < MARKET_CLOSE else SessionState.POST_CLOSE
         if clock < PRE_OPEN:
             return SessionState.PRE_MARKET
         if clock < MARKET_OPEN:

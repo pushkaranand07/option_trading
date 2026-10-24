@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `██████████████████████░░░` 89% (89/100 tasks)
+**Overall:** `██████████████████████░░░` 90% (90/100 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 14:01_
+_Last updated: 2026-10-24 14:06_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -185,7 +185,7 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`███████████████████░░░░░░` 76% (19/25)
+`████████████████████░░░░░` 80% (20/25)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -210,8 +210,8 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 - [ ] "Something else" bug you mentioned (**waiting for your description**)
 
 **Found while writing the docs (2026-10-24), not fixed yet** — each needs its own change:
-- [ ] `NSECalendar.from_nse()` never loads special sessions, so the agents' calendar treats Budget-day / Muhurat
-  sessions as closed (the downloader was fixed in PA-19; the calendar was not)
+- [x] `NSECalendar.from_nse()` never loaded special sessions → now the 11 verified weekend sessions plus NSE's
+  `*`-marked Muhurat holidays (2026-11-08 found live) ([PA-27](PA_27-calendar-special-sessions.md))
 - [ ] Web app hard-codes lot sizes (NIFTY 75, BANKNIFTY 35; current 65 / 30) and shows the market open on holidays
 - [ ] Option backtester's NSE adapter sets bid = ask = close, so its slippage setting has no effect (only commission)
 - [ ] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` is not applied (forwarded only for `openai` / `chatgpt`)
