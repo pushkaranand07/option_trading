@@ -42,7 +42,8 @@ Also decided, and shown to the user before building:
   08:30 weekdays with the nightly job's settings.
 - API: `GET /api/morning` (today's plan; built without AI if missing; `?date=` for a saved day), `POST
   /api/morning/refresh`, `POST /api/morning/ai` (background, one at a time).
-- **Plan tab** (opens first): the session bar with a live IST clock and phase (before the market → pre-open → wait
+- **Plan tab** (opens first): a live 5-minute chart per index (EMA 9 / 21, expected range for the day, entry / stop /
+  target when there is a trade); the session bar with a live IST clock and phase (before the market → pre-open → wait
   until 09:45 → open, exit by 15:15 → closed); the risk-limit inputs; per index **Today's call** (wait / no trade with
   the reason / take this trade: option, entry, stop, target, lots, max loss, money needed, leverage — or "skip, one lot
   risks more than your limit") and the **Morning view** in plain words. Refreshes every 15 s while open.

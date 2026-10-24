@@ -301,6 +301,12 @@ function applyChartTheme() {
   ema21Series.applyOptions({ color: cssVar("--ema21") });
   if (lastBars.length) drawBars(lastBars);
   drawPlanLines();
+  if (typeof planCharts !== "undefined") planCharts.forEach((c, sym) => {
+    c.ch.applyOptions({ layout: { textColor: cssVar("--muted") }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } } });
+    c.candles.applyOptions({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down });
+    c.e9.applyOptions({ color: cssVar("--ema9") }); c.e21.applyOptions({ color: cssVar("--ema21") });
+    drawPlanChartLines(sym);
+  });
 }
 
 function ema(values, n) { const k = 2 / (n + 1); let prev; return values.map((v) => (prev = prev === undefined ? v : v * k + prev * (1 - k))); }
@@ -763,16 +769,72 @@ function morningHtml(sym, e) {
 function renderPlanCards() {
   const m = S.morning; if (!m) return;
   const ph = phase(m.session);
-  $("#planBody").innerHTML = Object.entries(m.indices).map(([sym, e]) => `<section class="card plan-card">
+  // The cards are built once per plan (the charts live in them); later updates only refill the slots.
+  const key = m.built_at + "|" + Object.keys(m.indices).join(",");
+  if ($("#planBody").dataset.key !== key) {
+    $("#planBody").dataset.key = key;
+    $("#planBody").innerHTML = Object.entries(m.indices).map(([sym, e]) => `<section class="card plan-card" data-sym="${sym}">
       <div class="card-head"><h2>${esc(NAMES[sym] || sym)}</h2>${e.context.trend ? `<span class="badge ${e.context.trend.tone}">${esc(e.context.trend.label)}</span>` : ""}</div>
-      <div class="body"><h3 class="sub-h">Today's call</h3>${callHtml(sym, S.live[sym], ph)}
-        <h3 class="sub-h">Morning view</h3>${morningHtml(sym, e)}</div></section>`).join("");
+      <div class="body"><h3 class="sub-h">Today's call</h3><div class="call-slot"></div>
+        <h3 class="sub-h">Price chart <span class="small muted chart-note"></span></h3><div class="plan-chart"></div>
+        <div class="legend small"><span><i style="background:var(--ema9)"></i>Fast average (EMA 9)</span><span><i style="background:var(--ema21)"></i>Slow average (EMA 21)</span>
+          <span><i class="dash" style="border-color:var(--muted)"></i>Expected range today</span><span><i class="dash" style="border-color:var(--up)"></i>Target</span><span><i class="dash" style="border-color:var(--down)"></i>Stop loss</span></div>
+        <h3 class="sub-h">Morning view</h3><div class="morning-slot"></div></div></section>`).join("");
+    planCharts.clear();
+    loadPlanCharts();
+  }
+  for (const [sym, e] of Object.entries(m.indices)) {
+    const card = $(`.plan-card[data-sym="${sym}"]`);
+    $(".call-slot", card).innerHTML = callHtml(sym, S.live[sym], ph);
+    $(".morning-slot", card).innerHTML = morningHtml(sym, e);
+    drawPlanChartLines(sym);
+  }
   const job = m.ai_job || {};
   $("#planStamp").innerHTML = `Plan built ${esc(m.built_at)}${job.running ? ` · AI view running since ${esc(job.started)}…` : ""}.
     <button class="btn small-btn" id="planRefresh">Refresh data</button>
     ${m.session.trading && !PREVIEW_AT ? `<button class="btn small-btn" id="planAi" ${job.running ? "disabled" : ""}>Run AI view now (~20 min)</button>` : ""}`;
   $("#planRefresh").onclick = async () => { $("#planRefresh").disabled = true; S.morning = await api("/api/morning/refresh", { method: "POST" }).catch(() => S.morning); renderPlan(); };
   if ($("#planAi")) $("#planAi").onclick = async () => { try { await api("/api/morning/ai", { method: "POST" }); } catch (e) { alert(e.message); } loadMorning(); };
+}
+
+// One small live chart per index in the Plan tab: 5-minute candles of the last sessions, EMA 9 / 21,
+// the expected range for today, and entry / stop / target when there is a trade.
+const planCharts = new Map();
+function planChart(sym) {
+  if (planCharts.has(sym)) return planCharts.get(sym);
+  const el = $(`.plan-card[data-sym="${sym}"] .plan-chart`); if (!el) return null;
+  const ch = LightweightCharts.createChart(el, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--muted"),
+      fontFamily: "Inter, system-ui, sans-serif" }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } },
+    rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false }, crosshair: { mode: 0 } });
+  const up = cssVar("--up"), down = cssVar("--down");
+  const c = { ch, candles: ch.addCandlestickSeries({ borderVisible: false, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down }),
+    e9: ch.addLineSeries({ ...lineOpts, color: cssVar("--ema9") }), e21: ch.addLineSeries({ ...lineOpts, color: cssVar("--ema21") }), lines: [], fitted: false };
+  planCharts.set(sym, c);
+  return c;
+}
+async function loadPlanCharts() {
+  for (const sym of Object.keys(S.morning?.indices || {})) {
+    const c = planChart(sym); if (!c) continue;
+    try {
+      const r = await api(`/api/candles/${sym}?tf=5m&limit=300`);
+      const t = (b) => b.time + IST_OFFSET, closes = r.bars.map((b) => b.close), e9 = ema(closes, 9), e21 = ema(closes, 21);
+      c.candles.setData(r.bars.map((b) => ({ time: t(b), open: b.open, high: b.high, low: b.low, close: b.close })));
+      c.e9.setData(r.bars.map((b, i) => ({ time: t(b), value: e9[i] })));
+      c.e21.setData(r.bars.map((b, i) => ({ time: t(b), value: e21[i] })));
+      if (!c.fitted) { const n = r.bars.length; c.ch.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 3 }); c.fitted = true; }
+      const note = $(`.plan-card[data-sym="${sym}"] .chart-note`); if (note) note.textContent = `5-minute candles · ${r.source === "dhan" ? "Dhan live" : "Yahoo (can be delayed)"}`;
+      drawPlanChartLines(sym);
+    } catch (e) { console.warn(e); }
+  }
+}
+function drawPlanChartLines(sym) {
+  const c = planCharts.get(sym); if (!c) return;
+  c.lines.forEach((l) => c.candles.removePriceLine(l)); c.lines = [];
+  const mk = (price, color, title, style = 2) => price && c.lines.push(c.candles.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
+  const em = S.morning?.indices?.[sym]?.context?.expected_move;
+  if (em && S.morning.session.trading) { mk(em.day_high, cssVar("--muted"), "Expected high", 3); mk(em.day_low, cssVar("--muted"), "Expected low", 3); }
+  const p = S.live[sym];
+  if (p?.verdict?.safe && p.signal?.side !== "WAIT") { mk(p.signal.entry, cssVar("--text"), "Entry"); mk(p.signal.stop_loss, cssVar("--down"), "Stop loss"); mk(p.signal.target, cssVar("--up"), "Target"); }
 }
 
 function renderPlan() { renderSession(); renderRisk(); renderPlanCards(); }
@@ -782,6 +844,7 @@ async function loadMorning() {
   renderPlan(); loadLive();
 }
 async function loadLive() {
+  if (S.morning && phase(S.morning.session).key !== "stale") loadPlanCharts();
   if (!S.morning || !["wait", "live"].includes(phase(S.morning.session).key)) return;
   for (const sym of Object.keys(S.morning.indices)) {
     try { S.live[sym] = await api("/api/plan/" + sym); } catch { /* keep the last one */ }
