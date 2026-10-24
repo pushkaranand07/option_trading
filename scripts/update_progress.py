@@ -36,8 +36,11 @@ def download_share() -> tuple[int, int] | None:
     manifest = load_manifest(raw_root())
     if not manifest:
         return None
-    total = sum(1 for _ in weekdays(HISTORY_START, date.today() - timedelta(days=1))) * len(KINDS)
-    return min(len(manifest), total), total
+    days = set(weekdays(HISTORY_START, date.today() - timedelta(days=1)))
+    total = len(days) * len(KINDS)
+    # Weekend special sessions and pre-2018 holdout files are extra, not part of the planned history.
+    done = sum(1 for d, _ in manifest if d in days)
+    return min(done, total), total
 
 
 def render(text: str) -> str:
@@ -46,7 +49,7 @@ def render(text: str) -> str:
     out = []
     for section in sections:
         boxes = re.findall(r"(?m)^- \[([ xX])\]", section)
-        if section.startswith(("## Phase", "## Bug fixes")) and boxes:
+        if section.startswith(("## Phase", "## Bug fixes", "## Market Map")) and boxes:
             done = sum(b.lower() == "x" for b in boxes)
             all_done, all_total = all_done + done, all_total + len(boxes)
             section = re.sub(r"<!-- progress:phase -->.*?<!-- /progress:phase -->",
