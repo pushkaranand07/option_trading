@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from typing import TypedDict
 
+import pytest
 from langgraph.graph import END, StateGraph
 
 from tradingagents.graph.checkpointer import (
@@ -12,6 +13,8 @@ from tradingagents.graph.checkpointer import (
     get_checkpointer,
     thread_id,
 )
+
+pytestmark = pytest.mark.unit
 
 # Mutable flag to simulate crash on first run
 _should_crash = False

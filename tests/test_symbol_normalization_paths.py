@@ -6,11 +6,14 @@ the news path: a broker symbol like XAUUSD must resolve to the same Yahoo symbol
 hit the right instrument instead of failing/mismatching.
 """
 import pandas as pd
+import pytest
 
 import tradingagents.agents.context as au
 import tradingagents.dataflows.vendors.yahoo.market as yahoo_market
 import tradingagents.dataflows.vendors.yahoo.news as ynews
 from tradingagents.memory import settlement
+
+pytestmark = pytest.mark.unit
 
 
 def test_identity_lookup_normalizes_symbol(monkeypatch):

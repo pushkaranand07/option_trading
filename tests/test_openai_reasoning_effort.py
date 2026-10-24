@@ -12,6 +12,8 @@ from tradingagents.llm_clients.openai_client import (
     _supports_reasoning_effort,
 )
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.mark.parametrize(
     "model,expected",

@@ -10,6 +10,8 @@ import pytest
 
 from tradingagents.llm_clients.api_key_env import PROVIDER_API_KEY_ENV, get_api_key_env
 
+pytestmark = pytest.mark.unit
+
 # ---- Mapping coverage -----------------------------------------------------
 
 

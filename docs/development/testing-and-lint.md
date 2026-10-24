@@ -43,11 +43,9 @@ error. Passing `-m` on the command line replaces the `-m "not integration"` from
 | `integration` | Tests requiring external services; excluded by default, run only with `-m integration` |
 | `smoke` | Quick sanity checks |
 
-Most test files mark their tests `unit` (with `pytestmark = pytest.mark.unit` or `@pytest.mark.unit`). Eight files
-carry no marker, so `-m unit` does not run them; the plain `pytest -q` run does:
-`test_analyst_execution.py`, `test_api_key_env.py`, `test_checkpoint_resume.py`, `test_cli_no_console.py`,
-`test_crypto_asset_mode.py`, `test_env_overrides.py`, `test_openai_reasoning_effort.py`,
-`test_symbol_normalization_paths.py`. Run the full default suite before a pull request.
+Test files mark their tests `unit` (with `pytestmark = pytest.mark.unit` or `@pytest.mark.unit`). Eight files had
+no marker, so `-m unit` skipped them, until 2026-10-24 ([PA-31](../PA_31-small-fixes-prompt-env-test-markers.md)).
+Run the full default suite before a pull request.
 
 New tests: mark them `unit` unless they need the network, in which case mark them `integration`.
 

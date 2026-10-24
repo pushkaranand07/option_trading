@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import sys
 
+import pytest
 from typer.testing import CliRunner
 
 import cli.main as m
+
+pytestmark = pytest.mark.unit
 
 
 def test_no_console_error_tuple_matches_platform():

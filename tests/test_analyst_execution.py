@@ -1,8 +1,12 @@
 import unittest
 
+import pytest
+
 from tradingagents.graph.analyst_execution import (
     build_analyst_execution_plan,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class AnalystExecutionPlanTests(unittest.TestCase):
