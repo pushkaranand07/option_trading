@@ -9,8 +9,20 @@
 
 ## 1. What it does
 
-One page for NSE indices and stocks that answers "is there a trade right now?" in plain English. For the instrument
-you pick it shows:
+Seven tabs, in plain English (since 2026-10-24, [PA-32](../PA_32-webapp-tabs.md)). The first four follow the index or
+stock picked at the top; the other three are about the market and your own trading.
+
+| Tab | Shows | Data |
+|---|---|---|
+| **Today** | Should I trade this today? The rule-based answer, chart, trend, track record, BTST, last 10 sessions, glossary | Dhan / Yahoo (below) |
+| **Risk & Volatility** | Market regime (calm / choppy / stress), expected move for 5 / 10 / 21 days in % and ₹ with the likely range, GARCH forecast, implied vol vs forecast | The quant store (validated tools) |
+| **Options** | Live option chain (Dhan), and the measured bid-ask spread per strike: what each trade really costs | Dhan; NSE closing quotes captured nightly |
+| **AI Analysis** | The multi-agent analysis and its rating | The configured LLM |
+| **Market Map** | The 2021–26 law-change and event map | `reports/market_map/` |
+| **Research** | What is in use, every idea tested with its verdict in plain words, paper trading, the nightly job's last run | Trial log, paper ledger, `daily_status.json` |
+| **My Trades** | Your Dhan tradebook by holding period (intraday / week / month / longer), style, instrument, stock, hour, weekday, reason | Files you add; kept in `reports/journal/` |
+
+The Today tab in detail:
 
 - **The answer**: BUY CALL / BUY PUT (indices), BUY / SELL intraday short (stocks), or NO SAFE TRADE / NO TRADE with
   the reasons, plus entry, stop loss and target.
@@ -42,7 +54,8 @@ Then open `http://localhost:8000`. `webapp/requirements.txt` adds `fastapi` and 
 `pyproject.toml`.
 
 The page refreshes itself: quotes every 3 s, candles every 5 s, the plan every 15 s, the option chain every 4 s while
-its panel is open, status every 60 s. The theme choice is kept in the browser's `localStorage`.
+the Options tab is open, status every 60 s. Each tab loads its data when first opened; the tab and theme are kept in
+the browser's `localStorage`, and the address (`#risk`, `#trades`, …) opens a tab directly.
 
 ## 3. Settings
 
@@ -72,6 +85,11 @@ new one", and `DH-902` / `806` into "no Data API subscription".
 | `GET /api/optionchain/NIFTY?expiry=` | `spot`, `lot`, `step`, `rows` (±15 strikes) and `view` (ATM, PCR, max pain, bias, support, resistance, ATM IV) |
 | `POST /api/ai` with `{"symbol": "NIFTY", "analysts": ["market","news","social","fundamentals"]}` | `{"job": "<id>"}` |
 | `GET /api/ai/<id>` | `status` (`running` / `done` / `error`), `steps`, `rating`, `reports` |
+| `GET /api/risk/NIFTY` | `regime`, `vol`, `expected_move`, `iv` (`quant_report.quant_signal_data`; only values known before today's open) |
+| `GET /api/spreads/RELIANCE` | Latest captured closing bid/ask per expiry around the money, spread %, real ÷ model |
+| `GET /api/research` | `in_use`, `tested` (plain name, verdict, result), `paper`, `daily_job`, `approved` |
+| `GET /market-map` | The Market Map page (404 until `scripts/market_map.py` has run) |
+| `GET /api/journal/files`, `POST /api/journal/upload?name=…` (raw file body, ≤ 10 MB, .csv/.xlsx/.xls), `GET /api/journal?name=…&horizon=all\|intraday\|week\|month\|long` | Your tradebooks and their analysis |
 
 Indices offered: NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, SENSEX (`market_data.INDICES`).
 

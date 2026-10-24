@@ -22,11 +22,19 @@
   <button class="icon-btn" id="themeBtn" title="Switch light/dark" aria-label="Switch light or dark theme">◐</button>
 </header>
 
-<nav class="chips" id="chips" aria-label="Indices"></nav>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" data-tab="today">Today</button>
+  <button role="tab" data-tab="risk">Risk &amp; Volatility</button>
+  <button role="tab" data-tab="options">Options</button>
+  <button role="tab" data-tab="ai">AI Analysis</button>
+  <button role="tab" data-tab="map">Market Map</button>
+  <button role="tab" data-tab="research">Research</button>
+  <button role="tab" data-tab="trades">My Trades</button>
+</nav>
 
-<main class="page">
-  <!-- 1. Instrument -->
-  <section class="inst">
+<div id="instArea">
+  <nav class="chips" id="chips" aria-label="Indices"></nav>
+  <section class="inst page-inner">
     <div>
       <h1 id="instName">NIFTY 50</h1>
       <div class="muted small" id="instSub">Index</div>
@@ -36,93 +44,139 @@
       <div id="instChg"></div>
     </div>
   </section>
+</div>
 
-  <!-- 2. The answer -->
-  <section class="card hero" id="hero">
-    <div class="loading"><span class="spinner"></span>Reading the market and checking history…</div>
-  </section>
+<main class="page">
 
-  <!-- 3. Chart -->
-  <section class="card">
-    <div class="card-head">
-      <h2>Price chart</h2>
-      <div class="seg" id="tfSeg">
-        <button data-tf="5m" class="active">5 min</button><button data-tf="15m">15 min</button>
-        <button data-tf="1h">1 hour</button><button data-tf="1D">Daily</button>
+  <!-- ===================== TODAY ===================== -->
+  <div class="tab" data-tab="today">
+    <p class="tab-intro">Should I trade this today? A simple rule, checked against recent history before it is shown.</p>
+    <section class="card hero" id="hero">
+      <div class="loading"><span class="spinner"></span>Reading the market and checking history…</div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Price chart</h2>
+        <div class="seg" id="tfSeg">
+          <button data-tf="5m" class="active">5 min</button><button data-tf="15m">15 min</button>
+          <button data-tf="1h">1 hour</button><button data-tf="1D">Daily</button>
+        </div>
       </div>
-    </div>
-    <div id="chart" class="chart"></div>
-    <div class="legend small">
-      <span><i style="background:var(--ema9)"></i>Fast average (EMA 9)</span>
-      <span><i style="background:var(--ema21)"></i>Slow average (EMA 21)</span>
-      <span><i class="dash" style="border-color:var(--up)"></i>Target</span>
-      <span><i class="dash" style="border-color:var(--down)"></i>Stop loss</span>
-    </div>
-  </section>
+      <div id="chart" class="chart"></div>
+      <div class="legend small">
+        <span><i style="background:var(--ema9)"></i>Fast average (EMA 9)</span>
+        <span><i style="background:var(--ema21)"></i>Slow average (EMA 21)</span>
+        <span><i class="dash" style="border-color:var(--up)"></i>Target</span>
+        <span><i class="dash" style="border-color:var(--down)"></i>Stop loss</span>
+      </div>
+    </section>
 
-  <!-- 4. Trend + track record -->
-  <div class="two">
-    <section class="card" id="mood"></section>
-    <section class="card" id="record"></section>
+    <div class="two">
+      <section class="card" id="mood"></section>
+      <section class="card" id="record"></section>
+    </div>
+    <section class="card" id="btst"></section>
+    <section class="card" id="history"></section>
+
+    <details class="card more">
+      <summary><h2>New to trading? Read this first</h2><span class="muted small">Every word on this page, explained</span></summary>
+      <div class="pad glossary">
+        <p><b>Call (CE)</b> — an option that gains when the price goes <b>up</b>. <b>Put (PE)</b> — gains when it goes <b>down</b>. You pay a <b>premium</b> to buy one; the most you can lose is that premium.</p>
+        <p><b>Lot</b> — options trade in fixed bundles. One NIFTY lot is 65 units (NSE revises lot sizes; the app shows the current one), so a ₹100 premium costs ₹6,500 per lot.</p>
+        <p><b>Strike</b> — the price level an option is tied to.</p>
+        <p><b>Entry</b> — where you get in. <b>Stop loss</b> — where you exit to keep a loss small; place it the moment you enter. <b>Target</b> — where you book profit.</p>
+        <p><b>Intraday</b> — buy and sell the same day; everything closes by 3:15 PM. <b>BTST</b> — Buy Today, Sell Tomorrow.</p>
+        <p><b>VWAP</b> — the average price traders paid today. <b>EMA</b> — a moving average. <b>RSI</b> — momentum from 0 to 100.</p>
+        <p><b>Win rate</b> — how often a setup hit its target first in the past. <b>Avg result</b> — the average gain or loss per trade, in units of risk, after costs. A high win rate with a negative average still loses money.</p>
+        <p><b>The golden rules:</b> risk at most 1–2% of your money on one trade, always use a stop loss, at most one trade a day, and skip days that say "No trade".</p>
+      </div>
+    </details>
   </div>
 
-  <!-- 5. BTST -->
-  <section class="card" id="btst"></section>
+  <!-- ===================== RISK ===================== -->
+  <div class="tab" data-tab="risk">
+    <p class="tab-intro">How calm is the market, how far can the price move, and are options cheap or expensive?
+      These are the research layer's <b>validated</b> numbers — use them to size trades, not to pick a direction.</p>
+    <div id="riskBody"><div class="loading"><span class="spinner"></span>Loading…</div></div>
+  </div>
 
-  <!-- 6. Recent sessions -->
-  <section class="card" id="history"></section>
-
-  <!-- 7. More -->
-  <details class="card more" id="ocBox">
-    <summary><h2>Option chain</h2><span class="muted small">Open interest, IV and premiums for every strike</span></summary>
-    <div class="toolbar"><label class="small muted">Expiry <select id="expirySel"></select></label></div>
-    <div class="oc-stats" id="ocStats"></div>
-    <div class="notice" id="ocNotice" hidden></div>
-    <div class="oc-scroll">
-      <table class="oc" id="ocTable">
-        <thead>
-          <tr class="side-row"><th colspan="4" class="calls">CALLS</th><th></th><th colspan="4" class="puts">PUTS</th></tr>
-          <tr><th>OI</th><th>Chg OI</th><th>IV</th><th>LTP</th><th class="strike">Strike</th><th>LTP</th><th>IV</th><th>Chg OI</th><th>OI</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </details>
-
-  <details class="card more" id="aiBox">
-    <summary><h2>AI deep analysis</h2><span class="muted small">A team of AI agents reads news, sentiment and financials (2–6 min)</span></summary>
-    <div class="pad">
-      <div class="analysts" id="analysts">
-        <label><input type="checkbox" value="market" checked> Price &amp; indicators</label>
-        <label><input type="checkbox" value="news" checked> News</label>
-        <label><input type="checkbox" value="social" checked> Social sentiment</label>
-        <label><input type="checkbox" value="fundamentals" checked> Fundamentals</label>
+  <!-- ===================== OPTIONS ===================== -->
+  <div class="tab" data-tab="options">
+    <p class="tab-intro">Live option chain, and what it really costs to trade each strike (measured from NSE's closing quotes every evening).</p>
+    <section class="card">
+      <div class="card-head"><h2>Option chain</h2><label class="small muted">Expiry <select id="expirySel"></select></label></div>
+      <div class="pad">
+        <div class="oc-stats" id="ocStats"></div>
+        <div class="notice" id="ocNotice" hidden></div>
+        <div class="oc-scroll">
+          <table class="oc" id="ocTable">
+            <thead>
+              <tr class="side-row"><th colspan="4" class="calls">CALLS</th><th></th><th colspan="4" class="puts">PUTS</th></tr>
+              <tr><th>OI</th><th>Chg OI</th><th>IV</th><th>LTP</th><th class="strike">Strike</th><th>LTP</th><th>IV</th><th>Chg OI</th><th>OI</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-      <button class="btn primary" id="aiBtn">Run AI analysis</button>
-      <div class="notice" id="aiNotice" hidden></div>
-      <div id="aiProgress"></div>
-      <div id="aiResult"></div>
-    </div>
-  </details>
+    </section>
+    <section class="card" id="costCard"></section>
+  </div>
 
-  <details class="card more">
-    <summary><h2>New to trading? Read this first</h2><span class="muted small">Every word on this page, explained</span></summary>
-    <div class="pad glossary">
-      <p><b>Call (CE)</b> — an option that gains when the index goes <b>up</b>. <b>Put (PE)</b> — gains when the index goes <b>down</b>. You pay a <b>premium</b> to buy one; the most you can lose is that premium.</p>
-      <p><b>Lot</b> — options trade in fixed bundles. One NIFTY lot is 65 units (NSE revises lot sizes; the app shows the current one), so a ₹100 premium costs ₹6,500 per lot.</p>
-      <p><b>Strike</b> — the price level an option is tied to. We pick one strike "in the money" because it moves more closely with the index than cheap far-away strikes.</p>
-      <p><b>Entry</b> — where you get in. <b>Stop loss</b> — the level where you exit to keep a loss small. Always place it the moment you enter. <b>Target</b> — where you book profit.</p>
-      <p><b>Intraday</b> — buy and sell the same day; everything closes by 3:15 PM. <b>BTST</b> — Buy Today, Sell Tomorrow: buy near today's close, sell next morning.</p>
-      <p><b>VWAP</b> — the average price traders paid today. Above it, buyers are winning the day; below it, sellers are.</p>
-      <p><b>EMA</b> — a moving average. When the fast one is above the slow one, the short-term trend is up.</p>
-      <p><b>RSI</b> — momentum from 0 to 100. 50–70 means healthy buying; above 70 can mean overheated.</p>
-      <p><b>Win rate</b> — how often this exact setup hit its target before its stop in the past. <b>Avg result</b> — the average gain or loss per trade in units of risk, after costs. A high win rate with a negative average still loses money: the few losses are bigger than the many small wins.</p>
-      <p><b>The golden rules:</b> never risk more than 1–2% of your money on one trade, always use a stop loss, take at most one trade a day, and skip days the page says "No trade". Not trading is a position too.</p>
-    </div>
-  </details>
+  <!-- ===================== AI ===================== -->
+  <div class="tab" data-tab="ai">
+    <p class="tab-intro">A team of AI agents reads price data, news, sentiment and financials and gives a rating with reasons (2–10 min).
+      Checked on 24-Oct-2026: they quoted the research numbers correctly in 10 of 10 test runs.</p>
+    <section class="card">
+      <div class="pad">
+        <div class="analysts" id="analysts">
+          <label><input type="checkbox" value="market" checked> Price &amp; indicators</label>
+          <label><input type="checkbox" value="news" checked> News</label>
+          <label><input type="checkbox" value="social" checked> Social sentiment</label>
+          <label><input type="checkbox" value="fundamentals" checked> Fundamentals</label>
+        </div>
+        <button class="btn primary" id="aiBtn">Run AI analysis</button>
+        <div class="notice" id="aiNotice" hidden></div>
+        <div id="aiProgress"></div>
+        <div id="aiResult"></div>
+      </div>
+    </section>
+  </div>
 
-  <p class="disclaimer">Pulse shows rule-based setups checked against recent history, and AI opinions. Past results do not guarantee future ones,
-    and no strategy wins every time. This is not investment advice and no orders are placed. Options can lose their full premium.</p>
+  <!-- ===================== MARKET MAP ===================== -->
+  <div class="tab" data-tab="map">
+    <p class="tab-intro">Every law change and market event since 2021, and what it did to NIFTY, India VIX and options trading.
+      <a href="/market-map" target="_blank" rel="noopener">Open full screen ↗</a></p>
+    <div id="mapBody"></div>
+  </div>
+
+  <!-- ===================== RESEARCH ===================== -->
+  <div class="tab" data-tab="research">
+    <p class="tab-intro">Every trading idea is tested on years of NSE data, after real costs, against random luck — before anyone trusts it.
+      Here is what passed, what failed, and why.</p>
+    <div id="researchBody"><div class="loading"><span class="spinner"></span>Loading…</div></div>
+  </div>
+
+  <!-- ===================== MY TRADES ===================== -->
+  <div class="tab" data-tab="trades">
+    <p class="tab-intro">What actually makes or loses money in <b>your</b> trades. Export your tradebook from Dhan (Reports → Tradebook, Excel or CSV)
+      and add it here. The file stays on this computer (folder <code>reports/journal</code>).</p>
+    <section class="card">
+      <div class="pad journal-controls">
+        <label class="btn">Add a tradebook… <input type="file" id="jrUpload" accept=".csv,.xlsx,.xls" hidden></label>
+        <label class="small muted">File <select id="jrFile"></select></label>
+        <div class="seg" id="jrHorizon">
+          <button data-h="all" class="active">All</button><button data-h="intraday">Intraday</button>
+          <button data-h="week">Up to a week</button><button data-h="month">1–4 weeks</button><button data-h="long">Longer</button>
+        </div>
+      </div>
+      <div class="notice" id="jrNotice" hidden></div>
+    </section>
+    <div id="jrBody"></div>
+  </div>
+
+  <p class="disclaimer">Pulse shows rule-based setups checked against history, research results and AI opinions. Past results do not
+    guarantee future ones, and no strategy wins every time. This is not investment advice and no orders are placed.</p>
 </main>
 <script src="/static/app.js"></script>
 </body>
