@@ -1,0 +1,795 @@
+[
+ {
+  "date": "2021-03-01",
+  "title": "Peak margin phase 2 (50%)",
+  "category": "margin",
+  "detail": "Brokers had to collect 50% of peak intraday margin (exchanges take four snapshots a day and use the highest). Phase 1 at 25% started Dec 2020.",
+  "source": "https://www.angelone.in/news/market-updates/sebi-peak-margin-norms-to-kick-in-from-september-1",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2021-06-01",
+  "title": "Peak margin phase 3 (75%)",
+  "category": "margin",
+  "detail": "Required peak-margin collection rose to 75% of VaR+ELM (cash) or SPAN+exposure (F&O).",
+  "source": "https://5paisa.com/blog/peak-margin-rules-sebi-100percent-from-september-1st",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2021-09-01",
+  "title": "Peak margin 100%",
+  "category": "margin",
+  "detail": "Full upfront peak margin became mandatory for intraday and F&O positions, which ended broker-funded intraday leverage beyond SPAN+exposure.",
+  "source": "https://www.angelone.in/news/market-updates/sebi-peak-margin-norms-to-kick-in-from-september-1",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2021-04-30",
+  "title": "NIFTY lot 75 to 50",
+  "category": "F&O structure",
+  "detail": "NSE circular NSE/FAOP/47854 (dated 2021-03-31) cut the NIFTY lot from 75 to 50. It took effect from 2021-04-30 for July 2021 monthly contracts and later; weekly contracts moved from the August 2021 expiries.",
+  "source": "https://archives.nseindia.com/content/circulars/FAOP47854.pdf",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2022-02-25",
+  "title": "T+1 settlement phase 1",
+  "category": "settlement",
+  "detail": "Under SEBI circular SEBI/HO/MRD2/DCAP/P/CIR/2021/628 (2021-09-07), the 100 smallest stocks by market cap moved from T+2 to T+1. Batches of 500 followed on the last Friday of each month.",
+  "source": "https://moneylife.in/article/stock-market-t1-settlement-for-bottom-100-stocks-from-25th-february/65540.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2022-05-04",
+  "title": "RBI off-cycle hike to 4.40%",
+  "category": "macro",
+  "detail": "In an unscheduled meeting the RBI raised the repo rate 40bp from 4.00% to 4.40% and raised CRR 50bp to 4.5%, starting the 2022-23 hiking cycle. Market reaction: An unscheduled MPC hike of 40 bp to 4.40% plus a 50 bp CRR rise to 4.5%; Sensex -1,306.96 pts (-2.29%) and Nifty about -392 pts to 16,678.",
+  "source": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+  "kind": "regulatory",
+  "source2": "https://www.icicidirect.com/share-market-today/market-news-commentary/sensex-tanks-1,307-pts,-nifty-below-16,700-mark-after-rbis-sudden-repo-rate-hike/1329020"
+ },
+ {
+  "date": "2022-06-08",
+  "title": "RBI hike to 4.90%",
+  "category": "macro",
+  "detail": "Repo rate raised 50bp to 4.90%.",
+  "source": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2022-08-05",
+  "title": "RBI hike to 5.40%",
+  "category": "macro",
+  "detail": "Repo rate raised 50bp to 5.40%.",
+  "source": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2022-09-30",
+  "title": "RBI hike to 5.90%",
+  "category": "macro",
+  "detail": "Repo rate raised 50bp to 5.90%.",
+  "source": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2022-12-07",
+  "title": "RBI hike to 6.25%",
+  "category": "macro",
+  "detail": "Repo rate raised 35bp to 6.25%.",
+  "source": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2023-01-27",
+  "title": "T+1 settlement completed",
+  "category": "settlement",
+  "detail": "The final batch (the largest ~256 stocks, plus ETFs, REITs and InvITs) moved to T+1, so the whole Indian cash market settles T+1.",
+  "source": "https://fyers.in/notice-board/change-in-settlement-cycle-from-27th-january-2023-onwards/",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2023-02-08",
+  "title": "RBI hike to 6.50%",
+  "category": "macro",
+  "detail": "Repo rate raised 25bp to 6.50%, the last hike of the cycle; the rate then stayed at 6.50% until Feb 2025. Market reaction: The MPC voted 4-2 for a 25 bp hike to 6.50%, the last hike of the 2022-23 cycle (250 bp in total).",
+  "source": "https://www.business-standard.com/finance/news/rbi-mpc-pauses-repo-rate-hikes-interest-rate-kept-unchanged-at-6-5-123040600213_1.html",
+  "kind": "regulatory",
+  "source2": "https://www.business-standard.com/article/news-cm/nifty-climbs-above-17-800-rbi-hikes-repo-rate-by-25-bps-123020800425_1.html"
+ },
+ {
+  "date": "2023-04-01",
+  "title": "Finance Act 2023 STT hike on F&O",
+  "category": "tax",
+  "detail": "STT on sale of options premium rose from 0.05% to 0.0625% and on sale of futures from 0.01% to 0.0125%. The amendment passed the Lok Sabha on 2023-03-24.",
+  "source": "https://www.kitco.com/news/off-the-wire/2023-03-24/corrected-official-india-hikes-securities-transaction-tax-futures",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2023-04-28",
+  "title": "BANKNIFTY lot 25 to 15",
+  "category": "F&O structure",
+  "detail": "NSE circular NSE/FAOP/56233 (dated 2023-03-31) cut the BANKNIFTY lot from 25 to 15, effective from 2023-04-28 for July 2023 monthly contracts and later.",
+  "source": "https://archives.nseindia.com/content/circulars/FAOP56233.pdf",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-01-01",
+  "title": "Optional UPI-block trading (secondary market)",
+  "category": "settlement",
+  "detail": "Under SEBI's 2023-06-23 circular, an optional ASBA-like facility let clients trade in the cash segment with funds blocked in their bank account instead of transferred to the broker.",
+  "source": "https://www.taxmann.com/post/blog/sebi-mandates-qualified-stock-brokers-to-offer-upi-block-mechanism-or-3-in-1-trading-account-facility-to-their-clients/",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-03-28",
+  "title": "T+0 settlement beta",
+  "category": "settlement",
+  "detail": "Under SEBI circular dated 2024-03-21, an optional same-day (T+0) settlement cycle started for 25 scrips alongside T+1.",
+  "source": "https://www.outlookmoney.com/invest/beta-version-of-t0-settlement-cycle-starts-from-march-28-herere-sebi-guidelines-for-investors",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-04-26",
+  "title": "NIFTY lot 50 to 25",
+  "category": "F&O structure",
+  "detail": "NSE circular dated 2024-04-02 cut NIFTY from 50 to 25, FINNIFTY from 40 to 25 and MIDCPNIFTY from 75 to 50 (BANKNIFTY stayed 15). First weekly expiry on the new lot was 2024-05-02.",
+  "source": "https://zerodha.com/marketintel/bulletin/375282/revision-in-lot-size-of-index-derivative-contracts-2",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-07-23",
+  "title": "Budget July-2024 capital gains rates",
+  "category": "tax",
+  "detail": "On listed equity, STCG went from 15% to 20%, LTCG from 10% to 12.5%, and the LTCG exemption from Rs 1 lakh to Rs 1.25 lakh, effective Budget day. Market reaction: LTCG raised to 12.5% from 10%, STCG to 20% from 15%, and STT on F&O increased; Nifty fell as much as 1.77% intraday but closed -0.12% at 24,479.05.",
+  "source": "https://www.business-standard.com/amp/markets/news/budget-2024-hikes-ltcg-tax-rate-to-12-5-stcg-to-20-stt-on-f-o-also-up-124072300553_1.html",
+  "kind": "regulatory",
+  "source2": "https://www.theweek.in/wire-updates/business/2024/07/23/del177-biz-stocks-close.html"
+ },
+ {
+  "date": "2024-08-29",
+  "title": "Finfluencer association ban",
+  "category": "policy",
+  "detail": "SEBI-regulated entities may not associate with unregistered persons who give advice or make return claims. A circular dated 2025-01-29 also barred pure educators from using market price data from the preceding 3 months.",
+  "source": "https://www.business-standard.com/markets/news/sebi-finfluencer-circular-live-stock-data-market-education-rules-125013000571_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-10-01",
+  "title": "Budget July-2024 STT hike on F&O",
+  "category": "tax",
+  "detail": "STT on sale of futures rose from 0.0125% to 0.02% and on sale of options premium from 0.0625% to 0.1%.",
+  "source": "https://zerodha.com/z-connect/business-updates/what-changes-for-investors-after-budget-2024",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-10-01",
+  "title": "True-to-label exchange charges",
+  "category": "charges",
+  "detail": "Under SEBI circular SEBI/HO/MRD/TPD-1/P/CIR/2024/92 (2024-07-01), volume slabs were replaced with flat uniform MII fees. NSE options became Rs 35.03 per lakh of premium per side, replacing the earlier Rs 29.50-49.50 slabs.",
+  "source": "https://www.business-standard.com/amp/markets/stock-market-news/nse-and-bse-revise-their-transaction-fees-to-comply-with-sebi-circular-124092701207_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-11",
+  "title": "Direct payout of securities to client demat",
+  "category": "settlement",
+  "detail": "Under SEBI circular dated 2024-06-05 (deferred from 2024-10-14 by a 2024-10-10 circular), clearing corporations credit securities straight to client demat accounts instead of broker pool accounts, and margin-funded stocks must be held by pledge only.",
+  "source": "https://businessworld.in/article/sebi-extends-deadline-for-securities-payout-to-clients-demat-accounts-to-11-nov-535965",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-13",
+  "title": "Last BANKNIFTY weekly expiry",
+  "category": "F&O structure",
+  "detail": "NSE (circular 2024-10-10) discontinued BANKNIFTY weekly options after this date. Monthly contracts continue.",
+  "source": "https://zerodha.com/marketintel/bulletin/392870/discontinuation-of-weekly-derivatives-contracts-from-november-2024",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-18",
+  "title": "Last MIDCPNIFTY weekly expiry",
+  "category": "F&O structure",
+  "detail": "NIFTY Midcap Select weekly options discontinued after this date.",
+  "source": "https://zerodha.com/marketintel/bulletin/392870/discontinuation-of-weekly-derivatives-contracts-from-november-2024",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-19",
+  "title": "Last FINNIFTY weekly expiry",
+  "category": "F&O structure",
+  "detail": "NIFTY Financial Services weekly options discontinued after this date. NIFTY 50 is the only NSE weekly from here on.",
+  "source": "https://zerodha.com/marketintel/bulletin/392870/discontinuation-of-weekly-derivatives-contracts-from-november-2024",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-20",
+  "title": "One weekly expiry per exchange",
+  "category": "F&O structure",
+  "detail": "Under SEBI circular dated 2024-10-01, each exchange may offer weekly expiry on only one benchmark index: NIFTY on NSE, SENSEX on BSE.",
+  "source": "https://www.scconline.com/blog/post/2024/10/03/measures-to-strengthen-equity-index-derivatives-framework-legal-news",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-20",
+  "title": "Minimum index contract size Rs 15 lakh",
+  "category": "F&O structure",
+  "detail": "Under the SEBI 2024-10-01 circular, minimum index derivative contract value rose from Rs 5-10 lakh to Rs 15 lakh for new contracts.",
+  "source": "https://www.scconline.com/blog/post/2024/10/03/measures-to-strengthen-equity-index-derivatives-framework-legal-news",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-20",
+  "title": "NIFTY lot 25 to 75, BANKNIFTY 15 to 30",
+  "category": "F&O structure",
+  "detail": "New NSE index contracts carried NIFTY 75 and BANKNIFTY 30. Existing weekly and monthly contracts kept the old lot to expiry; quarterly and half-yearly contracts switched on 2024-12-26 (NIFTY) and 2024-12-24 (BANKNIFTY).",
+  "source": "https://www.5paisa.com/index.php/news/nse-revises-lot-sizes-for-key-index-derivatives-starting-november-2024",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-20",
+  "title": "SENSEX lot 10 to 20, BANKEX 15 to 30",
+  "category": "F&O structure",
+  "detail": "BSE notice 20241021-13 (2024-10-21) doubled the SENSEX and BANKEX lots for new contracts. Long-dated SENSEX contracts switched after 2024-12-27.",
+  "source": "https://groww.in/blog/nse-increases-lot-sizes-for-index-derivatives",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2024-11-20",
+  "title": "Extra 2% ELM on expiry day",
+  "category": "margin",
+  "detail": "An additional 2% extreme loss margin applies to short index options expiring that day.",
+  "source": "https://www.scconline.com/blog/post/2024/10/03/measures-to-strengthen-equity-index-derivatives-framework-legal-news",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-01-01",
+  "title": "SENSEX expiry Friday to Tuesday",
+  "category": "F&O structure",
+  "detail": "BSE moved SENSEX, BANKEX and SENSEX50 weekly and monthly expiries from Friday to Tuesday.",
+  "source": "https://www.business-standard.com/amp/markets/stock-market-news/sensex-bankex-sensex-50-expiry-days-to-change-from-january-1-bse-124112801317_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-01-31",
+  "title": "T+0 extended toward top 500",
+  "category": "settlement",
+  "detail": "Under SEBI circular dated 2024-12-10, optional T+0 began rolling out in monthly batches of 100 across the top 500 stocks by market cap.",
+  "source": "https://www.business-standard.com/markets/news/market-regulator-sebi-widens-scope-of-t-0-settlement-to-top-500-stocks-124121000906_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-02-01",
+  "title": "Upfront option premium collection",
+  "category": "margin",
+  "detail": "Under the SEBI 2024-10-01 circular, brokers must collect the full option premium upfront from buyers, with no intraday leverage on premium. Market reaction: Income up to Rs 12 lakh made tax-free in a Saturday session; Sensex +0.01% at 77,505.96 and Nifty -0.11% at 23,482.15.",
+  "source": "https://www.scconline.com/blog/post/2024/10/03/measures-to-strengthen-equity-index-derivatives-framework-legal-news",
+  "kind": "regulatory",
+  "source2": "https://www.business-standard.com/markets/news/union-budget-2025-stock-market-live-updates-sensex-nifty-50-union-budget-day-impact-share-market-insights-125020100101_1.html"
+ },
+ {
+  "date": "2025-02-01",
+  "title": "Calendar-spread benefit removed on expiry day",
+  "category": "margin",
+  "detail": "Margin offset between different expiries no longer applies on the day the near contract expires. One source says 2025-02-10; SEBI's circular says Feb 2025.",
+  "source": "https://www.scconline.com/blog/post/2024/10/03/measures-to-strengthen-equity-index-derivatives-framework-legal-news",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-02-01",
+  "title": "UPI-block or 3-in-1 mandatory for QSBs",
+  "category": "settlement",
+  "detail": "Under SEBI circular SEBI/HO/MRD-PoD2/CIR/P/2024/153 (2024-11-11), qualified stock brokers must offer UPI-block trading or a 3-in-1 account.",
+  "source": "https://www.taxmann.com/post/blog/sebi-mandates-qualified-stock-brokers-to-offer-upi-block-mechanism-or-3-in-1-trading-account-facility-to-their-clients/",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-02-07",
+  "title": "RBI cut to 6.25%",
+  "category": "macro",
+  "detail": "Repo rate cut 25bp from 6.50% to 6.25%, the first cut in nearly five years. Market reaction: Governor Malhotra's first MPC cut repo 25 bp to 6.25%; Nifty -43 pts to 23,559.95.",
+  "source": "https://www.business-standard.com/amp/finance/news/rbi-rate-cut-february-2025-sanjay-malhotra-125020700479_1.html",
+  "kind": "regulatory",
+  "source2": "https://www.business-standard.com/amp/markets/capital-market-news/rbi-trims-benchmark-repo-rate-by-25-bps-to-6-25-125020700388_1.html"
+ },
+ {
+  "date": "2025-03-27",
+  "title": "NSE Monday-expiry shift deferred",
+  "category": "F&O structure",
+  "detail": "NSE deferred its planned move of all expiries from Thursday to Monday (due 2025-04-04) after SEBI's consultation paper proposing that expiries be only on Tuesday or Thursday.",
+  "source": "https://www.business-standard.com/amp/markets/news/nse-defers-switching-to-monday-expiry-after-sebi-s-consultation-paper-125032800183_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-04-01",
+  "title": "Intraday position-limit monitoring",
+  "category": "F&O structure",
+  "detail": "Under the SEBI 2024-10-01 circular, exchanges began checking index-derivative position limits intraday (at least 4 random snapshots), not just at end of day.",
+  "source": "https://www.scconline.com/blog/post/2024/10/03/measures-to-strengthen-equity-index-derivatives-framework-legal-news",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-04-09",
+  "title": "RBI cut to 6.00%",
+  "category": "macro",
+  "detail": "Repo rate cut 25bp to 6.00%. Market reaction: Second straight 25 bp cut to 6.0%; Nifty settled near 22,400 and VIX rose 4.83%.",
+  "source": "https://www.business-standard.com/amp/finance/news/rbi-rate-cut-april-2025-governor-sanjay-malhotra-repo-rate-125040900306_1.html",
+  "kind": "regulatory",
+  "source2": "https://www.business-standard.com/amp/markets/capital-market-news/nifty-settles-near-22-400-rbi-cuts-repo-rate-by-25-bps-to-6-vix-rallies-4-83-125040900822_1.html"
+ },
+ {
+  "date": "2025-04-25",
+  "title": "BANKNIFTY lot 30 to 35",
+  "category": "F&O structure",
+  "detail": "In NSE's semi-annual review, BANKNIFTY went from 30 to 35 and MIDCPNIFTY from 120 to 140. Monthly contracts moved from the July 2025 expiry (2025-07-31).",
+  "source": "https://zerodha.com/marketintel/bulletin/411352/revision-in-lot-size-of-index-derivative-contracts-from-april-25-2025",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-06-06",
+  "title": "RBI cut to 5.50% plus CRR cut",
+  "category": "macro",
+  "detail": "Repo rate cut 50bp to 5.50%, with a 100bp CRR cut in tranches. Rates were then held at 5.50% in Aug 2025. Market reaction: Repo cut 50 bp to 5.5% and CRR cut 100 bp to 3% in tranches (about Rs 2.5 trn); Bank Nifty hit a record high.",
+  "source": "https://www.business-standard.com/finance/news/rbi-mpc-august-2025-monetary-policy-repo-rate-gdp-inflation-stance-125080600237_1.html",
+  "kind": "regulatory",
+  "source2": "https://www.outlookbusiness.com/amp/story/markets/nifty-bank-soars-to-record-high-after-rbis-steeper-than-expected-rate-cut-hdfc-bank-axis-bank-idfc-first-bank-top-gainers"
+ },
+ {
+  "date": "2025-09-01",
+  "title": "NSE expiry to Tuesday, BSE to Thursday",
+  "category": "F&O structure",
+  "detail": "Under SEBI circular dated 2025-05-26 (expiries limited to Tuesday or Thursday) and NSE circular 2025-06-17, NSE weekly and monthly expiries moved from Thursday to Tuesday (monthly = last Tuesday) and BSE moved to Thursday.",
+  "source": "https://www.newsonair.gov.in/nse-bse-swap-derivatives-expiry-days",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-10-01",
+  "title": "New MWPL formula and ban-period rule",
+  "category": "F&O structure",
+  "detail": "Under SEBI circular SEBI/HO/MRD/TPD-1/P/CIR/2025/79 (2025-05-29), single-stock MWPL became the lower of 15% of free float or 65x average daily delivery value. During the F&O ban, trades that reduce futures-equivalent OI are allowed.",
+  "source": "https://www.businesstoday.in/amp/markets/story/sebi-equity-fo-rules-futeq-method-mwpl-risk-management-478321-2025-05-29",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-10-01",
+  "title": "Intraday index-option limits Rs 5,000 cr net",
+  "category": "F&O structure",
+  "detail": "Under SEBI circular dated 2025-09-01, the intraday cap per entity is Rs 5,000 cr net (delta-based futures-equivalent) and Rs 10,000 cr gross per side, against an end-of-day net limit of Rs 1,500 cr. Expiry-day penalties started 2025-12-06.",
+  "source": "https://www.business-standard.com/markets/news/sebi-stricter-intraday-position-limits-options-market-regulation-125090200971_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2025-12-05",
+  "title": "RBI cut to 5.25%",
+  "category": "macro",
+  "detail": "Unanimous 25bp repo cut from 5.50% to 5.25%. One secondary source says it was held there through the 2026 reviews until October 2026. Market reaction: Unanimous 25 bp cut to 5.25%, completing 125 bp of easing in 2025; stance kept neutral.",
+  "source": "https://www.business-standard.com/amp/finance/news/rbi-mpc-december-2025-rate-cut-announcement-sanjay-malhotra-cpi-inflation-125120500161_1.html",
+  "kind": "regulatory",
+  "source2": "https://www.scconline.com/blog/post/2025/12/06/rbi-announced-repo-rate-cut-mpc-december-2025/"
+ },
+ {
+  "date": "2025-12-08",
+  "title": "Pre-open session in F&O",
+  "category": "F&O structure",
+  "detail": "NSE (circular 2025-11-04) added a 9:00-9:15 call-auction pre-open for current-month index and stock futures (not options), with order entry closing at random between 9:07 and 9:08.",
+  "source": "https://www.business-standard.com/amp/markets/news/nse-pre-open-session-equity-derivatives-december-8-2025-125110401569_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2026-01-06",
+  "title": "NIFTY lot 75 to 65, BANKNIFTY 35 to 30",
+  "category": "F&O structure",
+  "detail": "NSE circular FAOP70616 (2025-10-03, effective 2025-10-28 EOD) cut NIFTY 75 to 65, BANKNIFTY 35 to 30, FINNIFTY 65 to 60 and MIDCPNIFTY 140 to 120. First weekly on the new lot was 2026-01-06, first monthly 2026-01-27. These remain current as of Oct 2026.",
+  "source": "https://nsearchives.nseindia.com/content/circulars/FAOP70616.pdf",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2026-03-01",
+  "title": "NSE IPFT folded into transaction charges",
+  "category": "charges",
+  "detail": "Under NSE circular NSE/FA/73061 (2026-02-27), the IPFT contribution went back to Rs 0.01 per crore and transaction charges were adjusted so the total stays neutral. Options are about 0.03553% of premium per side including IPFT.",
+  "source": "https://nsearchives.nseindia.com/content/circulars/FA73061.pdf",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2026-03-31",
+  "title": "BANKNIFTY concentration limits deadline",
+  "category": "F&O structure",
+  "detail": "Under SEBI circulars of 2025-05-29 and 2025-10-30, non-benchmark derivative indices need at least 14 constituents, top stock 20% or less and top 3 at 45% or less, phased in four tranches. Deadlines: 2025-12-31 for FINNIFTY and BANKEX, 2026-03-31 for BANKNIFTY.",
+  "source": "https://www.business-standard.com/amp/markets/capital-market-news/exchanges-get-time-till-fy26-to-align-banknifty-finnifty-and-bankex-with-sebi-rules-125103100382_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2026-04-01",
+  "title": "Finance Act 2026 STT hike on F&O",
+  "category": "tax",
+  "detail": "Announced in the 2026-02-01 Budget: STT on sale of futures rose from 0.02% to 0.05%, and on sale of options premium from 0.1% to 0.15%. Exercised options are also 0.15%.",
+  "source": "https://nsearchives.nseindia.com/content/circulars/FATAX73524.pdf",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2026-04-01",
+  "title": "Buybacks taxed as capital gains",
+  "category": "tax",
+  "detail": "Under the Finance Act 2026, buyback proceeds are taxed as capital gains (cost is deductible) instead of as deemed dividend, with an extra levy on promoters. Exact rates vary across secondary sources.",
+  "source": "https://www.scconline.com/blog/post/2026/07/16/finance-act-2026-share-buyback-taxation-analysis/",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2026-04-01",
+  "title": "Retail algo framework fully applicable",
+  "category": "policy",
+  "detail": "Under SEBI circular dated 2025-02-04, retail API algo orders must be tagged and strategies registered with exchanges, through empanelled vendors. The date was extended from 2025-08-01 and then 2025-10-01 by circular 2025/132 (2025-09-30).",
+  "source": "https://taxguru.in/sebi/sebi-extends-algo-trading-implementation-timeline-april-2026.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2026-10-07",
+  "title": "RBI hike to 5.50%",
+  "category": "macro",
+  "detail": "Unanimous 25bp repo hike from 5.25% to 5.50%, with the stance changed to calibrated tightening. It is the first hike since Feb 2023. Market reaction: First repo hike since Feb-2023 (+25 bp to 5.50%), stance moved to 'calibrated tightening', alongside a Rs 2.5 trn liquidity injection.",
+  "source": "https://www.indiatvnews.com/business/news/rbi-mpc-meeting-repo-rate-decision-live-update-today-monetary-policy-october-loan-interest-rates-gdp-news-governor-sanjay-malhotra-2026-10-07-1056275",
+  "kind": "regulatory",
+  "source2": "https://www.businesstoday.in/latest/economy/story/rbi-raises-repo-rate-to-5-50-but-injects-rs2-5-lakh-crore-is-its-policy-sending-mixed-signals-563286-2026-10-23"
+ },
+ {
+  "date": "2026-12-07",
+  "title": "Closing auction session and 30-min VWAP expiry settlement (upcoming)",
+  "category": "settlement",
+  "detail": "Under SEBI circular dated 2026-10-15, which revises the CAS circular of 2026-01-16: a 3:30-3:40 pm closing auction, index derivatives trading to 3:45 pm (expiring index contracts stop at 3:30), and expiring derivatives settling on a 30-minute VWAP rather than the auction price. Order-transition rules start 2027-02-08.",
+  "source": "https://www.business-standard.com/markets/news/cas-review-sebi-announces-last-30-minute-vwap-method-for-settlement-126101501571_1.html",
+  "kind": "regulatory"
+ },
+ {
+  "date": "2021-02-01",
+  "title": "Union Budget FY22",
+  "category": "policy",
+  "detail": "Capex- and growth-focused budget; Nifty +4.74% to 14,281.20 and Sensex +5.0%, the best Budget-day gain since 1997.",
+  "source": "https://www.business-standard.com/amp/article/markets/investor-wealth-rise-by-over-rs-6-34-trn-as-markets-cheer-budget-2021-121020101454_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2021-04-12",
+  "title": "COVID second-wave crash",
+  "category": "macro",
+  "detail": "A surge in COVID cases sent Nifty down 3.53% to 14,310 and Sensex down 3.44%, a 10-week low; midcap and smallcap indices fell about 5%.",
+  "source": "https://www.businesstoday.in/personal-finance/investment/story/covid-second-wave-shaves-10-off-sensex-more-downside-ahead-293898-2021-04-20",
+  "kind": "news"
+ },
+ {
+  "date": "2021-11-26",
+  "title": "Omicron variant sell-off",
+  "category": "global",
+  "detail": "Detection of the Omicron variant set off a global risk-off move; Nifty -2.91% to 17,026 and Sensex -1,687 pts (-2.87%).",
+  "source": "https://www.business-standard.com/article/markets/november-show-worst-for-sensex-and-nifty-indices-since-march-2020-121113001767_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2022-02-01",
+  "title": "Union Budget FY23",
+  "category": "policy",
+  "detail": "Capex raised 35.4% to Rs 7.5 trn with no negative tax surprises; Nifty +1.37% to 17,576.80 and Sensex +1.46%.",
+  "source": "https://www.business-standard.com/amp/budget/article/budget-2022-markets-cheer-thrust-on-capex-sensex-rises-848-points-122020102139_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2022-02-24",
+  "title": "Russia invades Ukraine",
+  "category": "geopolitical",
+  "detail": "Nifty fell 815.30 pts (-4.78%) to 16,247.95 and India VIX jumped 30.3% to 31.98.",
+  "source": "https://www.business-standard.com/article/news-cm/nifty-march-futures-trade-at-discount-122022401117_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2022-03-16",
+  "title": "Fed starts hiking cycle",
+  "category": "global",
+  "detail": "The US Fed raised rates by 25 bp to 0.25-0.50%, its first hike since 2018.",
+  "source": "https://www.npr.org/2022/03/16/1086484178/the-federal-reserve-interest-rates-inflation",
+  "kind": "news"
+ },
+ {
+  "date": "2022-06-13",
+  "title": "Global sell-off on US CPI",
+  "category": "global",
+  "detail": "A hotter US May CPI (8.6%) caused a global rout; Nifty -2.64% to 15,774.4, India VIX +13% to above 22, and the rupee hit a record low of 78.04.",
+  "source": "https://www.moneylife.in/article/nifty-sensex-suffer-carnage-after-us-inflation-spike-monday-closing-report/67461.html",
+  "kind": "news"
+ },
+ {
+  "date": "2023-01-24",
+  "title": "Hindenburg report on Adani",
+  "category": "corporate",
+  "detail": "Short-seller Hindenburg Research published fraud and stock-manipulation allegations against the Adani Group, starting a rout that erased about $47bn in two sessions.",
+  "source": "https://fortune.com/2023/01/27/hindenburg-report-wipes-out-over-47-billion-from-adani-group-market-cap-in-2-days",
+  "kind": "news"
+ },
+ {
+  "date": "2023-01-27",
+  "title": "Adani rout drags Nifty",
+  "category": "corporate",
+  "detail": "Adani Enterprises fell 18% and Adani Ports 15%; Nifty -1.61% to 17,604.35 and Sensex -1.45%.",
+  "source": "https://www.business-standard.com/amp/article/news-cm/barometers-end-with-deep-cuts-as-adani-twins-drag-auto-index-outperforms-123012700873_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2023-02-01",
+  "title": "Union Budget FY24",
+  "category": "policy",
+  "detail": "Budget day was volatile and indices ended roughly flat (exact close unconfirmed) while Adani Enterprises crashed about 26% during the session.",
+  "source": "https://www.moneylife.in/article/nifty-and-sensex-ended-flat-on-volatile-budget-day-wednesday-closing-report/69704.html",
+  "kind": "news"
+ },
+ {
+  "date": "2023-02-02",
+  "title": "Adani Enterprises plunges after FPO pulled",
+  "category": "corporate",
+  "detail": "Adani Enterprises plunged 27% while Sensex gained 224 pts and Nifty settled at 17,610.40.",
+  "source": "https://www.business-standard.com/amp/article/news-cm/sensex-gains-224-pts-nifty-settles-at-17-610-40-adani-enterprises-plummets-27-123020201150_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2023-04-06",
+  "title": "RBI surprise pause",
+  "category": "policy",
+  "detail": "RBI unexpectedly held the repo rate at 6.5% ('a pause, not a pivot'); Sensex +0.24% to 59,833 and Nifty 17,599.",
+  "source": "https://bsdev.business-standard.com/markets/news/sensex-up-144pts-nifty-nears-17-600-as-rbi-pauses-hike-realty-stocks-jump-123040700004_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2023-12-04",
+  "title": "BJP sweeps three state elections",
+  "category": "election",
+  "detail": "After BJP wins in MP, Rajasthan and Chhattisgarh (results on 3 Dec), Nifty rose 2.1% to a record 20,687, its best day in about 14 months.",
+  "source": "https://www.business-standard.com/amp/markets/stock-market-news/election-results-of-four-states-give-new-wings-to-bull-run-in-market-123120400887_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2024-02-01",
+  "title": "Interim Budget FY25",
+  "category": "policy",
+  "detail": "FY25 fiscal deficit target set at 5.1% of GDP with record capex; equities were muted (Nifty about 21,690, Sensex -107) and bond yields fell.",
+  "source": "https://indiainfoline.com/knowledge-center/union-budget/stock-markets-respond-blandly-interim-budget",
+  "kind": "news"
+ },
+ {
+  "date": "2024-06-03",
+  "title": "Exit-poll rally",
+  "category": "election",
+  "detail": "Exit polls (released 1 Jun) predicted a large NDA win; Nifty +3.25% to a record close of 23,263.90, Sensex +2,507 pts, and India VIX down about 20%.",
+  "source": "https://www.businesstoday.in/amp/markets/market-commentary/story/market-in-numbers-sensex-nifty-log-stellar-rally-gainers-52-week-highs-and-more-431891-2024-06-03",
+  "kind": "news"
+ },
+ {
+  "date": "2024-06-04",
+  "title": "Election results shock",
+  "category": "election",
+  "detail": "BJP fell short of a majority on its own; Nifty -5.93% to 21,884.50, its worst day since Mar-2020, Sensex -5.74%, and India VIX up about 24-40%.",
+  "source": "https://moneylife.in/article/nifty-sensex-crash-on-election-surprise-tuesday-closing-report/74316.html",
+  "kind": "news"
+ },
+ {
+  "date": "2024-08-05",
+  "title": "Yen carry-trade unwind",
+  "category": "global",
+  "detail": "Global turmoil after the BoJ hike; Nifty -2.68% to 24,055.60 and India VIX +42% to 20.37.",
+  "source": "https://www.business-standard.com/amp/markets/capital-market-news/stocks-poised-for-rebound-after-sharp-drop-124080600125_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2024-09-27",
+  "title": "Nifty record high 26,277 (2024 peak)",
+  "category": "market",
+  "detail": "Nifty set an intraday all-time high of 26,277.35 (record close 26,216.05 on 26 Sep) that stood until Nov-2025.",
+  "source": "https://www.ddnews.gov.in/en/nifty-hits-fresh-record-high-as-markets-gain-momentum/",
+  "kind": "news"
+ },
+ {
+  "date": "2024-09-30",
+  "title": "China-stimulus rotation begins",
+  "category": "global",
+  "detail": "Sensex -1,272 pts (-1.49%) and Nifty -368 pts to 25,810 on West Asia risk and fear of funds moving to China after Beijing's stimulus.",
+  "source": "https://m.greaterkashmir.com/article/sensex-crashes-by-1272-pts-investors-lose-rs-4-lakh-crore/335706",
+  "kind": "news"
+ },
+ {
+  "date": "2024-10-03",
+  "title": "Iran missile attack on Israel and SEBI F&O curbs",
+  "category": "geopolitical",
+  "detail": "Nifty -2.12% to 25,250.10 and Sensex -1,769 pts (-2.10%) on Iran-Israel escalation, higher crude and new SEBI derivatives rules; India VIX +9.9%.",
+  "source": "https://www.outlookbusiness.com/markets/sensex-nifty-slump-over-2-percent-as-middle-east-conflict-deepens",
+  "kind": "news"
+ },
+ {
+  "date": "2024-11-03",
+  "title": "Record October FPI outflow reported",
+  "category": "market",
+  "detail": "Depository data showed FPIs sold a record Rs 94,017 cr of Indian equities in Oct-2024 (the previous record was Rs 61,973 cr in Mar-2020), driven by the shift into China.",
+  "source": "https://www.business-standard.com/amp/markets/news/fpis-withdraw-record-rs-94-000-cr-from-indian-equities-in-october-124110300138_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2024-11-06",
+  "title": "Trump wins US election",
+  "category": "global",
+  "detail": "Nifty +1.12% to 24,484.05 and Sensex +901 pts, led by Nifty IT +3.99%.",
+  "source": "https://www.business-standard.com/markets/news/stock-market-live-updates-today-sensex-nifty-nse-bse-titan-iex-q2-results-swiggy-ipo-124110600120_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2024-11-21",
+  "title": "US indictment of Gautam Adani",
+  "category": "corporate",
+  "detail": "US bribery and fraud charges sent Adani group stocks down up to 20% (Adani Enterprises more than 20%); Nifty fell about 0.7%.",
+  "source": "https://fortune.com/asia/2024/11/21/gautam-adani-group-shares-plunge-us-indictment-bribery",
+  "kind": "news"
+ },
+ {
+  "date": "2024-11-25",
+  "title": "Mahayuti wins Maharashtra",
+  "category": "election",
+  "detail": "After the BJP-led alliance won 235 seats, Nifty rose 1.32% to 24,221.90 and Sensex 1.25%.",
+  "source": "https://www.businesstoday.in/amp/markets/market-commentary/story/sensex-nifty-cheer-maharashtra-poll-outcome-how-long-can-the-party-on-d-street-last-455029-2024-11-25",
+  "kind": "news"
+ },
+ {
+  "date": "2024-12-06",
+  "title": "RBI cuts CRR to 4%",
+  "category": "policy",
+  "detail": "Repo held at 6.5% for an 11th meeting, but CRR was cut 50 bp to 4% (about Rs 1.16 trn of liquidity) and the FY25 GDP forecast lowered to 6.6%.",
+  "source": "https://www.business-standard.com/amp/finance/news/monetary-policy-review-rbi-keeps-rates-unchanged-cuts-crr-by-50-bps-to-4-124120601217_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2025-04-03",
+  "title": "US 'Liberation Day' tariffs",
+  "category": "global",
+  "detail": "Trump announced reciprocal tariffs including 26% on India (US time); Nifty closed -0.35% at 23,250.10 on 3 Apr. Dated to 3 Apr, India's first session after the US-evening announcement.",
+  "source": "https://www.outlookmoney.com/amp/story/market-intelligence/sensex-sheds-322-points-to-close-at-76295-nifty-ends-above-23200-after-trump-imposes-reciprocal-tariffs-on-india",
+  "kind": "news"
+ },
+ {
+  "date": "2025-04-07",
+  "title": "Global tariff crash",
+  "category": "global",
+  "detail": "US-China tariff escalation; Nifty -3.24% to 22,161.60, and India VIX had its biggest one-day jump on record (reported 56-66%).",
+  "source": "https://www.business-standard.com/amp/markets/news/india-vix-logs-biggest-single-day-jump-signals-rocky-road-ahead-125040701001_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2025-05-07",
+  "title": "Operation Sindoor",
+  "category": "geopolitical",
+  "detail": "Indian strikes on Pakistan after the Pahalgam attack; the market opened sharply lower but closed roughly flat (sources disagree on sign: +0.14% vs -0.33%).",
+  "source": "https://www.business-standard.com/markets/news/operation-sindoor-how-have-stock-markets-reacted-to-india-pak-war-in-past-125050700765_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2025-05-12",
+  "title": "India-Pakistan ceasefire rally",
+  "category": "geopolitical",
+  "detail": "Ceasefire plus a US-China tariff truce; Nifty +3.82% (916.70 pts) to 24,924.70, its best day in about 4 years.",
+  "source": "https://www.business-standard.com/markets/news/sensex-nifty-log-best-day-in-4-yrs-on-india-pak-truce-us-china-trade-deal-125051200707_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2025-07-31",
+  "title": "US 25% tariff on India",
+  "category": "global",
+  "detail": "After Trump announced a 25% tariff plus a penalty on India (late 30 Jul), Nifty closed -0.35% at 24,768.35.",
+  "source": "https://www.business-standard.com/markets/news/stock-market-live-july-31-nse-bse-sensex-today-nifty-us-india-tariffs-gift-nifty-q1-results-today-ipo-nsdl-125073100108_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2025-08-06",
+  "title": "Extra 25% Russia-oil tariff (50% total)",
+  "category": "global",
+  "detail": "Trump's executive order added 25% over India's Russian oil purchases, taking US duties to 50% from 27 Aug; India's MEA called it 'unfair, unjustified'.",
+  "source": "https://www.thedailystar.net/news/world/usa/news/trump-order-doubles-tariffs-india-50-3957021",
+  "kind": "news"
+ },
+ {
+  "date": "2025-08-26",
+  "title": "Pre-50% tariff sell-off",
+  "category": "global",
+  "detail": "On the eve of the 50% tariff taking effect (markets shut 27 Aug), Nifty -1.02% to 24,712.05 with FII selling of about Rs 6,516 cr.",
+  "source": "https://www.nasdaq.com/articles/sensex-nifty-tumble-tariff-worries",
+  "kind": "news"
+ },
+ {
+  "date": "2025-09-03",
+  "title": "GST 2.0 rationalisation",
+  "category": "policy",
+  "detail": "GST Council moved to two slabs (5%/18%) effective 22 Sep, cutting small cars to 18%; Nifty Auto jumped about 4% intraday on 4 Sep before fading.",
+  "source": "https://www.theweek.in/wire-updates/business/2025/09/04/dcm69-biz-stocks-ld-auto.html",
+  "kind": "news"
+ },
+ {
+  "date": "2025-11-27",
+  "title": "Nifty new record after 14 months",
+  "category": "market",
+  "detail": "Nifty hit 26,295.55, surpassing its Sep-2024 peak after 287 sessions.",
+  "source": "https://ddnews.gov.in/en/nifty-hits-fresh-record-high-as-markets-gain-momentum/",
+  "kind": "news"
+ },
+ {
+  "date": "2026-01-05",
+  "title": "Nifty all-time high",
+  "category": "market",
+  "detail": "Nifty 50 touched an all-time high of 26,358.25 (per NSE), the 2026 peak before a roughly 16% correction.",
+  "source": "https://x.com/NSEIndia/status/2008050167937925308",
+  "kind": "news"
+ },
+ {
+  "date": "2026-02-01",
+  "title": "Union Budget FY27: F&O STT hike",
+  "category": "policy",
+  "detail": "STT on futures raised to 0.05% and on options to 0.15% (effective 1 Apr 2026); in a Sunday session Nifty fell about 2-2.3% to 24,825.45 and Sensex closed at 80,722.94. NOTE: Sunday special session; measured here from the next session until the weekend-session data fix lands.",
+  "source": "https://upstox.com/news/market-news/trading/stock-market-nifty-50-sensex-live-updates-on-sunday-february-1-union-budget-2026/liveblog-188661/",
+  "kind": "news"
+ },
+ {
+  "date": "2026-02-03",
+  "title": "India-US trade deal",
+  "category": "global",
+  "detail": "US tariff on India cut to 18% and the 25% Russia-oil penalty scrapped; Nifty rose as much as 4.99% intraday and closed +2.55% at 25,727.55.",
+  "source": "https://www.moneylife.in/article/us-cuts-india-tariffs-to-18-percentage-in-trade-deal-announced-by-trump-sensex-and-nifty-jump-5-percentage/79553.html",
+  "kind": "news"
+ },
+ {
+  "date": "2026-03-02",
+  "title": "US-Israel strikes on Iran",
+  "category": "geopolitical",
+  "detail": "After weekend strikes on Iran (Khamenei reportedly killed), Nifty -1.2% to 24,865.70 (about -500 pts intraday) and India VIX +25% to 17.1.",
+  "source": "https://trendlyne.com/posts/5549817/market-closes-lower-after-us-and-israel-strike-iran-triggering-risk-of-broader-conflict",
+  "kind": "news"
+ },
+ {
+  "date": "2026-03-04",
+  "title": "Iran war: oil surge and record-low rupee",
+  "category": "geopolitical",
+  "detail": "Sensex fell 1,745.59 pts (-2.17%) to a low of 78,486.51 on oil, FII selling and a record-low rupee. (Index figures quoted in the news are intraday; the measured close is in the table.)",
+  "source": "https://www.business-standard.com/markets/news/stock-market-crash-us-iran-war-sensex-nifty-oil-fii-rupee-why-are-markets-falling-today-126030400156_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2026-03-23",
+  "title": "War and oil-shock crash",
+  "category": "geopolitical",
+  "detail": "Sensex -1,837 pts (-2.46%) to 72,696 and Nifty -2.6% to 22,513 as the West Asia war escalated.",
+  "source": "https://www.mstock.com/articles/decoding-stock-market-crash-on-23-march-2026",
+  "kind": "news"
+ },
+ {
+  "date": "2026-04-08",
+  "title": "US-Iran ceasefire rally",
+  "category": "geopolitical",
+  "detail": "Two-week truce with Hormuz reopening terms; Brent -13.7% to about $94, Sensex +3.95% to 77,563 (biggest jump in 5 years), and Nifty +3.8% to 23,997.",
+  "source": "https://www.business-standard.com/markets/news/truce-lifts-sensex-biggest-jump-five-years-126040801221_1.html",
+  "kind": "news"
+ },
+ {
+  "date": "2026-09-28",
+  "title": "Hormuz stalemate sell-off",
+  "category": "geopolitical",
+  "detail": "The US-Iran stalemate over reopening Hormuz pushed Brent about +3.8% to $108; Sensex -1,124 pts to a 6-month low and Nifty near 22,780.",
+  "source": "https://www.deccanherald.com/amp/story/business/markets/sensex-sinks-1124-points-as-crude-surge-west-asia-tensions-rattle-markets-4162517",
+  "kind": "news"
+ },
+ {
+  "date": "2026-10-01",
+  "title": "Record 2026 FII exodus",
+  "category": "market",
+  "detail": "FIIs sold Rs 10,148 cr in one day, taking 2026 outflows to a record $27.8bn; Nifty hit about 22,301 intraday, heading for an 8th straight weekly loss (the longest in 25 years).",
+  "source": "https://www.theweek.in/news/biz-tech/2026/10/01/sensex-nifty-weekly-loss-25-years.html",
+  "kind": "news"
+ },
+ {
+  "date": "2026-10-08",
+  "title": "Nifty hits 2026 low",
+  "category": "market",
+  "detail": "Brent above $104 (Gulf shipping attacks), the RBI hike, FII selling and the rupee near 97/$; Nifty -1.6% to 22,231.80 (intraday low 22,179.90), Sensex -1.4% to 71,593, VIX up more than 10%.",
+  "source": "https://www.outlookbusiness.com/markets/nifty-hits-2026-low-what-triggered-the-market-bloodbath",
+  "kind": "news"
+ }
+]
