@@ -134,3 +134,38 @@ def test_flows_for_an_uncaptured_past_day_are_reported_missing(tmp_path):
     assert report.rows == []
     assert "never captured" in report.availability.message
     assert "Do not estimate" in report.to_text()
+
+
+class _HolidayClient:
+    def __init__(self, payload=None, fail=False):
+        self.payload, self.fail = payload, fail
+
+    def get_json(self, path, params=None, ttl=None):
+        if self.fail:
+            from tradingagents.dataflows.errors import VendorUnavailableError
+            raise VendorUnavailableError("nse", "down")
+        return Fetched(self.payload, path, None)
+
+
+@pytest.mark.unit
+def test_from_nse_knows_past_special_sessions_and_this_years_muhurat():
+    payload = {"CM": [{"tradingDate": "08-Nov-2026", "description": "Diwali Laxmi Pujan*"},
+                      {"tradingDate": "10-Nov-2026", "description": "Diwali-Balipratipada"}]}
+    cal = NSECalendar.from_nse(_HolidayClient(payload))
+    assert cal.is_trading_day(date(2026, 2, 1))              # Sunday Budget session (files verified)
+    assert cal.is_trading_day(date(2023, 11, 12))            # Sunday Muhurat 2023
+    assert cal.is_trading_day(date(2026, 11, 8))             # NSE's "*": Muhurat session this year
+    assert not cal.is_trading_day(date(2026, 11, 10))        # an ordinary holiday
+    assert not cal.is_trading_day(date(2026, 1, 31))         # an ordinary Saturday
+    # Muhurat day: never "open" in regular hours; after the close its files are expected.
+    assert cal.session_state(ist(2026, 11, 8, 10, 0)) == SessionState.PRE_MARKET
+    assert cal.session_state(ist(2026, 11, 8, 19, 30)) == SessionState.POST_CLOSE
+    # A Budget weekend session trades regular hours.
+    assert cal.session_state(ist(2026, 2, 1, 10, 0)) == SessionState.OPEN
+    assert cal.previous_session(date(2026, 2, 2)) == date(2026, 2, 1)
+
+
+@pytest.mark.unit
+def test_from_nse_keeps_known_special_sessions_when_nse_is_down():
+    cal = NSECalendar.from_nse(_HolidayClient(fail=True))
+    assert cal.is_trading_day(date(2025, 2, 1)) and not cal.is_trading_day(date(2025, 2, 2))

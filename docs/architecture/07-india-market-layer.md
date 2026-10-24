@@ -77,9 +77,15 @@ is a session.
 - `session_state(now)` → `no_session`, `pre_market` (before 09:00 IST), `pre_open` (09:00–09:15),
   `open` (09:15–15:30), `post_close`.
 
-**Special sessions** (a weekend Muhurat or budget-day session) are supported by the constructor argument
-`special_sessions`, which makes those dates trading days. `from_nse()` does not fill it, and no code in the
-repository passes it today, so a special session is treated as a non-session unless a caller supplies it.
+**Special sessions** (a weekend Muhurat or Budget-day session) are trading days. `from_nse()` adds two kinds
+([PA-27](../PA_27-calendar-special-sessions.md)):
+
+- `KNOWN_SPECIAL_SESSIONS` — the 11 weekend sessions since 2015, each verified by downloading its NSE files
+  (NSE's holiday list covers only the current year, so past sessions come from this list);
+- holidays NSE marks with `*` (e.g. "Diwali Laxmi Pujan*"), which have a Muhurat session — kept in `muhurat_days`.
+
+On a Muhurat day `session_state` never reports `open` during regular hours (the one-hour Muhurat window is announced
+separately and not modelled): `pre_market` before 15:30, `post_close` after, so that day's files are expected.
 
 ### 4.2 Publication status
 
