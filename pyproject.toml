@@ -48,6 +48,7 @@ quant = [
     "lightgbm>=4.3",
     "scikit-learn>=1.5",
     "pyarrow>=16",
+    "openpyxl>=3.1",          # reading broker reports (trade journal)
 ]
 # Phase 7: pretrained time-series model (Amazon Chronos-Bolt, runs on CPU). Separate
 # because it pulls in PyTorch: pip install "tradingagents[chronos]".
