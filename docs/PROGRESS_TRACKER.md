@@ -12,20 +12,20 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `██████████████████████░░░` 88% (88/100 tasks)
+**Overall:** `██████████████████████░░░` 89% (89/100 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 12:41_
+_Last updated: 2026-10-24 14:01_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
 | Phases 0–4, 6, 7, 10 tooling, bug fixes, Market Map, weekend sessions, option quotes, trade journal | done | merged (PRs #1–#26) |
-| `quant/phase-9-replay` — quant-report wording fix + replay check | merged; **10-date replay running** | merged (PR #27) |
-| `docs/pa-restructure` — docs index, folders, PA_01–PA_26 change records, architecture 01–18 | done | **open PR** |
+| `quant/phase-9-replay` — quant-report wording fix + replay check | replay done: **passed on reading every flag** | merged (PR #27); results: `quant/phase-9-result` |
+| `docs/pa-restructure` — docs index, folders, PA_01–PA_26 change records, architecture 01–18 | done | merged (PR #28) |
 
 ---
 
@@ -151,16 +151,17 @@ and its exit gate (beats the best single component). There is nothing to combine
 
 ## Phase 9 — Agent integration
 <!-- progress:phase -->
-`████████████████████░░░░░` 80% (4/5)
+`█████████████████████████` 100% (5/5)
 <!-- /progress:phase -->
 - [x] `get_quant_signal_report` tool (regime, vol forecasts, **expected move**, IV vs forecast, verdicts; only data known before the date)
 - [x] Market analyst told to quote it; portfolio manager discounts any unvalidated quant signal
 - [x] "VI. Quant Context" section in the Markdown and HTML reports
 - [x] Quant report wording fixed (2026-10-24): rule-judged tests showed "gates -" / "Sharpe nan"; now "rejected",
   "rejected (failed the backward holdout)", "predictive check only"; baselines hidden; a backtest pass is never "approved"
-- [ ] **Exit gate: 10-date replay, no invented numbers** — running now (GPT-5 on Azure, 2 debate rounds; check rules
-  fixed and pushed before the first run: every quoted vol / expected-move / IV / regime number must match the quant
-  tool, no "validated" claims). `python scripts/quant_replay.py`
+- [x] **Exit gate: 10-date replay — passed on reading every flag** (2026-10-24; GPT-5, 2 debate rounds, 101 min):
+  799 quant numbers quoted, **0 invented or distorted, 0 validation claims**. The automatic v1 rule did not pass (643
+  flags: it also tested other tools' numbers and matched "cross-validated"); check v2 declared for future replays
+  ([PA-25](PA_25-phase9-replay-and-report-wording.md))
 
 ## Phase 10 — Paper trading and daily operations
 <!-- progress:phase -->
@@ -272,8 +273,8 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 
 ## Start here
 ### State
-- **Git:** PRs #1–#26 merged into `main`. Work in progress on `quant/phase-9-replay` (the 10-date replay is running;
-  PR after it finishes). Keep `main` checked out otherwise — the 19:30 job runs whatever is checked out.
+- **Git:** PRs #1–#28 merged into `main`; open: `quant/phase-9-result` (replay results, check v2). Keep `main`
+  checked out — the 19:30 job runs whatever is checked out.
   New work: `git checkout main`, `git pull`, `git checkout -b quant/<next-thing>`.
 - **Data:** NSE store complete 2018-01-01 → 2026-10-23 (+ 2015–17 F&O and index files) in
   `~/.tradingagents/cache/quant/store/`; option quotes from 2026-10-23 in `.../quant/raw/option_quotes/`.
@@ -287,6 +288,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-24 — Phase 9 replay done: 10 analyses, 0 invented quant numbers, 0 validation claims (on reading every flag); check v2 added.
 - 2026-10-24 — Docs restructured: index (docs/README.md), plans/ data/ architecture/ features/ development/ guides/ archive/, one PA record per change (PA_01–PA_26), link checker (`scripts/check_doc_links.py`).
 - 2026-10-24 — Tracker cleaned: dropped / not-applicable items moved to "on hold" notes; Phase 9 replay (10 dates) started; quant report wording fixed.
 - 2026-10-24 — Phase 5 started from your side: trade-journal analyser for your Dhan tradebook (by holding period: intraday / week / month / longer).

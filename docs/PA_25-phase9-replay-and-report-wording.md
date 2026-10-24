@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | In progress — wording fix merged; the 10-date replay is running (results added here when it finishes) |
+| **Status** | Done — **no invented quant numbers and no validation claims in 10 full analyses** (on reading every flag); the automatic v1 rule did not pass (too broad) and v2 was declared for future replays |
 | **Scope** | `tradingagents/analytics/quant_report.py` (`_validation_lines`), `tradingagents/analytics/replay_check.py`, `scripts/quant_replay.py`, `tests/test_quant_report.py`, `tests/test_replay_check.py` |
 | **Related** | [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) (the agent tool), [architecture/16](architecture/16-quant-context-in-agents.md), [features/quant-report](features/quant-report.md) |
-| **Pull request** | #27 (branch `quant/phase-9-replay`) |
+| **Pull request** | #27 (branch `quant/phase-9-replay`, the check and the wording fix); results and check v2: branch `quant/phase-9-result` |
 | **Date** | 2026-10-24 |
 
 ## 1. Problem
@@ -53,22 +53,60 @@ Faithful quotes with agent rounding pass; an invented 31.5% is caught; a percent
 sentences without quant words are not checked. Verdict wording: rule-judged tests show their verdict, baselines hidden,
 a backtest pass is not an approval.
 
-## 5. Results so far
+## 5. Results
 
-Run 1 (^NSEI 2023-08-10, 10.0 min, rating Overweight): the frozen rule flagged **78 numbers in 35 sentences, 0
-validation claims**. Reading every flagged sentence: the flags are numbers from the **other** technical tools (50 /
-200-day averages, RSI 52, ATR 161, Bollinger band 19,400) in sentences that also say "regime" — rule 1 is broader than
-intended, because it compares those numbers only with the quant tool's output.
+### 5.1 The ten runs (GPT-5 on Azure, 2 debate and 2 risk rounds)
 
-A closer look restricted to numbers right after a quant term (GARCH, EWMA, IV, expected move, percentile, regime
-probability): **76 numbers, all quant values faithful** (e.g. IV 9.2%, 0th percentile, p calm 1.00, expected move
-±1.6–3.6% and ±311 points); the only 3 mismatches were an ATR of 161 and a 150-point stop.
+| Run | Minutes | Rating | v1 flags (numbers / claims) | v2 flags (numbers / claims) |
+|---|---|---|---|---|
+| ^NSEI 2023-08-10 | 10.0 | Overweight | 78 / 0 | 4 / 0 |
+| ^NSEI 2024-06-05 | 10.1 | Underweight | 35 / 1 | 0 / 0 |
+| ^NSEBANK 2025-04-08 | 10.2 | Overweight | 39 / 0 | 1 / 0 |
+| RELIANCE 2026-03-24 | 10.3 | Underweight | 103 / 0 | 11 / 0 |
+| HDFCBANK 2022-06-14 | 10.6 | Overweight | 43 / 0 | 1 / 0 |
+| INFY 2026-07-24 | 9.1 | Underweight | 97 / 0 | 8 / 0 |
+| TCS 2026-10-23 | 10.3 | Overweight | 42 / 0 | 1 / 0 |
+| SBIN 2024-11-25 | 9.8 | Overweight | 46 / 0 | 3 / 0 |
+| TATASTEEL 2022-02-25 | 8.9 | Hold | 107 / 0 | 6 / 0 |
+| ADANIENT 2023-01-30 | 12.2 | Sell | 53 / 1 | 5 / 0 |
+| **Total** | 101.5 (12:15 → 13:57) | | **643 / 2** | **40 / 0** |
 
-The frozen rule is **not** being changed mid-run. The final report gives both: the frozen rule's verdict, and the
-closer look with each remaining flag read and classified.
+(The ratings are reported, not judged: this check is about quoting, not about whether a call was right.)
+
+### 5.2 The frozen rule (v1): not passed
+
+643 unsupported numbers and 2 validation claims in 1,259 sentences. Reading them: rule 1 tests every number in any
+sentence that mentions volatility or regime, including the **other** tools' numbers (moving averages, RSI, ATR,
+Bollinger bands, support levels, the agents' own strike suggestions), against the quant tool only. Both "claims" were
+misfires: "a focused, **cross-validated** read of ^NSEI" and "a **proven** incubator model" (Adani's business).
+
+### 5.3 Reading every flag: passed
+
+Numbers in the clause right after a quant term: **799** across the 10 runs. The 40 that v2 flags, each read:
+
+| Kind | Count | Examples |
+|---|---|---|
+| Other tools' technical numbers | 19 | ATR 161, 50 / 200-day averages, Bollinger 1,350.84, support 93.59, stop 769.8 |
+| The agents' own trade suggestions | 18 | "sell 1100C / buy 1125C", "Feb 23 3300P / 2900P", "30–45 day covered calls at 1470–1500" |
+| Faithful paraphrase | 3 | "IV in the 80th+ percentile" (tool: 83%) |
+| **Invented or wrong quant number** | **0** | — |
+
+Examples of exact quoting: INFY "IV is 9.9% above 21-day GARCH and in the 92nd percentile" (tool: +9.9%, 92%);
+ADANIENT "±14.8% over 5 sessions, ±19.4% over 10, ±24.8% over 21" (tool: the same); NIFTY 2023 "low IV (30d IV 9.2%,
+0th percentile)". Agent rounding such as "±20% two-week expected moves" for ±19.4% occurs and is acceptable.
+
+**Verdict: Phase 9 exit gate passed on reading every flag** — the agents quote the quant layer faithfully and never
+present a quant signal as validated. The automatic v1 rule's "not passed" is recorded as it is.
+
+### 5.4 Check v2 (declared after this replay, for future ones)
+
+`replay_check.check_v2`: only numbers in the clause right after a quant term (never across a sentence end, never
+cutting a number), whole numbers may differ by less than 1; claims need a quant-specific subject and skip
+"cross-validated". `python scripts/quant_replay.py --check-only --rule v2` (default) or `--rule v1`. Tests built from
+this replay's real false alarms; an invented GARCH number and a real "validated" claim are still caught. v2 still flags
+the agents' own strike suggestions near the word "IV", so flags are still read, not just counted.
 
 ## 6. Risks and open items
 
-- 9 runs to go at the time of writing (~10 minutes each).
-- The rule-1 over-breadth is a design flaw in the check, found by reading its output; a narrower rule would be a new,
-  declared version, not a silent edit.
+- Ten dates, one LLM (GPT-5) and one prompt version: a change of model or prompts needs a new replay.
+- v2 was written after seeing this replay's output; it has not yet judged an unseen replay.

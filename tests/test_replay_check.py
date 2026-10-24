@@ -57,3 +57,34 @@ def test_validation_claims_are_flagged_unless_negated():
 def test_sentences_without_quant_words_are_not_checked():
     res = rc.check(["Revenue grew 12.7% and the stock trades at 23.5x earnings."], QUANT)
     assert res.sentences == 0 and res.passed
+
+
+# ---- v2, built from the 2026-10-24 replay's real false alarms
+
+ADANI = """next  5 sessions: ±14.8% = ±Rs 409 on the last close Rs 2,761
+next 10 sessions: ±19.4% = ±Rs 537 on the last close Rs 2,761
+IV percentile over the past year: 92%"""
+
+
+@pytest.mark.unit
+def test_v2_ignores_other_tools_numbers_and_accepts_agent_rounding():
+    text = ("Price is above the 50- and 200-day SMAs (19221.42), RSI ~52, in a CALM regime with ATR 161. "
+            "Expected moves from GARCH are roughly ±14.8% over 5 sessions; ±20% two-week expected moves. "
+            "IV is in the 92nd percentile.")
+    res = rc.check_v2([text], ADANI)
+    assert res.passed, (res.unsupported, res.claims)
+    assert rc.check([text], ADANI).unsupported                         # v1 flagged the SMA / RSI / ATR numbers
+
+
+@pytest.mark.unit
+def test_v2_still_catches_an_invented_quant_number_and_a_real_claim():
+    res = rc.check_v2(["The GARCH forecast is 31.5% for next week. Our quant signal is validated."], ADANI)
+    assert [n for n, _ in res.unsupported] == ["31.5%"]
+    assert len(res.claims) == 1
+
+
+@pytest.mark.unit
+def test_v2_claims_need_a_quant_subject_and_skip_cross_validated():
+    text = ("Here is a focused, cross-validated read using the quant research regime context. "
+            "Adani gives investors access to energy transition via a proven incubator model.")
+    assert rc.check_v2([text], ADANI).claims == []

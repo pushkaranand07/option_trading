@@ -58,7 +58,7 @@ Plain text in the agents' context, and `6_quant/quant.md` plus the HTML section 
 - Tickers outside the universe get a one-line "no quant numbers" note; the section is left out of their reports.
 - If the store has not been built or refreshed, lines say "not available" or show the last known date.
 - The universe is today's survivors; the report carries the survivorship note.
-- The Phase 9 replay check (do agents quote these numbers faithfully?) was running on 2026-10-24; first findings and
-  the result: [PA-25](../PA_25-phase9-replay-and-report-wording.md).
+- Phase 9 replay (2026-10-24): in 10 full analyses the agents quoted these numbers faithfully (0 invented, 0
+  validation claims): [PA-25](../PA_25-phase9-replay-and-report-wording.md).
 
 How it is built: [../architecture/16-quant-context-in-agents.md](../architecture/16-quant-context-in-agents.md).

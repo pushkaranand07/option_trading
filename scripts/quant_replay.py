@@ -68,11 +68,13 @@ def texts_of(saved: dict) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--rule", choices=("v1", "v2"), default="v2",
+                        help="v1: the broad rule the 2026-10-24 replay was judged by; v2: narrower (replay_check.py)")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     OUT.mkdir(parents=True, exist_ok=True)
 
-    results, lines = [], ["# Phase 9 replay check", ""]
+    results, lines = [], [f"# Phase 9 replay check (rule {args.rule})", ""]
     for symbol, day in RUNS:
         path = OUT / f"{slug(symbol, day)}.json"
         if not path.exists():
@@ -85,7 +87,8 @@ def main() -> int:
             path.write_text(json.dumps(saved, ensure_ascii=False, indent=1), encoding="utf-8")
             print(f"  done in {(time.monotonic() - started) / 60:.1f} min, rating {saved['rating']}", flush=True)
         saved = json.loads(path.read_text(encoding="utf-8"))
-        res = rc.check(texts_of(saved), quant_signal_text(symbol, day))
+        checker = rc.check if args.rule == "v1" else rc.check_v2
+        res = checker(texts_of(saved), quant_signal_text(symbol, day))
         results.append(res)
         verdict = "PASS" if res.passed else "FLAGS"
         print(f"{symbol} {day}: {verdict} — {res.sentences} quant sentences, {len(res.unsupported)} unsupported "
@@ -104,8 +107,8 @@ def main() -> int:
                  f"{'PASS' if n_bad == 0 and len(results) == len(RUNS) else 'NOT PASSED (read the flags)'}")
         print(f"\n{total}")
         lines.insert(2, total + "\n")
-        (OUT / "summary.md").write_text("\n".join(lines), encoding="utf-8")
-        print(f"Flags with their sentences: {OUT / 'summary.md'}")
+        (OUT / f"summary_{args.rule}.md").write_text("\n".join(lines), encoding="utf-8")
+        print(f"Flags with their sentences: {OUT / f'summary_{args.rule}.md'}")
     return 0
 
 
