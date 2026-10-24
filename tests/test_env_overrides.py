@@ -8,6 +8,8 @@ import pytest
 
 import tradingagents.default_config as default_config_module
 
+pytestmark = pytest.mark.unit
+
 
 def _config_with_env(monkeypatch, **overrides):
     """The defaults as the environment given here would set them."""

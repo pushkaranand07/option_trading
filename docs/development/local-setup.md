@@ -56,7 +56,7 @@ is public.**
 | Azure OpenAI (`.env.enterprise.example`; also the web app's AI panel) | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, optional `OPENAI_API_VERSION` |
 | Amazon Bedrock | `AWS_BEARER_TOKEN_BEDROCK` or the AWS credential chain (`AWS_PROFILE`), `AWS_DEFAULT_REGION` |
 | Remote Ollama | `OLLAMA_BASE_URL` |
-| Data vendors | `FRED_API_KEY` (macro data), `ALPHA_VANTAGE_API_KEY` (only if routed to Alpha Vantage; not in `.env.example`), `SEC_EDGAR_USER_AGENT` (a name and contact address; no key) |
+| Data vendors | `FRED_API_KEY` (macro data), `ALPHA_VANTAGE_API_KEY` (only if routed to Alpha Vantage), `SEC_EDGAR_USER_AGENT` (a name and contact address; no key) |
 | Social-post screening (optional) | `TYPESAFE_API_KEY`, `TYPESAFE_DEFAULT_MODEL`, `TYPESAFE_BASE_URL` |
 | Web app market data (optional) | `DHAN_CLIENT_ID`, `DHAN_ACCESS_TOKEN` (the token expires every 24 hours) |
 | Run settings (skip CLI prompts) | `TRADINGAGENTS_LLM_PROVIDER`, `TRADINGAGENTS_DEEP_THINK_LLM`, `TRADINGAGENTS_QUICK_THINK_LLM`, `TRADINGAGENTS_OUTPUT_LANGUAGE`, `TRADINGAGENTS_MAX_DEBATE_ROUNDS`, `TRADINGAGENTS_MAX_RISK_ROUNDS`, and the others in `tradingagents/default_config.py` (`_ENV_OVERRIDES`) |

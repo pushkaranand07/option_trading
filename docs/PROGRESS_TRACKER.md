@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `███████████████████████░░` 93% (93/100 tasks)
+**Overall:** `████████████████████████░` 94% (94/100 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 14:21_
+_Last updated: 2026-10-24 15:26_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -185,7 +185,7 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`███████████████████████░░` 92% (23/25)
+`████████████████████████░` 96% (24/25)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -218,8 +218,8 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
   cost model ([PA-28](PA_28-backtester-modelled-bid-ask.md))
 - [x] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` was ignored → now forwarded (dropped for non-reasoning
   deployments) ([PA-29](PA_29-azure-reasoning-effort.md)). **Your `.env` says `low`: it now takes effect**
-- [ ] News Analyst prompt does not mention `get_india_fii_dii_flows` although the tool is offered;
-  `ALPHA_VANTAGE_API_KEY` missing from `.env.example`; 8 test files lack the `unit` marker
+- [x] News Analyst prompt now names `get_india_fii_dii_flows`; `ALPHA_VANTAGE_API_KEY` added to `.env.example`;
+  the 8 unmarked test files marked `unit` (86 more tests in `-m unit`) ([PA-31](PA_31-small-fixes-prompt-env-test-markers.md))
 
 ## Market Map 2021–26 (requested 2026-10-24)
 <!-- progress:phase -->
