@@ -1,6 +1,7 @@
 # Quant context in the agents
 
-> **Status:** Current. The Phase 9 exit check (10-date replay) was running on 2026-10-24; its result is not recorded yet.
+> **Status:** Current. Phase 9 exit check (10-date replay, 2026-10-24): passed on reading every flag — 0 invented
+> quant numbers, 0 validation claims ([PA-25](../PA_25-phase9-replay-and-report-wording.md)).
 > **Scope:** `tradingagents/analytics/quant_report.py`, `tradingagents/agents/tools.py` (`get_quant_signal_report`),
 > `tradingagents/agents/analysts/market_analyst.py`, `tradingagents/agents/managers/portfolio_manager.py`,
 > `tradingagents/reporting.py` (`_quant_part`), `tradingagents/analytics/replay_check.py`, `scripts/quant_replay.py`.

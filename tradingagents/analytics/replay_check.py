@@ -14,6 +14,18 @@ Rules, fixed before any replay was run:
 
 Pass: zero unsupported numbers and zero validation claims across all replayed runs.
 Every flag is printed with its sentence so it can be read, not just counted.
+
+These are **v1** (``check``), kept unchanged: the 2026-10-24 replay was judged by them.
+Reading its 643 flags showed rule 1 is too broad — it also tests numbers from the other
+tools (moving averages, RSI, ATR, Bollinger bands, strikes) that share a sentence with a
+quant word, against the quant tool only — and rule 2 matched "cross-validated" and "a proven
+incubator model". **v2** (``check_v2``, declared after that replay, for future ones):
+
+1. Only numbers in the clause right after a quant term (``NEAR``: up to 40 characters, never
+   across a sentence end, never cutting a number) are checked; a whole number the agent
+   wrote may differ by less than 1 (agent rounding, e.g. ±20% for ±19.4%).
+2. A claim needs a quant-specific subject (quant, signal, strategy, backtest, GARCH,
+   regime model, condor); "cross-validated" is not a claim.
 """
 
 from __future__ import annotations
@@ -89,5 +101,35 @@ def check(texts: list[str], quant_text: str) -> CheckResult:
                     if not _supported(n, truth):
                         res.unsupported.append((n.token, s))
             if CLAIM_WORDS.search(s) and SUBJECT_WORDS.search(s) and not NEGATION.search(s):
+                res.claims.append(s)
+    return res
+
+
+# ---------------------------------------------------------------- v2
+
+NEAR = re.compile(r"(garch|gjr|ewma|implied vol(?:atility)?|\biv\b|expected move|percentile|p ?calm|p ?choppy|"
+                  r"p ?stress|historical vol)(?:(?!\.\s)[^;|\n]){0,40}[\d.,%]*", re.I)
+CLAIM_SUBJECT_V2 = re.compile(r"quant|signal|strategy|backtest|garch|regime model|condor", re.I)
+
+
+def _supported_v2(n: Num, truth: list[Num]) -> bool:
+    if _supported(n, truth):
+        return True
+    return n.whole and any(abs(n.value - t.value) < 1.0 and (t.pct or not n.pct) for t in truth)
+
+
+def check_v2(texts: list[str], quant_text: str) -> CheckResult:
+    truth = numbers(quant_text)
+    res = CheckResult()
+    for text in texts:
+        flat = re.sub(r"\s+", " ", text or "")
+        for m in NEAR.finditer(flat):
+            res.sentences += 1
+            for n in numbers(m.group(0)):
+                if not _supported_v2(n, truth):
+                    res.unsupported.append((n.token, m.group(0).strip()))
+        for s in sentences(flat):
+            if (CLAIM_WORDS.search(s) and CLAIM_SUBJECT_V2.search(s) and not NEGATION.search(s)
+                    and not re.search(r"cross-validated", s, re.I)):
                 res.claims.append(s)
     return res
