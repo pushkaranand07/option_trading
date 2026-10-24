@@ -55,6 +55,8 @@ def build_series():
     df = pd.DataFrame({
         "nifty": close["NIFTY"], "banknifty": close["BANKNIFTY"], "vix": close["INDIAVIX"],
         "nifty_opt": fo_w["opt_contracts"]["NIFTY"], "bn_opt": fo_w["opt_contracts"]["BANKNIFTY"],
+        # Notional value traded (Rs): unlike contract counts it does not jump when the lot size changes.
+        "nifty_opt_val": fo_w["opt_turnover"]["NIFTY"], "bn_opt_val": fo_w["opt_turnover"]["BANKNIFTY"],
         "nifty_pcr": fo_w["pcr_oi"]["NIFTY"], "bn_pcr": fo_w["pcr_oi"]["BANKNIFTY"],
         "nifty_lot": fo_w["lot_size"]["NIFTY"], "bn_lot": fo_w["lot_size"]["BANKNIFTY"],
         "fii_long": share["FII"], "client_long": share["Client"], "pro_long": share["Pro"],
@@ -111,8 +113,10 @@ def impact(df: pd.DataFrame, date: str) -> dict | None:
         "vix_after5": float(df["vix"].iloc[min(pos + 4, len(idx) - 1)]),
         "rv_before": float(lr.iloc[pos - 20:pos].std() * np.sqrt(252)),
         "rv_after": float(lr.iloc[pos:after].std() * np.sqrt(252)) if after - pos > 5 else None,
-        "opt_before": window("nifty_opt", pos - 20, pos),
-        "opt_after": window("nifty_opt", pos, after),
+        "opt_before": window("nifty_opt_val", pos - 20, pos),
+        "opt_after": window("nifty_opt_val", pos, after),
+        "bn_opt_before": window("bn_opt_val", pos - 20, pos),
+        "bn_opt_after": window("bn_opt_val", pos, after),
         "pcr_before": window("nifty_pcr", pos - 5, pos),
         "pcr_after": window("nifty_pcr", pos, pos + 5),
         "fii_before": window("fii_long", pos - 5, pos),

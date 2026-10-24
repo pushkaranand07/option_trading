@@ -18,8 +18,8 @@ def frame(n=80):
     lot = pd.Series(50.0, index=idx)
     lot.iloc[60:] = 25.0
     return pd.DataFrame({
-        "nifty": nifty, "vix": 15.0, "nifty_opt": np.where(np.arange(n) < 41, 100.0, 150.0),
-        "nifty_pcr": 1.0, "fii_long": 0.4, "regime": "calm", "nifty_lot": lot, "bn_lot": 15.0,
+        "nifty": nifty, "vix": 15.0, "nifty_opt_val": np.where(np.arange(n) < 41, 100.0, 150.0),
+        "bn_opt_val": 50.0, "nifty_pcr": 1.0, "fii_long": 0.4, "regime": "calm", "nifty_lot": lot, "bn_lot": 15.0,
     }, index=idx)
 
 
@@ -33,6 +33,7 @@ def test_impact_is_measured_from_the_first_session_on_or_after_the_date():
     assert out["nifty_day"] == pytest.approx(0.10)
     assert out["opt_before"] == 100.0 and out["opt_after"] == 150.0
     assert out["regime"] == "calm"
+    assert out["bn_opt_before"] == out["bn_opt_after"] == 50.0
 
 
 @pytest.mark.unit
