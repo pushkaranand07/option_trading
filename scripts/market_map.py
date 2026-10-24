@@ -4,7 +4,7 @@
     python scripts/market_map.py --note "added X"   # also logs what changed on the page
 
 Everything is measured from the verified NSE store. Events come from
-docs/market_events_2021_2026.json (regulatory changes and market events, each with
+docs/data/market_events_2021_2026.json (regulatory changes and market events, each with
 its official or news source) plus events detected in the data itself (largest NIFTY
 days, lot-size changes). The page is a single HTML file under reports/ (gitignored:
 it embeds NSE data); open it in a browser.
@@ -28,7 +28,7 @@ from tradingagents.analytics.universe import SECTOR_OF, STOCKS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = Path(__file__).with_name("market_map_template.html")
-EVENTS = ROOT / "docs" / "market_events_2021_2026.json"
+EVENTS = ROOT / "docs" / "data" / "market_events_2021_2026.json"
 OUT = ROOT / "reports" / "market_map"
 
 START = pd.Timestamp("2021-01-01")

@@ -1,7 +1,7 @@
 # Proof Plan — from "looks good in a backtest" to "safe to trade on Dhan"
 
 > Written 2026-10-23. Companion to [QUANT_SIGNAL_LAYER_PLAN.md](QUANT_SIGNAL_LAYER_PLAN.md) and
-> [PROGRESS_TRACKER.md](PROGRESS_TRACKER.md). Research and decision support only — not investment advice.
+> [PROGRESS_TRACKER.md](../PROGRESS_TRACKER.md). Research and decision support only — not investment advice.
 
 ---
 

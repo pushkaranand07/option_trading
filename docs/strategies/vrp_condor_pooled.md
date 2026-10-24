@@ -1,6 +1,6 @@
 # Strategy spec: pooled VRP iron condor (NIFTY + BANKNIFTY)
 
-> Stage 0 of [PROOF_PLAN.md](../PROOF_PLAN.md). Frozen 2026-10-23. **Any change to anything below is a new
+> Stage 0 of [PROOF_PLAN.md](../plans/PROOF_PLAN.md). Frozen 2026-10-23. **Any change to anything below is a new
 > strategy and starts again at Stage 1.** The git commit that adds this file is the strategy's identity.
 
 ## Idea

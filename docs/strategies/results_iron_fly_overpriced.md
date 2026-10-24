@@ -1,6 +1,6 @@
 # Strategy spec — Results-day iron butterfly, only when options look overpriced
 
-> Stage 0 of [PROOF_PLAN.md](../PROOF_PLAN.md). Frozen 2026-10-24 **before any backtest of it was run**.
+> Stage 0 of [PROOF_PLAN.md](../plans/PROOF_PLAN.md). Frozen 2026-10-24 **before any backtest of it was run**.
 > A re-test of [results_iron_fly.md](results_iron_fly.md) (rejected), changing one thing for a stated reason. It counts
 > as a new trial. Research only — not investment advice.
 

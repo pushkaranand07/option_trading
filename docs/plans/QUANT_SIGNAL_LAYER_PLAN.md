@@ -95,14 +95,14 @@ These are the hardest parts to get right, and they are already here:
 
 | Need | Where | Notes |
 |---|---|---|
-| No-lookahead swings and patterns | [swings.py](../tradingagents/analytics/swings.py) | `confirmed_swings`, `market_structure`, `double_top_breakdown` |
-| Repainting detector for any signal | [swings.py](../tradingagents/analytics/swings.py) | `find_lookahead(signal_fn, df)`: empty list = causal |
-| Walk-forward with embargo | [validation.py](../tradingagents/analytics/validation.py) | `walk_forward(data, strategy, grid, train, test, embargo)` |
-| Deflated Sharpe ratio | [validation.py](../tradingagents/analytics/validation.py) | `deflated_sharpe_ratio`, `evidence_verdict` (`MIN_TRADES = 30`, `DSR_SIGNIFICANT = 0.95`) |
-| Signal building blocks | [option_backtester/signals/](../option_backtester/signals/) | momentum, trend, IV rank, ATR, Bollinger, volume, calendar |
-| Option structures and simulator | [option_backtester/](../option_backtester/) | spreads, condors, butterflies, calendars |
-| NSE data | [nse/](../tradingagents/dataflows/vendors/nse/) | F&O bhavcopy, delivery data, FII/DII flows, index constituents, holidays |
-| Survivorship warning | [indices.py](../tradingagents/dataflows/vendors/nse/indices.py) | `survivorship_warning` |
+| No-lookahead swings and patterns | [swings.py](../../tradingagents/analytics/swings.py) | `confirmed_swings`, `market_structure`, `double_top_breakdown` |
+| Repainting detector for any signal | [swings.py](../../tradingagents/analytics/swings.py) | `find_lookahead(signal_fn, df)`: empty list = causal |
+| Walk-forward with embargo | [validation.py](../../tradingagents/analytics/validation.py) | `walk_forward(data, strategy, grid, train, test, embargo)` |
+| Deflated Sharpe ratio | [validation.py](../../tradingagents/analytics/validation.py) | `deflated_sharpe_ratio`, `evidence_verdict` (`MIN_TRADES = 30`, `DSR_SIGNIFICANT = 0.95`) |
+| Signal building blocks | [option_backtester/signals/](../../option_backtester/signals/) | momentum, trend, IV rank, ATR, Bollinger, volume, calendar |
+| Option structures and simulator | [option_backtester/](../../option_backtester/) | spreads, condors, butterflies, calendars |
+| NSE data | [nse/](../../tradingagents/dataflows/vendors/nse/) | F&O bhavcopy, delivery data, FII/DII flows, index constituents, holidays |
+| Survivorship warning | [indices.py](../../tradingagents/dataflows/vendors/nse/indices.py) | `survivorship_warning` |
 
 The new work is the models themselves and the discipline around them.
 
@@ -135,7 +135,7 @@ With 30 trades, a 60% hit rate is easily luck. This is why the plan prefers sign
 
 ### 4.3 Deflated Sharpe: correcting for the number of ideas tried
 
-If you try 200 parameter combinations, the best one will show a high Sharpe even on pure noise. The expected best Sharpe from N noise trials grows roughly like `√(2 ln N)`. `deflated_sharpe_ratio` in [validation.py](../tradingagents/analytics/validation.py) accounts for N, skew and fat tails. **Log every trial.** Hiding failed trials is the main way people fool themselves.
+If you try 200 parameter combinations, the best one will show a high Sharpe even on pure noise. The expected best Sharpe from N noise trials grows roughly like `√(2 ln N)`. `deflated_sharpe_ratio` in [validation.py](../../tradingagents/analytics/validation.py) accounts for N, skew and fat tails. **Log every trial.** Hiding failed trials is the main way people fool themselves.
 
 ### 4.4 Volatility risk premium (VRP)
 
@@ -249,7 +249,7 @@ Each phase has a **goal**, the **work**, the **files** it adds, and an **exit ga
    - `vrp_z` = z-score of VRP over the last 252 days
    - **Sell premium** (iron condor / short strangle with wings) when `vrp_z > +1`
    - **Stand aside or buy premium** when `vrp_z < −1`
-6. Backtest through [option_backtester/](../option_backtester/) with real lot sizes and costs.
+6. Backtest through [option_backtester/](../../option_backtester/) with real lot sizes and costs.
 
 **Files:** `tradingagents/analytics/volatility_model.py`, `option_backtester/signals/vrp.py`
 
@@ -349,7 +349,7 @@ Each phase has a **goal**, the **work**, the **files** it adds, and an **exit ga
 **Goal:** Give the LLM agents the numbers, so they argue about evidence instead of guessing.
 
 **Work**
-- New tool `get_quant_signal_report(ticker, date)` in [tools.py](../tradingagents/agents/tools.py) returning plain text like:
+- New tool `get_quant_signal_report(ticker, date)` in [tools.py](../../tradingagents/agents/tools.py) returning plain text like:
 
   ```
   Regime: choppy range (p = 0.78)
@@ -361,7 +361,7 @@ Each phase has a **goal**, the **work**, the **files** it adds, and an **exit ga
   ```
 
 - The market analyst cites it; the risk manager **must refuse** any trade whose underlying signal has verdict `not_significant` or `insufficient_evidence`.
-- Add the report to the HTML output in [report_html.py](../tradingagents/report_html.py).
+- Add the report to the HTML output in [report_html.py](../../tradingagents/report_html.py).
 
 **Exit gate:** in a replay of 50 historical dates, agent decisions match the quant signal's direction and size limits, and the agents never invent numbers that aren't in the tool output.
 
@@ -468,7 +468,7 @@ When <condition>, <instrument> tends to <move> over <N days>, because <reason>.
 
 ## 8. Dependencies
 
-All free and CPU-friendly. Add as an optional extra in [pyproject.toml](../pyproject.toml):
+All free and CPU-friendly. Add as an optional extra in [pyproject.toml](../../pyproject.toml):
 
 ```toml
 [project.optional-dependencies]
