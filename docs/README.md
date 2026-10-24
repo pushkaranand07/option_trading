@@ -75,6 +75,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-26](PA_26-docs-restructure.md) | This documentation restructure | Done |
 | [PA-27](PA_27-calendar-special-sessions.md) | NSE calendar knows special sessions (Budget days, Muhurat) | Done |
 | [PA-28](PA_28-backtester-modelled-bid-ask.md) | Option backtester: modelled bid/ask so slippage counts | Done |
+| [PA-29](PA_29-azure-reasoning-effort.md) | Azure: the reasoning-effort setting is applied | Done |
 
 ---
 

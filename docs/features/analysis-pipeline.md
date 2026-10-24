@@ -116,8 +116,8 @@ GPT-5) took 10.0 minutes ([PA-25](../PA_25-phase9-replay-and-report-wording.md))
   and no setting makes output identical across runs (`default_config.py`).
 - **Azure: one deployment for both tiers.** `AZURE_OPENAI_DEPLOYMENT_NAME` is used for quick and deep alike
   (`llm_clients/azure_client.py`).
-- **Azure: reasoning effort not applied.** `TRADINGAGENTS_OPENAI_REASONING_EFFORT` is forwarded only for the
-  `openai` and `chatgpt` providers (`llm_clients/factory.py`).
+- **Azure reasoning effort** is applied since 2026-10-24 ([PA-29](../PA_29-azure-reasoning-effort.md)); runs before
+  that (including the Phase 9 replay) used the deployment's default whatever `.env` said.
 - **News Analyst prompt** does not mention `get_india_fii_dii_flows`, although the tool is offered to it.
 - **REVIEW.** If the Portfolio Manager's decision has no readable rating the run is recorded as `REVIEW`, not
   as Hold; re-run or read the decision yourself (`agents/rating.py`).

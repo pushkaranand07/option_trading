@@ -54,7 +54,7 @@ MiniMax M2.x models do not accept `tool_choice`, so the client leaves it out. Mo
 | Setting | Forwarded when provider is |
 |---|---|
 | `google_thinking_level` | `google` |
-| `openai_reasoning_effort` | `openai` or `chatgpt` (`REASONING_EFFORT_PROVIDERS`) |
+| `openai_reasoning_effort` | `openai`, `chatgpt` or `azure` (`REASONING_EFFORT_PROVIDERS`); dropped for non-reasoning models (gpt-4o, gpt-4.1, …) |
 | `anthropic_effort` | `anthropic` |
 | `temperature`, `llm_max_retries`, `max_tokens` | any (Gemini receives `max_output_tokens`) |
 
@@ -77,9 +77,9 @@ Two consequences found in the code:
 
 - `AZURE_OPENAI_DEPLOYMENT_NAME` applies to **both** tiers. When it is set, the quick and deep tiers call the
   same deployment whatever `quick_think_llm` and `deep_think_llm` say.
-- `openai_reasoning_effort` (and `TRADINGAGENTS_OPENAI_REASONING_EFFORT`) is **not forwarded** for `azure`:
-  `build_llm_kwargs()` only adds it for `openai` and `chatgpt`, although `AzureOpenAIClient` would pass it
-  through if it arrived. The CLI also asks the reasoning-effort question only for those two providers.
+- `openai_reasoning_effort` (`TRADINGAGENTS_OPENAI_REASONING_EFFORT`) is forwarded for `azure` too since
+  2026-10-24 ([PA-29](../PA_29-azure-reasoning-effort.md)); before, it was silently ignored there. The CLI asks the
+  reasoning-effort question only for `openai` and `chatgpt`; on Azure set the variable.
 
 `validate_model()` returns `True` for Azure, so any deployment name is accepted without a warning.
 

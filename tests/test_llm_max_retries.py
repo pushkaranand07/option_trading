@@ -93,3 +93,31 @@ def test_env_override_sets_config(monkeypatch):
     # None-default key: env value arrives as a string and is coerced downstream.
     assert config["llm_max_retries"] == "8"
     assert _coerce_max_retries(config["llm_max_retries"]) == 8
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("provider", ["openai", "chatgpt", "azure"])
+def test_reasoning_effort_is_forwarded_for_openai_style_providers(provider):
+    kwargs = build_llm_kwargs({"llm_provider": provider, "openai_reasoning_effort": "low"})
+    assert kwargs["reasoning_effort"] == "low"
+
+
+@pytest.mark.unit
+def test_reasoning_effort_reaches_the_azure_model(monkeypatch):
+    from tradingagents.llm_clients.factory import create_llm_client
+    for var, value in (("AZURE_OPENAI_API_KEY", "test"), ("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/"),
+                       ("OPENAI_API_VERSION", "2025-03-01-preview"), ("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")):
+        monkeypatch.setenv(var, value)
+    kwargs = build_llm_kwargs({"llm_provider": "azure", "openai_reasoning_effort": "low"})
+    llm = create_llm_client("azure", "gpt-5", **kwargs).get_llm()
+    assert llm.reasoning_effort == "low"
+
+
+@pytest.mark.unit
+def test_azure_drops_reasoning_effort_for_a_non_reasoning_deployment(monkeypatch):
+    from tradingagents.llm_clients.factory import create_llm_client
+    for var, value in (("AZURE_OPENAI_API_KEY", "test"), ("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/"),
+                       ("OPENAI_API_VERSION", "2025-03-01-preview"), ("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")):
+        monkeypatch.setenv(var, value)
+    llm = create_llm_client("azure", "gpt-4o", reasoning_effort="low").get_llm()
+    assert getattr(llm, "reasoning_effort", None) is None            # gpt-4o would reject it with a 400
