@@ -27,3 +27,20 @@ the **full** slippage assumption), plus one filter, decided at the entry close:
 ≥ 100 trades · mean > 0 with block-bootstrap 95% interval above 0 · beats the same trade on random quiet days in ≥ 95%
 of 200 runs · positive in ≥ 70% of years · deflated Sharpe ≥ 0.95 counting every logged trial (now including the
 original). If it passes: Stage 2 stress (costs ×2), then Stage 3 forward paper trading with the user's real fills.
+
+## Result (2026-10-24, `scripts/quant_results_fly.py --overpriced`): REJECTED
+745 of the original 984 trades passed the filter (2018-10 → 2026-10).
+
+| Test | Result |
+|---|---|
+| Trades ≥ 100 | ✅ 745 |
+| Mean > 0, bootstrap CI above 0 | ❌ mean **−4.71%** of max risk (original −6.46%), CI [−7.37%, −2.01%]; wins 50% |
+| Beats random quiet days ≥ 95% | ✅ 100% of 200 runs (random −11.19%) |
+| Positive years ≥ 70% | ❌ 1 of 9 (2021 only) |
+| Deflated Sharpe ≥ 0.95 | ❌ 0.000 (N = 184) |
+
+**What it shows:** the filter helped by ~1.7 points but kept three quarters of the trades: options almost always price
+more than the stock's *median* results-day move, so the median is a weak yardstick. The friction gap (~10 points of max
+risk at the assumed slippage) is far larger than anything selection recovered. Two honest attempts, both rejected; no
+further variants of this idea will be tried on the same data. The one open question is real execution cost: only the
+user's actual Dhan fills can show whether slippage is well below the model's 1 tick + 1% per leg.

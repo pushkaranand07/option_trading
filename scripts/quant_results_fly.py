@@ -1,6 +1,7 @@
 """Results-day iron butterfly on the 29 stocks (spec frozen in docs/strategies/results_iron_fly.md).
 
     python scripts/quant_results_fly.py
+    python scripts/quant_results_fly.py --overpriced     # re-test: docs/strategies/results_iron_fly_overpriced.md
     python scripts/quant_results_fly.py --symbols INFY TCS --random-runs 50
 
 Downloads each stock's board meetings from NSE once (cached with the raw NSE
@@ -8,7 +9,7 @@ files), simulates every results event 2018 → today, and judges it with the tes
 fixed in the spec: >= 100 trades, bootstrap interval above 0, beats the same trade
 on random quiet days in >= 95% of runs, positive in >= 70% of years, deflated
 Sharpe >= 0.95 counting every logged trial. Trades are saved to
-<store>/events/results_fly_trades.csv; the run goes in the trial log.
+<store>/events/<idea>_trades.csv; the run goes in the trial log.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tradingagents.analytics import datastore as ds, events as ev, stress as st, trial_log  # noqa: E402
 from tradingagents.analytics.condor import _prepare  # noqa: E402
+from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import STOCKS  # noqa: E402
 from tradingagents.analytics.validation import deflated_sharpe_ratio  # noqa: E402
 
@@ -73,8 +75,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--symbols", nargs="+", default=list(STOCKS))
     parser.add_argument("--random-runs", type=int, default=200)
+    parser.add_argument("--overpriced", action="store_true",
+                        help="only when the implied move >= 1.25x the stock's past results-day moves")
     args = parser.parse_args()
 
+    idea = f"{IDEA}_overpriced" if args.overpriced else IDEA
     started = time.monotonic()
     rng = np.random.default_rng(0)
     trades, randoms, n_events = [], [], 0
@@ -84,6 +89,10 @@ def main() -> int:
         chain = ds.load("option_chain", symbols=[symbol])
         lots = lots_of(symbol)
         got = ev.event_trades(chain, lots, events, symbol)
+        if args.overpriced:
+            p = load_prices([symbol])
+            closes = pd.Series(p["adj_close"].to_numpy(float), index=pd.to_datetime(p["trade_date"]))
+            got = ev.overpriced(got, ev.event_windows(_prepare(chain)["days"], events), closes)
         trades += got
         randoms.append(random_returns(_prepare(chain), symbol, lots, got, list(events["date"]),
                                       args.random_runs, rng))
@@ -97,7 +106,7 @@ def main() -> int:
                          | {"return_on_risk": t.return_on_risk, "strikes": t.strikes} for t in trades])
     out = ds.store_root() / "events"
     out.mkdir(parents=True, exist_ok=True)
-    rows.to_csv(out / "results_fly_trades.csv", index=False)
+    rows.to_csv(out / f"{idea}_trades.csv", index=False)
 
     n = len(r)
     lo, hi = st.block_bootstrap_ci(r)
@@ -117,7 +126,7 @@ def main() -> int:
         ("Positive years >= 70%", (by_year > 0).mean() >= 0.70, f"{(by_year > 0).sum()}/{len(by_year)}"),
         ("Deflated Sharpe >= 0.95", dsr >= 0.95, f"{dsr:.3f} (N = {n_trials} trials)"),
     ]
-    print(f"\nResults-day iron butterfly, {trades[0].entry_date} -> {trades[-1].exit_date}: "
+    print(f"\n{idea}, {trades[0].entry_date} -> {trades[-1].exit_date}: "
           f"{n} trades, wins {wins:.0%}, median {np.median(r):+.2%}, worst {r.min():+.2%}")
     print("\nBy year (mean return on max risk):")
     print(by_year.map(lambda v: f"{v:+.2%}").to_string())
@@ -127,7 +136,8 @@ def main() -> int:
     verdict = "pass" if all(ok for _, ok, _ in tests) else "reject"
     print(f"\nVerdict: {verdict.upper()}")
     trial_log.record(trial_log.Trial(
-        idea=IDEA, params={"wing_mult": ev.DEFAULT_FLY.wing_mult, "max_dte": ev.DEFAULT_FLY.max_dte},
+        idea=idea, params={"wing_mult": ev.DEFAULT_FLY.wing_mult, "max_dte": ev.DEFAULT_FLY.max_dte,
+                           "overpriced_ratio": 1.25 if args.overpriced else None},
         universe="29 F&O stocks", data_start=str(trades[0].entry_date), data_end=str(trades[-1].exit_date),
         n_trials=1, n_oos_trades=n, dsr=dsr, verdict=verdict,
         notes=f"mean {r.mean():+.4f}/risk, CI [{lo:+.4f}, {hi:+.4f}], beats random {beats:.0%}"))
