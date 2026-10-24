@@ -111,6 +111,15 @@ def _iv_lines(symbol: str, on: date, garch21: float | None, root: Path) -> list[
     return lines
 
 
+BASELINE_IDEAS = {"random"}           # comparison baselines in the trial log, not signals
+VERDICT_TEXT = {
+    "reject": "rejected", "rejected": "rejected", "keep": "kept as a forecast input (not a trade signal)",
+    "pass": "passed its backtest; forward paper trading pending, NOT approved",
+    "predictive_check": "predictive check only (not a trade signal)",
+    "holdout_fail": "rejected (failed the backward holdout)",
+}
+
+
 def _validation_lines(path: Path | None = None) -> list[str]:
     try:
         trials = trial_log.load(path=path)
@@ -124,8 +133,12 @@ def _validation_lines(path: Path | None = None) -> list[str]:
     if not latest:
         lines.append("  no signal has been tested yet.")
     for idea, t in sorted(latest.items()):
-        lines.append(f"  {idea}: gates {t.gate_verdict or '-'}; {t.n_oos_trades or 0} out-of-sample trades, "
-                     f"Sharpe {t.oos_sharpe if t.oos_sharpe is not None else float('nan'):.2f}")
+        if idea in BASELINE_IDEAS:
+            continue
+        # Tests judged by their own pre-declared rules (no gate run) record only a verdict.
+        status = f"gates {t.gate_verdict}" if t.gate_verdict else VERDICT_TEXT.get(t.verdict, t.verdict or "not judged")
+        sharpe = "" if t.oos_sharpe is None or t.oos_sharpe != t.oos_sharpe else f", Sharpe {t.oos_sharpe:.2f}"
+        lines.append(f"  {idea}: {status}; {t.n_oos_trades or 0} out-of-sample trades{sharpe}")
     approved = [i for i, t in latest.items() if t.gate_verdict == "approved"]
     if approved:
         lines.append(f"Approved signals: {', '.join(approved)}.")
