@@ -265,3 +265,26 @@ table.oc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .plan-chart { height: 300px; margin-bottom: 6px; }
 .plan-card .legend { margin-bottom: 4px; }
 .chart-note { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+
+/* plan tab: option chain and AI strategist */
+.seg-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0 10px; }
+.seg { border: 1px solid var(--border); background: var(--panel-2); border-radius: 99px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text); }
+.seg.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.oc-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.oc-stats .stat { background: var(--panel-2); border-radius: 10px; padding: 6px 12px; }
+.plan-oc { max-height: 460px; border: 1px solid var(--border); border-radius: 10px; }
+.plan-oc td small, .plan-oc td.strike small { display: block; font-size: 11px; font-weight: 500; }
+.plan-oc td.strike small { color: var(--muted); }
+.plan-oc td.prem b { display: block; }
+.plan-oc td.hot .v { font-weight: 800; }
+.plan-oc tr.picked td.strike { box-shadow: inset 3px 0 0 var(--brand), inset -3px 0 0 var(--brand); }
+.plan-oc tr.spot-row td { padding: 0; height: 0; border-bottom: 2px solid var(--brand); text-align: center; }
+.plan-oc tr.spot-row span { position: relative; top: -9px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 99px; }
+.leg-tag { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 1px 6px; border-radius: 6px; margin: 0 4px; color: #fff; vertical-align: middle; }
+.leg-tag.buy { background: var(--up); } .leg-tag.sell { background: var(--down); }
+.strat-ask { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.strat-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.levels.sized .lv { background: var(--panel); border: 1px solid var(--border); }
+.t.legs { width: 100%; font-size: 13px; }
+ul.plain { margin: 0; padding-left: 18px; }
+ul.plain li { margin: 2px 0; }

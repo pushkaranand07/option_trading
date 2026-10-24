@@ -20,7 +20,16 @@ from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from webapp import ai, market_data as md, morning, planner, quant, signals  # noqa: E402
+from webapp import (  # noqa: E402
+    ai,
+    market_data as md,
+    morning,
+    option_chain as nse_oc,
+    planner,
+    quant,
+    signals,
+    strategist,
+)
 
 STATIC = Path(__file__).parent / "static"
 app = FastAPI(title="Pulse Trader")
@@ -149,6 +158,42 @@ def morning_ai():
     if problem := ai.azure_problem():
         raise HTTPException(400, problem)
     return morning.start_ai_build()
+
+
+# ---------- AI strategist (Plan tab): NSE option chain + one defined-risk strategy sized to the user's limit ----------
+
+@app.get("/api/chain/{symbol}")
+async def nse_chain(symbol: str, expiry: str | None = None):
+    try:
+        return await run_in_threadpool(nse_oc.chain, md.instrument(symbol)["symbol"], expiry)
+    except nse_oc.ChainError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+class StrategyRequest(BaseModel):
+    symbol: str
+    risk_pct: float = 1.0
+    risk_amount: float | None = None      # rupees; sizing only, never sent to the LLM
+    allocation: float | None = None
+    expiry: str | None = None
+
+
+@app.post("/api/strategy")
+def strategy_start(req: StrategyRequest):
+    if problem := ai.azure_problem():
+        raise HTTPException(400, problem)
+    sym = md.instrument(req.symbol)["symbol"]
+    return {"job": strategist.start(sym, req.risk_pct, req.risk_amount, req.allocation, req.expiry)}
+
+
+@app.get("/api/strategy/{job_id}")
+def strategy_status(job_id: str):
+    job = strategist.job(job_id)
+    if not job:
+        raise HTTPException(404, "Unknown job")
+    return job
 
 
 # ---------- quant layer: risk, spreads, research, market map, trade journal ----------
