@@ -76,3 +76,25 @@ def test_expiry_day_contracts_settle_at_intrinsic_even_when_untraded():
     assert chain.loc[("put", 22500.0), "bid"] == 0.0                     # kept, and worthless
     assert ("call", 25000.0) not in chain.index                          # untraded before expiry: dropped
     assert any("valued at intrinsic" in a for a in chain.attrs["approximations"])
+
+
+@pytest.mark.unit
+def test_modelled_bid_ask_makes_the_spread_slippage_mode_cost_something():
+    from tradingagents.integrations.optopsy.adapter import cost_model_half_spread, quote_from_close
+
+    def chain(half_spread):
+        df = one_call_chain({20: 10.0, 5: 12.0})
+        quotes = [quote_from_close(c, half_spread) for c in (10.0, 12.0)]
+        df["bid"], df["ask"] = [q[0] for q in quotes], [q[1] for q in quotes]
+        return df
+
+    def pnl(df, mode):
+        out = op.simulate(df, op.long_calls, max_entry_dte=20, exit_dte=5, quantity=1, multiplier=75, slippage=mode)
+        return out.trade_log["realized_pnl"].iloc[0]
+
+    flat, modelled = chain(None), chain(cost_model_half_spread)
+    assert pnl(flat, "spread") == pnl(flat, "mid")                     # before: no spread, no cost
+    # Close 10 -> ask 10.15 (half-spread 0.05 + 0.10); close 12 -> bid 11.80 (12 - 0.17, rounded down to the tick).
+    # Bought at the ask, sold at the bid: 1.65 x 75 instead of 2.00 x 75 at the mid.
+    assert pnl(modelled, "mid") == pytest.approx(2.0 * 75)
+    assert pnl(modelled, "spread") == pytest.approx((11.80 - 10.15) * 75)

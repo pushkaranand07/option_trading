@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `██████████████████████░░░` 90% (90/100 tasks)
+**Overall:** `███████████████████████░░` 91% (91/100 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 14:06_
+_Last updated: 2026-10-24 14:11_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -185,7 +185,7 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`████████████████████░░░░░` 80% (20/25)
+`█████████████████████░░░░` 84% (21/25)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -213,7 +213,8 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 - [x] `NSECalendar.from_nse()` never loaded special sessions → now the 11 verified weekend sessions plus NSE's
   `*`-marked Muhurat holidays (2026-11-08 found live) ([PA-27](PA_27-calendar-special-sessions.md))
 - [ ] Web app hard-codes lot sizes (NIFTY 75, BANKNIFTY 35; current 65 / 30) and shows the market open on holidays
-- [ ] Option backtester's NSE adapter sets bid = ask = close, so its slippage setting has no effect (only commission)
+- [x] Option backtester's NSE adapter set bid = ask = close, so slippage did nothing → modelled bid/ask from the
+  cost model ([PA-28](PA_28-backtester-modelled-bid-ask.md))
 - [ ] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` is not applied (forwarded only for `openai` / `chatgpt`)
 - [ ] News Analyst prompt does not mention `get_india_fii_dii_flows` although the tool is offered;
   `ALPHA_VANTAGE_API_KEY` missing from `.env.example`; 8 test files lack the `unit` marker
