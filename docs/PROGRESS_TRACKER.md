@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `█████████████████████░░░░` 84% (85/101 tasks)
+**Overall:** `█████████████████████░░░░` 84% (86/102 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 10:52_
+_Last updated: 2026-10-24 11:10_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -32,7 +32,8 @@ _Last updated: 2026-10-24 10:52_
 | `quant/holdout-2015` (+ stress, paper) | Proof plan Stages 0–2, backward holdout | VRP condor **rejected** by holdout; paper = observation | merged (PRs #11–#16) |
 | `quant/market-map` | Market Map 2021–26 (timeline, impact map, network) | built; page under `reports/market_map/` | merged (PR #21) |
 | `quant/weekend-sessions` | Bug fix: weekend NSE sessions never downloaded | 11 sessions recovered, store + IV + GARCH + regime rebuilt | merged (PR #20) |
-| `quant/phase-7-chronos` | 7 Pretrained time-series model | Chronos-Bolt **not kept** (GARCH better) | **open PR** |
+| `quant/phase-7-chronos` | 7 Pretrained time-series model | Chronos-Bolt **not kept** (GARCH better) | merged (PR #22) |
+| `quant/results-iron-fly` | Event window: results-day IV crush | spec frozen first; **rejected** (costs > edge) | **open PR** |
 
 ---
 
@@ -109,7 +110,7 @@ _Last updated: 2026-10-24 10:52_
 
 ## Phase 6 — LightGBM model
 <!-- progress:phase -->
-`███████████████████████░░` 93% (13/14)
+`███████████████████████░░` 93% (14/15)
 <!-- /progress:phase -->
 - [x] Triple-barrier labels on closes (label = exit return > 0; the "upper first" label gave AUC 0.55 on pure noise)
 - [x] Price, volume, structure and market-context features; automatic leak check (0 mismatches)
@@ -127,6 +128,9 @@ _Last updated: 2026-10-24 10:52_
 - [x] **Approach A, step 1 — predict move *size*, not direction** (label: 10-session move > 1× expected move):
   LightGBM same-day AUC **0.503** (no skill; it leaned on market-wide features that can't rank stocks) vs
   **ranking by the GARCH forecast alone: 0.573** → move size *is* predictable, by GARCH, not by the fitted model
+- [x] Event window (2026-10-24): results-day iron butterfly on the 29 stocks, spec frozen before the run
+  (`docs/strategies/results_iron_fly.md`). 984 trades: **−6.5% of risk/trade, every year negative → rejected**.
+  Results days beat random days in 100% of runs (the IV crush is real, ~+4.7 pts) but slippage + charges are larger
 - [x] Approach A, step 2 — iron condors on the 5 stocks GARCH predicts quietest: **rejected**. 387 trades, Sharpe −0.44;
   beats random picks 92% (GARCH's ranking helps) but selling stock condors loses money (random −0.84, all stocks −1.22;
   190 of 387 trades had an untraded wing at entry) — structural, not a setting
@@ -254,6 +258,7 @@ somewhere in-sample and fell apart out of sample or after costs.
 | LightGBM "how big will the move be" | ❌ no skill | same-day AUC 0.503 — but **GARCH alone ranks it at 0.573** ✅ |
 | Condors on the 5 GARCH-quietest stocks | ❌ rejected | Sharpe −0.44: stock condors lose money; GARCH only makes them lose less |
 | Chronos-Bolt pretrained model (Phase 7) | ❌ not kept | volatility QLIKE 0.382 vs GARCH 0.336; beats GARCH on 8/31 symbols |
+| Results-day iron butterfly (IV crush, 29 stocks) | ❌ rejected | 984 trades, −6.5% of risk/trade, 0/9 years positive; beats random days 100% (IV crush is real) but friction is larger |
 
 Public end-of-day data has not produced a tradable edge in these 29 large, heavily-watched stocks, consistent with
 how efficiently they are priced. Costs matter a lot: a delivery round trip is ~0.33%, so a strategy rotating 5 stocks
@@ -272,7 +277,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 
 ## Start here tomorrow
 ### State
-- **Git:** PRs #1–#21 merged. Open: `quant/phase-7-chronos` — merge it, then `git checkout main` and `git pull`
+- **Git:** PRs #1–#22 merged. Open: `quant/results-iron-fly` — merge it, then `git checkout main` and `git pull`
   (the 19:30 job runs whatever is checked out). Start new work on a new branch from `main`:
   `git checkout main`, `git pull`, `git checkout -b quant/<next-thing>`.
 - **Data:** NSE store complete 2018-01-01 to 2026-10-22 (F&O, option chain, participant OI, delivery, index closes,
@@ -308,6 +313,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 - The "something else" bug description
 
 ## Log
+- 2026-10-24 — Event-window test: results-day iron butterfly rejected (984 trades, −6.5%/trade); IV crush real but smaller than trading friction.
 - 2026-10-24 — Phase 7: Chronos-Bolt volatility forecasts tested against GARCH on 31 symbols → not kept (QLIKE 0.382 vs 0.336).
 - 2026-10-24 — Market Map 2021–26 built in the project (107 researched events + data-detected ones, impact measured
   from NSE). Its news cross-check exposed a data bug: weekend NSE sessions were never downloaded → fixed, 11 sessions

@@ -41,3 +41,19 @@ No parameter is fitted: there is nothing to tune, so no walk-forward is needed. 
 | Stress (Stage 2, only if the above pass) | costs ×2 still positive; worst single trade ≤ max risk |
 
 If it passes, it goes to Stage 3 (forward paper trading) like any other candidate; it is not traded on backtest evidence.
+
+## Result (2026-10-24, `scripts/quant_results_fly.py`): REJECTED
+984 trades on 1,009 results dates, 2018-01 → 2026-10 (29 stocks).
+
+| Test | Result |
+|---|---|
+| Trades ≥ 100 | ✅ 984 |
+| Mean > 0, bootstrap CI above 0 | ❌ mean **−6.46%** of max risk, CI [−9.06%, −3.76%]; wins 49% |
+| Beats random quiet days ≥ 95% | ✅ 100% of 200 runs (random days −11.18%) |
+| Positive years ≥ 70% | ❌ 0 of 9 (every year negative, 2026 worst at −16.4%) |
+| Deflated Sharpe ≥ 0.95 | ❌ 0.000 (N = 183) |
+
+**What it shows:** the IV crush is real (results days beat random days by ~4.7 points of max risk, every run), but it is
+smaller than the cost of trading it. Charges are ~2% of max risk per trade; the rest of the loss is slippage across
+eight option fills in two days and moves bigger than the straddle priced. A defined-risk 4-leg structure on stock
+options cannot harvest it at retail cost. Not retested with other wings or holds: that would be tuning on the result.
