@@ -262,10 +262,9 @@
   "date": "2025-02-01",
   "title": "Upfront option premium collection",
   "category": "margin",
-  "detail": "Under the SEBI 2024-10-01 circular, brokers must collect the full option premium upfront from buyers, with no intraday leverage on premium. Market reaction: Income up to Rs 12 lakh made tax-free in a Saturday session; Sensex +0.01% at 77,505.96 and Nifty -0.11% at 23,482.15.",
+  "detail": "Under the SEBI 2024-10-01 circular, brokers must collect the full option premium upfront from buyers, with no intraday leverage on premium.",
   "source": "https://www.scconline.com/blog/post/2024/10/03/measures-to-strengthen-equity-index-derivatives-framework-legal-news",
-  "kind": "regulatory",
-  "source2": "https://www.business-standard.com/markets/news/union-budget-2025-stock-market-live-updates-sensex-nifty-50-union-budget-day-impact-share-market-insights-125020100101_1.html"
+  "kind": "regulatory"
  },
  {
   "date": "2025-02-01",
@@ -724,7 +723,7 @@
   "date": "2026-02-01",
   "title": "Union Budget FY27: F&O STT hike",
   "category": "policy",
-  "detail": "STT on futures raised to 0.05% and on options to 0.15% (effective 1 Apr 2026); in a Sunday session Nifty fell about 2-2.3% to 24,825.45 and Sensex closed at 80,722.94. NOTE: Sunday special session; measured here from the next session until the weekend-session data fix lands.",
+  "detail": "STT on futures raised to 0.05% and on options to 0.15% (effective 1 Apr 2026); in a Sunday session Nifty fell about 2-2.3% to 24,825.45 and Sensex closed at 80,722.94. NSE held a special Sunday session for the Budget.",
   "source": "https://upstox.com/news/market-news/trading/stock-market-nifty-50-sensex-live-updates-on-sunday-february-1-union-budget-2026/liveblog-188661/",
   "kind": "news"
  },
@@ -790,6 +789,14 @@
   "category": "market",
   "detail": "Brent above $104 (Gulf shipping attacks), the RBI hike, FII selling and the rupee near 97/$; Nifty -1.6% to 22,231.80 (intraday low 22,179.90), Sensex -1.4% to 71,593, VIX up more than 10%.",
   "source": "https://www.outlookbusiness.com/markets/nifty-hits-2026-low-what-triggered-the-market-bloodbath",
+  "kind": "news"
+ },
+ {
+  "date": "2025-02-01",
+  "title": "Union Budget FY26: income-tax relief",
+  "category": "policy",
+  "detail": "Income up to Rs 12 lakh made tax-free in a Saturday session; Sensex +0.01% at 77,505.96 and Nifty -0.11% at 23,482.15.",
+  "source": "https://www.business-standard.com/markets/news/union-budget-2025-stock-market-live-updates-sensex-nifty-50-union-budget-day-impact-share-market-insights-125020100101_1.html",
   "kind": "news"
  }
 ]
