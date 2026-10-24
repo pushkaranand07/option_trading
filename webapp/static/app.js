@@ -431,12 +431,12 @@ async function pollAI(jobId, sym) {
 }
 
 // ---------- tabs ----------
-const TABS = ["today", "risk", "options", "ai", "map", "research", "trades"];
+const TABS = ["plan", "today", "risk", "options", "ai", "map", "research", "trades"];
 const INSTRUMENT_TABS = ["today", "risk", "options", "ai"];
 const loaded = {};
 
 function showTab(tab, force = false) {
-  if (!TABS.includes(tab)) tab = "today";
+  if (!TABS.includes(tab)) tab = "plan";
   const changed = S.tab !== tab;
   S.tab = tab; store("tab", tab);
   if (location.hash.slice(1) !== tab) history.replaceState(null, "", "#" + tab);
@@ -449,6 +449,7 @@ function showTab(tab, force = false) {
   const key = INSTRUMENT_TABS.includes(tab) ? tab + ":" + S.sym : tab;
   if (!force && !changed && loaded[key]) return;
   loaded[key] = true;
+  if (tab === "plan") loadMorning();
   if (tab === "today") loadCandles();
   if (tab === "risk") loadRisk();
   if (tab === "options") { loadOptions(); loadCosts(); }
@@ -651,16 +652,154 @@ async function loadJournal() {
   $("#jrBody").innerHTML = html;
 }
 
+// ---------- plan (morning plan + live call + sizing) ----------
+const NAMES = { NIFTY: "NIFTY 50", BANKNIFTY: "NIFTY BANK" };
+S.morning = null; S.live = {};
+
+// Preview: ?at=2026-10-23T10:30 shows the Plan tab as at that moment, with that day's saved plan.
+const PREVIEW_AT = new URLSearchParams(location.search).get("at");
+function istNow() {
+  if (PREVIEW_AT) { const [d, t] = PREVIEW_AT.split("T"); return { date: d, mins: toMins(t), hhmm: t + " (preview)" }; }
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+  const g = (t) => p.find((x) => x.type === t).value;
+  return { date: `${g("year")}-${g("month")}-${g("day")}`, mins: +g("hour") * 60 + +g("minute"), hhmm: `${g("hour")}:${g("minute")}` };
+}
+const toMins = (hhmm) => +hhmm.slice(0, 2) * 60 + +hhmm.slice(3, 5);
+const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`);
+
+function phase(sess) {
+  const now = istNow();
+  if (!sess || sess.date !== now.date) return { key: "stale", text: "Plan is not for today — refresh it." };
+  if (!sess.trading) return { key: "closed", text: `Market closed today${sess.holiday ? ` (${sess.holiday.replace("*", "")})` : ""}. Next session: ${sess.next_session}.` };
+  const m = now.mins, open = toMins(sess.open), first = toMins(sess.first_signal), close = toMins(sess.close);
+  if (m < toMins(sess.pre_open)) return { key: "pre", text: `Before the market. Opens at ${sess.open} — in ${dur(open - m)}. Read the morning view below.` };
+  if (m < open) return { key: "preopen", text: `Pre-open auction. Trading starts at ${sess.open} — in ${dur(open - m)}.` };
+  if (m < first) return { key: "wait", text: `Market open. The rule waits for the first half hour — trade signal from ${sess.first_signal} (in ${dur(first - m)}).` };
+  if (m < close) return { key: "live", text: `Market open — closes at ${sess.close} (in ${dur(close - m)}). Exit intraday trades by 15:15.` };
+  return { key: "after", text: `Market closed for today at ${sess.close}. Next session: ${sess.next_session}.` };
+}
+
+function renderSession() {
+  const s = S.morning?.session; if (!s) return;
+  const ph = phase(s);
+  const steps = [["Pre-open", s.pre_open], ["Open", s.open], ["Signal from", s.first_signal], ["Exit intraday by", "15:15"],
+    ["Close", s.close + (s.index_derivatives_close !== s.close ? ` (index F&O ${s.index_derivatives_close})` : "")]];
+  $("#sessionBar").innerHTML = `<div class="body"><div class="session-top"><div><div class="ask">${esc(s.weekday)} ${esc(s.date)}</div>
+      <div class="phase ${ph.key}">${esc(ph.text)}</div></div><div class="clock num">${istNow().hhmm} IST</div></div>
+    ${s.trading ? `<div class="timeline">${steps.map(([k, v]) => `<div><span>${k}</span><b class="num">${esc(v)}</b></div>`).join("")}</div>` : ""}</div>`;
+}
+
+function riskLimit() {
+  const cap = +($("#capital").value || 0), pctv = +($("#riskPct").value || 0);
+  return { cap, pct: pctv, max: cap > 0 && pctv > 0 ? (cap * pctv) / 100 : null };
+}
+["capital", "riskPct"].forEach((id) => {
+  const el = $("#" + id), saved = store(id); if (saved) el.value = saved;
+  el.addEventListener("input", () => { store(id, el.value); renderRisk(); renderPlanCards(); });
+});
+function renderRisk() {
+  const r = riskLimit();
+  $("#riskOut").innerHTML = r.max ? `You lose at most <b>${money(r.max)}</b> on any one trade (${r.pct}% of ${money(r.cap)}). Trade sizes below follow this.`
+    : `Enter your capital and the most you are willing to lose on one trade (1% is a common limit). Nothing leaves this computer.`;
+}
+
+function sizeTrade(p) {
+  const leg = p.option, s = p.signal, r = riskLimit();
+  if (!leg || !r.max) return null;
+  const perUnit = leg.premium && leg.stop_loss ? leg.premium - leg.stop_loss : leg.move_sl;   // premium lost at the stop
+  const perLot = perUnit * leg.lot;
+  const lots = perLot > 0 ? Math.floor(r.max / perLot) : 0;
+  return { perLot, lots, approx: !leg.premium, loss: lots * perLot, cost: leg.premium ? leg.premium * leg.lot * lots : null,
+    exposure: s.entry * leg.lot * lots, leverage: r.cap ? (s.entry * leg.lot * lots) / r.cap : null };
+}
+
+function callHtml(sym, p, ph) {
+  if (ph.key === "closed" || ph.key === "after" || ph.key === "stale") return `<div class="call idle"><b>No trading now.</b> ${esc(ph.text)}</div>`;
+  if (ph.key === "pre" || ph.key === "preopen" || ph.key === "wait")
+    return `<div class="call idle"><b>Wait.</b> The trade decision is made live from ${esc(S.morning.session.first_signal)}, using this morning's view and the first half hour of trading. This card updates by itself.</div>`;
+  if (!p) return `<div class="call idle"><span class="spinner"></span> Checking the live signal…</div>`;
+  const v = p.verdict, s = p.signal, leg = p.option;
+  if (!(v.safe && s.side !== "WAIT")) {
+    return `<div class="call stop"><b>No trade right now.</b> ${esc(v.blockers[0] || "No clean setup.")}
+      <div class="small muted">Checked again every 15 seconds until 15:15. Not trading is a position too.</div></div>`;
+  }
+  const up = s.side === "BUY", z = sizeTrade(p);
+  const sizing = !riskLimit().max ? `<div class="small warn-c">Enter your capital and risk limit above to see how many lots.</div>`
+    : z.lots < 1 ? `<div class="small warn-c">One lot risks about ${money(z.perLot)} — more than your limit of ${money(riskLimit().max)}. Skip this trade.</div>`
+    : `<div class="levels"><div class="lv"><span>Lots</span><b>${z.lots}</b><small>${z.lots * leg.lot} units</small></div>
+        <div class="lv"><span>Max loss at stop</span><b class="down">${z.approx ? "≈ " : ""}${money(z.loss)}</b><small>within your limit</small></div>
+        <div class="lv"><span>Money needed</span><b>${z.cost != null ? money(z.cost) : "premium × lots"}</b><small>option premium paid</small></div>
+        <div class="lv"><span>Leverage</span><b>${z.leverage != null ? z.leverage.toFixed(1) + "×" : "—"}</b><small>index exposure ÷ capital</small></div></div>`;
+  return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
+    <div class="what"><b>Buy ${esc(NAMES[sym])} ${fmt0(leg.strike)} ${leg.kind}</b>${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}</div>
+    <div class="levels"><div class="lv"><span>Entry (index)</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss (index)</span><b class="down">${fmt(s.stop_loss)}</b></div>
+      <div class="lv"><span>Target (index)</span><b class="up">${fmt(s.target)}</b></div>${leg.premium ? `<div class="lv"><span>Premium now</span><b>${rupee(leg.premium)}</b><small>stop ${rupee(leg.stop_loss)} · target ${rupee(leg.target)}</small></div>` : ""}</div>
+    ${sizing}
+    <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs). Exit by 15:15. One trade a day. Not a validated edge — use your judgment.</div></div>`;
+}
+
+function plainPcr(x) { return x > 1.2 ? "many more puts than calls open (heavy hedging)" : x < 0.8 ? "more calls than puts open" : "calls and puts roughly balanced"; }
+function morningHtml(sym, e) {
+  const c = e.context, ai = e.ai, em = c.expected_move, t = c.trend, g = c.regime;
+  const aiBlock = !ai ? `<p class="small muted">AI view not built yet (runs at 8:30 AM on trading days).</p>`
+    : ai.error ? `<div class="notice">AI view failed: ${esc(ai.error)}</div>`
+    : `<div class="ai-line"><span class="badge ${/Buy|Overweight/.test(ai.rating) ? "up" : /Sell|Underweight/.test(ai.rating) ? "down" : "warn"}">${esc(ai.rating)}</span>
+        <span class="small muted">AI agents' view from news, sentiment and the bull/bear debate (${ai.minutes} min)</span></div>
+       <details class="ai-more"><summary>Read the AI's reasoning</summary><div class="report">${DOMPurify.sanitize(marked.parse(ai.decision || ""))}</div>
+         ${ai.news ? `<h3>News</h3><div class="report">${DOMPurify.sanitize(marked.parse(ai.news))}</div>` : ""}</details>`;
+  const rows = [
+    t && ["Trend", `<b>${esc(t.label)}</b> — ${esc(t.explain)}`],
+    em && [S.morning.session.trading ? "Expected range today" : "Expected range next session", `<b>${fmt0(em.day_low)} – ${fmt0(em.day_high)}</b> (±${pc(em.day_pct)} from the last close ${fmt(em.close)}; about 2 days in 3 stay inside)`],
+    c.last_session?.close && ["Last session", `${esc(c.last_session.date)}: open ${fmt(c.last_session.open)}, high ${fmt(c.last_session.high)}, low ${fmt(c.last_session.low)}, close <b>${fmt(c.last_session.close)}</b> (${pct(c.last_session.change_pct)})`],
+    g && ["Market mood", `<b>${esc(REGIME_TEXT[g.name]?.[0] || g.name)}</b> — ${esc(REGIME_TEXT[g.name]?.[2] || "")}`],
+    c.pcr && ["Put-call ratio", `<b>${c.pcr.value.toFixed(2)}</b>${c.pcr.prev ? ` (day before ${c.pcr.prev.toFixed(2)})` : ""} — ${plainPcr(c.pcr.value)}`],
+    c.fii_long_share && ["Foreign investors (FII)", `<b>${pc(c.fii_long_share.value, 0)}</b> of their index futures are long${c.fii_long_share.week_ago != null ? ` (a week ago ${pc(c.fii_long_share.week_ago, 0)})` : ""} — ${c.fii_long_share.value < 0.35 ? "they are betting mostly on a fall" : c.fii_long_share.value > 0.65 ? "they are betting mostly on a rise" : "mixed"}`],
+    c.iv && ["Options", `implied vol ${pc(c.iv.iv30)}${c.iv.minus_garch21 != null ? `, ${c.iv.minus_garch21 > 0.03 ? "expensive" : c.iv.minus_garch21 < -0.03 ? "cheap" : "fairly priced"} vs the forecast` : ""}`],
+  ].filter(Boolean);
+  return `${aiBlock}<table class="facts">${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</table>`;
+}
+
+function renderPlanCards() {
+  const m = S.morning; if (!m) return;
+  const ph = phase(m.session);
+  $("#planBody").innerHTML = Object.entries(m.indices).map(([sym, e]) => `<section class="card plan-card">
+      <div class="card-head"><h2>${esc(NAMES[sym] || sym)}</h2>${e.context.trend ? `<span class="badge ${e.context.trend.tone}">${esc(e.context.trend.label)}</span>` : ""}</div>
+      <div class="body"><h3 class="sub-h">Today's call</h3>${callHtml(sym, S.live[sym], ph)}
+        <h3 class="sub-h">Morning view</h3>${morningHtml(sym, e)}</div></section>`).join("");
+  const job = m.ai_job || {};
+  $("#planStamp").innerHTML = `Plan built ${esc(m.built_at)}${job.running ? ` · AI view running since ${esc(job.started)}…` : ""}.
+    <button class="btn small-btn" id="planRefresh">Refresh data</button>
+    ${m.session.trading && !PREVIEW_AT ? `<button class="btn small-btn" id="planAi" ${job.running ? "disabled" : ""}>Run AI view now (~20 min)</button>` : ""}`;
+  $("#planRefresh").onclick = async () => { $("#planRefresh").disabled = true; S.morning = await api("/api/morning/refresh", { method: "POST" }).catch(() => S.morning); renderPlan(); };
+  if ($("#planAi")) $("#planAi").onclick = async () => { try { await api("/api/morning/ai", { method: "POST" }); } catch (e) { alert(e.message); } loadMorning(); };
+}
+
+function renderPlan() { renderSession(); renderRisk(); renderPlanCards(); }
+
+async function loadMorning() {
+  try { S.morning = await api("/api/morning" + (PREVIEW_AT ? "?date=" + PREVIEW_AT.slice(0, 10) : "")); } catch (e) { $("#planBody").innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
+  renderPlan(); loadLive();
+}
+async function loadLive() {
+  if (!S.morning || !["wait", "live"].includes(phase(S.morning.session).key)) return;
+  for (const sym of Object.keys(S.morning.indices)) {
+    try { S.live[sym] = await api("/api/plan/" + sym); } catch { /* keep the last one */ }
+  }
+  renderPlanCards();
+}
+
 // ---------- start ----------
 (async function init() {
   applyChartTheme();
   await loadStatus();
   renderChips(); renderInst();
-  showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("tab") || "today");
+  showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("tab") || "plan");
   loadQuotes(); loadCandles(); loadPlan();
   setInterval(loadQuotes, 3000);
   setInterval(loadCandles, 5000);
   setInterval(loadPlan, 15000);
   setInterval(() => { if (S.tab === "options") loadChain(); }, 4000);
   setInterval(loadStatus, 60000);
+  setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
 })();

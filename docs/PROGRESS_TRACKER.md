@@ -19,7 +19,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 15:46_
+_Last updated: 2026-10-24 16:05_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -269,8 +269,10 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
   are too expensive for multi-leg trades); `sizing.py` once a signal has a measured edge.
 - **Market Map** (`reports/market_map/india-market-map.html`): what each law change and event did to the market.
 - **Trade journal** (`scripts/trade_journal.py`): what works in your own trades, by holding period.
-- **Web app in seven tabs** (`python -m uvicorn webapp.server:app --port 8000`): Today, Risk & Volatility, Options
-  (with measured spreads), AI Analysis, Market Map, Research, My Trades ([PA-32](PA_32-webapp-tabs.md)).
+- **Web app in eight tabs** (`python -m uvicorn webapp.server:app --port 8000`): **Plan** (morning plan + live call
+  sized from your risk limit), Today, Risk & Volatility, Options (with measured spreads), AI Analysis, Market Map,
+  Research, My Trades ([PA-32](PA_32-webapp-tabs.md), [PA-33](PA_33-morning-plan.md)).
+- **Morning plan** weekdays 08:30 (task "TradingAgents morning plan"): NIFTY + BANKNIFTY data and AI view.
 - **Daily refresh** weekdays 19:30. Log: `~/.tradingagents/cache/quant/daily_update.log`; status:
   `~/.tradingagents/cache/quant/daily_status.json`. Remove: `schtasks /Delete /TN "TradingAgents quant daily update" /F`.
 
@@ -293,6 +295,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-24 — Morning plan: 8:30 AM job (data + AI view for NIFTY and BANKNIFTY) and a Plan tab with the session clock and the live call sized from your risk limit.
 - 2026-10-24 — Web app rebuilt into seven plain-English tabs (risk, measured spreads, research verdicts, market map, trade journal added).
 - 2026-10-24 — Phase 9 replay done: 10 analyses, 0 invented quant numbers, 0 validation claims (on reading every flag); check v2 added.
 - 2026-10-24 — Docs restructured: index (docs/README.md), plans/ data/ architecture/ features/ development/ guides/ archive/, one PA record per change (PA_01–PA_26), link checker (`scripts/check_doc_links.py`).

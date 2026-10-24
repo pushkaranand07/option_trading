@@ -9,11 +9,13 @@
 
 ## 1. What it does
 
-Seven tabs, in plain English (since 2026-10-24, [PA-32](../PA_32-webapp-tabs.md)). The first four follow the index or
-stock picked at the top; the other three are about the market and your own trading.
+Eight tabs, in plain English (since 2026-10-24, [PA-32](../PA_32-webapp-tabs.md), [PA-33](../PA_33-morning-plan.md)).
+**Plan** opens first; the next four follow the index or stock picked at the top; the last three are about the market
+and your own trading.
 
 | Tab | Shows | Data |
 |---|---|---|
+| **Plan** | Today's session (pre-open, open, signal from 9:45, exit by 15:15, close — 15:45 for index F&O from 7-Dec-2026), and for NIFTY and BANKNIFTY: **today's call** (wait / no trade / take this trade, sized from your capital and max-loss % so the stop loses at most that, with lots, money needed and leverage) and the **morning view** (AI rating and reasoning, trend, expected range, last session, regime, PCR, FII positioning, options) | `reports/morning/` (8:30 AM job) + the live rule; capital kept in the browser only |
 | **Today** | Should I trade this today? The rule-based answer, chart, trend, track record, BTST, last 10 sessions, glossary | Dhan / Yahoo (below) |
 | **Risk & Volatility** | Market regime (calm / choppy / stress), expected move for 5 / 10 / 21 days in % and ₹ with the likely range, GARCH forecast, implied vol vs forecast | The quant store (validated tools) |
 | **Options** | Live option chain (Dhan), and the measured bid-ask spread per strike: what each trade really costs | Dhan; NSE closing quotes captured nightly |

@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
-from webapp import ai, market_data as md, planner, quant, signals  # noqa: E402
+from webapp import ai, market_data as md, morning, planner, quant, signals  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
 app = FastAPI(title="Pulse Trader")
@@ -105,6 +105,43 @@ def ai_status(job_id: str):
     if not job:
         raise HTTPException(404, "Unknown job")
     return job
+
+
+# ---------- morning plan ----------
+
+@app.get("/api/morning")
+async def morning_plan(date: str | None = None):
+    """Today's plan (built at 8:30 AM by the scheduled job); built on the spot, without AI, if missing.
+    ``date`` (YYYY-MM-DD) returns that day's saved plan, for the page's preview mode."""
+    if date:
+        from datetime import date as _date
+        try:
+            saved = morning.load(_date.fromisoformat(date))
+        except ValueError as exc:
+            raise HTTPException(400, "date must be YYYY-MM-DD") from exc
+        if saved is None:
+            raise HTTPException(404, f"No saved plan for {date}")
+        return saved | {"ai_job": morning.ai_status()}
+    plan = morning.load()
+    if plan is None:
+        plan = await _call(morning.build, None, False)
+    plan["ai_job"] = morning.ai_status()
+    return plan
+
+
+@app.post("/api/morning/refresh")
+async def morning_refresh():
+    """Rebuild the data part now (seconds); the morning's AI view is kept."""
+    plan = await _call(morning.build, None, False)
+    plan["ai_job"] = morning.ai_status()
+    return plan
+
+
+@app.post("/api/morning/ai")
+def morning_ai():
+    if problem := ai.azure_problem():
+        raise HTTPException(400, problem)
+    return morning.start_ai_build()
 
 
 # ---------- quant layer: risk, spreads, research, market map, trade journal ----------

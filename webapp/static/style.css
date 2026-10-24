@@ -237,3 +237,28 @@ table.oc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .card .body { overflow-x: auto; }
 @media (max-width: 720px) { .page { padding: 14px 12px 32px; } .page-inner { padding: 12px 12px 0; } .big { font-size: 22px; } }
 .t td.num { white-space: nowrap; }
+
+/* plan tab */
+.session-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding-top: 14px; }
+.phase { font-size: 17px; font-weight: 700; margin-top: 4px; }
+.phase.live { color: var(--up); } .phase.wait, .phase.pre, .phase.preopen { color: var(--warn); } .phase.closed, .phase.after, .phase.stale { color: var(--muted); }
+.clock { font-size: 22px; font-weight: 800; }
+.timeline { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.timeline div { background: var(--panel-2); border-radius: 10px; padding: 6px 12px; }
+.timeline span { display: block; font-size: 11px; color: var(--muted); }
+.sizing { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.sizing input { width: 130px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.sizing #riskPct { width: 70px; }
+.sizing #riskOut { flex-basis: 100%; }
+.sub-h { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 8px; }
+.call { border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
+.call.idle { background: var(--panel-2); } .call.stop { background: var(--warn-soft); }
+.call.go-up { background: var(--up-soft); border: 1px solid var(--up); } .call.go-down { background: var(--down-soft); border: 1px solid var(--down); }
+.facts { width: 100%; border-collapse: collapse; font-size: 14px; }
+.facts th { text-align: left; vertical-align: top; color: var(--muted); font-weight: 600; padding: 7px 12px 7px 0; width: 190px; white-space: nowrap; }
+.facts td { padding: 7px 0; border-bottom: 1px solid var(--border); }
+.facts tr:last-child td { border-bottom: 0; }
+.ai-line { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.ai-more summary { cursor: pointer; font-size: 13px; color: var(--brand); margin-bottom: 8px; }
+.small-btn { padding: 4px 10px; font-size: 12.5px; margin-left: 6px; }
+@media (max-width: 720px) { .facts th { width: auto; white-space: normal; } }

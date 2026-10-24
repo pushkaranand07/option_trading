@@ -17,6 +17,17 @@ Weekdays at 19:30, Task Scheduler runs, from the repository root:
 Eight steps in order (download → store → volatility → regime → tracker → market_map → paper → quotes); the first
 failure stops the run. Design and setup: [../architecture/15-daily-refresh-and-paper-trading.md](../architecture/15-daily-refresh-and-paper-trading.md).
 
+**Morning plan** — weekdays at **08:30**, task "TradingAgents morning plan" ([PA-33](../PA_33-morning-plan.md)):
+
+```
+.venv\Scripts\pythonw.exe -W ignore scripts\morning_plan.py --log %USERPROFILE%\.tradingagents\cache\quant\morning_plan.log
+```
+
+Builds `reports/morning/<date>.json` for NIFTY and BANKNIFTY (data + two GPT-5 analyses, ~20 min); on holidays it
+records the closure and skips the AI. Check: `schtasks /Query /TN "TradingAgents morning plan" /V /FO LIST`; run now:
+`schtasks /Run /TN "TradingAgents morning plan"`; remove: `schtasks /Delete /TN "TradingAgents morning plan" /F`.
+Like the nightly job it runs the checked-out branch and needs the PC on and the user logged in.
+
 ## 2. Checking it ran
 
 **Status file** — `~/.tradingagents/cache/quant/daily_status.json`:
