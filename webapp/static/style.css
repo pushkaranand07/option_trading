@@ -262,3 +262,6 @@ table.oc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .ai-more summary { cursor: pointer; font-size: 13px; color: var(--brand); margin-bottom: 8px; }
 .small-btn { padding: 4px 10px; font-size: 12.5px; margin-left: 6px; }
 @media (max-width: 720px) { .facts th { width: auto; white-space: normal; } }
+.plan-chart { height: 300px; margin-bottom: 6px; }
+.plan-card .legend { margin-bottom: 4px; }
+.chart-note { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }

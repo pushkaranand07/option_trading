@@ -42,7 +42,8 @@ Also decided, and shown to the user before building:
   08:30 weekdays with the nightly job's settings.
 - API: `GET /api/morning` (today's plan; built without AI if missing; `?date=` for a saved day), `POST
   /api/morning/refresh`, `POST /api/morning/ai` (background, one at a time).
-- **Plan tab** (opens first): the session bar with a live IST clock and phase (before the market → pre-open → wait
+- **Plan tab** (opens first): a live 5-minute chart per index (EMA 9 / 21, expected range for the day, entry / stop /
+  target when there is a trade); the session bar with a live IST clock and phase (before the market → pre-open → wait
   until 09:45 → open, exit by 15:15 → closed); the risk-limit inputs; per index **Today's call** (wait / no trade with
   the reason / take this trade: option, entry, stop, target, lots, max loss, money needed, leverage — or "skip, one lot
   risks more than your limit") and the **Morning view** in plain words. Refreshes every 15 s while open.
@@ -66,3 +67,11 @@ The Plan tab screenshotted at Saturday 16:03 (closed), and previews of 2026-10-2
 - The take-trade card has not been seen with a live safe signal yet (none occurred while building); its sizing math is
   simple (lots = ⌊max loss ÷ (premium − premium stop) × lot⌋) but untested in the browser.
 - The rule's costs (0.01% for indices) are optimistic for options; see the open item to use measured spreads.
+
+## 7. Follow-ups (same day, from the user's review)
+
+- A live 5-minute chart per instrument in the Plan tab (the Today tab's chart is unchanged).
+- The index bar shows on every tab. On the Plan tab a click switches the plan to that instrument in place: NIFTY 50 and
+  NIFTY BANK show the 8:30 plan with its AI view; other indices and searched stocks get the same view built on the spot
+  (`GET /api/morning/context/{symbol}`; no AI — the AI Analysis tab runs it on request). Stocks are sized in shares.
+  `?sym=FINNIFTY` in the address opens a given instrument.

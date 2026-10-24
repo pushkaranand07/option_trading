@@ -129,6 +129,13 @@ async def morning_plan(date: str | None = None):
     return plan
 
 
+@app.get("/api/morning/context/{symbol}")
+async def morning_context(symbol: str):
+    """The morning view for any instrument, built now (the 8:30 job covers NIFTY and BANKNIFTY, with AI)."""
+    from datetime import date as _date
+    return {"context": await _call(morning.context, md.instrument(symbol)["symbol"], _date.today()), "ai": None}
+
+
 @app.post("/api/morning/refresh")
 async def morning_refresh():
     """Rebuild the data part now (seconds); the morning's AI view is kept."""

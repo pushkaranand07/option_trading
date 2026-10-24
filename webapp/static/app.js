@@ -3,7 +3,7 @@
 const $ = (s, el = document) => el.querySelector(s);
 const IST_OFFSET = 19800; // lightweight-charts draws UTC; shift so the axis reads Indian time
 
-const S = { sym: store("sym") || "NIFTY", tf: "5m", indices: [], quotes: {}, status: {}, plan: null, expiry: null, aiJob: null,
+const S = { sym: (new URLSearchParams(location.search).get("sym") || store("sym") || "NIFTY").toUpperCase(), tf: "5m", indices: [], quotes: {}, status: {}, plan: null, expiry: null, aiJob: null,
   tab: "today" };
 
 function store(k, v) {
@@ -76,7 +76,11 @@ function renderChips() {
       <span class="num">${q ? fmt(q.ltp) : "—"}</span> ${q ? `<span class="${cls(q.change)} small">${pct(q.change_pct)}</span>` : ""}</button>`;
   }).join("");
 }
-$("#chips").onclick = (e) => { const b = e.target.closest(".chip"); if (b) selectSymbol(b.dataset.sym); };
+$("#chips").onclick = (e) => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  selectSymbol(b.dataset.sym);
+  if (!INSTRUMENT_TABS.includes(S.tab) && S.tab !== "plan") showTab("today");   // from Map, Research or My Trades: open its page
+};
 
 function renderInst() {
   const q = S.quotes[S.sym];
@@ -301,6 +305,12 @@ function applyChartTheme() {
   ema21Series.applyOptions({ color: cssVar("--ema21") });
   if (lastBars.length) drawBars(lastBars);
   drawPlanLines();
+  if (typeof planCharts !== "undefined") planCharts.forEach((c, sym) => {
+    c.ch.applyOptions({ layout: { textColor: cssVar("--muted") }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } } });
+    c.candles.applyOptions({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down });
+    c.e9.applyOptions({ color: cssVar("--ema9") }); c.e21.applyOptions({ color: cssVar("--ema21") });
+    drawPlanChartLines(sym);
+  });
 }
 
 function ema(values, n) { const k = 2 / (n + 1); let prev; return values.map((v) => (prev = prev === undefined ? v : v * k + prev * (1 - k))); }
@@ -704,9 +714,26 @@ function renderRisk() {
     : `Enter your capital and the most you are willing to lose on one trade (1% is a common limit). Nothing leaves this computer.`;
 }
 
+S.extraCtx = {};
+function planEntries() {
+  const m = S.morning; if (!m) return null;
+  if (m.indices[S.sym]) return [[S.sym, m.indices[S.sym]]];
+  const x = S.extraCtx[S.sym];
+  if (x === "pending") return null;
+  if (x) return [[S.sym, { ...x, extra: true }]];
+  S.extraCtx[S.sym] = "pending";
+  api("/api/morning/context/" + encodeURIComponent(S.sym)).then((r) => { S.extraCtx[S.sym] = r; renderPlanCards(); loadLive(); })
+    .catch((e) => { S.extraCtx[S.sym] = { context: { error: e.message }, ai: null }; renderPlanCards(); });
+  return null;
+}
+
 function sizeTrade(p) {
   const leg = p.option, s = p.signal, r = riskLimit();
-  if (!leg || !r.max) return null;
+  if (!r.max) return null;
+  if (!leg) {                                     // shares (stocks): the stop loses at most the limit
+    const per = Math.abs(s.entry - s.stop_loss), qty = per > 0 ? Math.floor(r.max / per) : 0;
+    return { shares: true, perLot: per, lots: qty, loss: qty * per, cost: qty * s.entry, leverage: r.cap ? (qty * s.entry) / r.cap : null };
+  }
   const perUnit = leg.premium && leg.stop_loss ? leg.premium - leg.stop_loss : leg.move_sl;   // premium lost at the stop
   const perLot = perUnit * leg.lot;
   const lots = perLot > 0 ? Math.floor(r.max / perLot) : 0;
@@ -725,6 +752,19 @@ function callHtml(sym, p, ph) {
       <div class="small muted">Checked again every 15 seconds until 15:15. Not trading is a position too.</div></div>`;
   }
   const up = s.side === "BUY", z = sizeTrade(p);
+  if (!leg) {
+    const sz = !z ? `<div class="small warn-c">Enter your capital and risk limit above to see how many shares.</div>`
+      : z.lots < 1 ? `<div class="small warn-c">One share risks ${money(z.perLot)} — more than your limit. Skip this trade.</div>`
+      : `<div class="levels"><div class="lv"><span>Shares</span><b>${z.lots}</b><small>intraday (MIS)</small></div>
+          <div class="lv"><span>Max loss at stop</span><b class="down">${money(z.loss)}</b><small>within your limit</small></div>
+          <div class="lv"><span>Position value</span><b>${money(z.cost)}</b><small>your broker asks a margin on this</small></div>
+          <div class="lv"><span>Leverage</span><b>${z.leverage != null ? z.leverage.toFixed(1) + "×" : "—"}</b><small>value ÷ capital</small></div></div>`;
+    return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
+      <div class="what"><b>${up ? "Buy" : "Short-sell"} ${esc(nameOf(sym))}</b> · intraday, exit by 15:15</div>
+      <div class="levels"><div class="lv"><span>Entry</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss</span><b class="down">${fmt(s.stop_loss)}</b></div>
+        <div class="lv"><span>Target</span><b class="up">${fmt(s.target)}</b></div></div>${sz}
+      <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs). One trade a day. Not a validated edge — use your judgment.</div></div>`;
+  }
   const sizing = !riskLimit().max ? `<div class="small warn-c">Enter your capital and risk limit above to see how many lots.</div>`
     : z.lots < 1 ? `<div class="small warn-c">One lot risks about ${money(z.perLot)} — more than your limit of ${money(riskLimit().max)}. Skip this trade.</div>`
     : `<div class="levels"><div class="lv"><span>Lots</span><b>${z.lots}</b><small>${z.lots * leg.lot} units</small></div>
@@ -732,7 +772,7 @@ function callHtml(sym, p, ph) {
         <div class="lv"><span>Money needed</span><b>${z.cost != null ? money(z.cost) : "premium × lots"}</b><small>option premium paid</small></div>
         <div class="lv"><span>Leverage</span><b>${z.leverage != null ? z.leverage.toFixed(1) + "×" : "—"}</b><small>index exposure ÷ capital</small></div></div>`;
   return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
-    <div class="what"><b>Buy ${esc(NAMES[sym])} ${fmt0(leg.strike)} ${leg.kind}</b>${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}</div>
+    <div class="what"><b>Buy ${esc(NAMES[sym] || nameOf(sym))} ${fmt0(leg.strike)} ${leg.kind}</b>${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}</div>
     <div class="levels"><div class="lv"><span>Entry (index)</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss (index)</span><b class="down">${fmt(s.stop_loss)}</b></div>
       <div class="lv"><span>Target (index)</span><b class="up">${fmt(s.target)}</b></div>${leg.premium ? `<div class="lv"><span>Premium now</span><b>${rupee(leg.premium)}</b><small>stop ${rupee(leg.stop_loss)} · target ${rupee(leg.target)}</small></div>` : ""}</div>
     ${sizing}
@@ -742,7 +782,9 @@ function callHtml(sym, p, ph) {
 function plainPcr(x) { return x > 1.2 ? "many more puts than calls open (heavy hedging)" : x < 0.8 ? "more calls than puts open" : "calls and puts roughly balanced"; }
 function morningHtml(sym, e) {
   const c = e.context, ai = e.ai, em = c.expected_move, t = c.trend, g = c.regime;
-  const aiBlock = !ai ? `<p class="small muted">AI view not built yet (runs at 8:30 AM on trading days).</p>`
+  if (c.error) return `<div class="notice">Could not build the view for ${esc(nameOf(sym))}: ${esc(c.error)}</div>`;
+  const aiBlock = e.extra ? `<p class="small muted">The 8:30 AM AI view covers NIFTY 50 and NIFTY BANK. For ${esc(nameOf(sym))}, run it on the AI Analysis tab.</p>`
+    : !ai ? `<p class="small muted">AI view not built yet (runs at 8:30 AM on trading days).</p>`
     : ai.error ? `<div class="notice">AI view failed: ${esc(ai.error)}</div>`
     : `<div class="ai-line"><span class="badge ${/Buy|Overweight/.test(ai.rating) ? "up" : /Sell|Underweight/.test(ai.rating) ? "down" : "warn"}">${esc(ai.rating)}</span>
         <span class="small muted">AI agents' view from news, sentiment and the bull/bear debate (${ai.minutes} min)</span></div>
@@ -763,16 +805,74 @@ function morningHtml(sym, e) {
 function renderPlanCards() {
   const m = S.morning; if (!m) return;
   const ph = phase(m.session);
-  $("#planBody").innerHTML = Object.entries(m.indices).map(([sym, e]) => `<section class="card plan-card">
-      <div class="card-head"><h2>${esc(NAMES[sym] || sym)}</h2>${e.context.trend ? `<span class="badge ${e.context.trend.tone}">${esc(e.context.trend.label)}</span>` : ""}</div>
-      <div class="body"><h3 class="sub-h">Today's call</h3>${callHtml(sym, S.live[sym], ph)}
-        <h3 class="sub-h">Morning view</h3>${morningHtml(sym, e)}</div></section>`).join("");
+  const entries = planEntries();
+  if (!entries) { $("#planBody").dataset.key = ""; $("#planBody").innerHTML = `<div class="loading"><span class="spinner"></span>Building the plan for ${esc(nameOf(S.sym))}…</div>`; return; }
+  // The card is built once per plan and instrument (its chart lives in it); later updates only refill the slots.
+  const key = m.built_at + "|" + S.sym + "|" + (entries[0][1].extra ? "x" : "");
+  if ($("#planBody").dataset.key !== key) {
+    $("#planBody").dataset.key = key;
+    $("#planBody").innerHTML = entries.map(([sym, e]) => `<section class="card plan-card" data-sym="${esc(sym)}">
+      <div class="card-head"><h2>${esc(NAMES[sym] || nameOf(sym))}</h2>${e.context.trend ? `<span class="badge ${e.context.trend.tone}">${esc(e.context.trend.label)}</span>` : ""}</div>
+      <div class="body"><h3 class="sub-h">Today's call</h3><div class="call-slot"></div>
+        <h3 class="sub-h">Price chart <span class="small muted chart-note"></span></h3><div class="plan-chart"></div>
+        <div class="legend small"><span><i style="background:var(--ema9)"></i>Fast average (EMA 9)</span><span><i style="background:var(--ema21)"></i>Slow average (EMA 21)</span>
+          <span><i class="dash" style="border-color:var(--muted)"></i>Expected range today</span><span><i class="dash" style="border-color:var(--up)"></i>Target</span><span><i class="dash" style="border-color:var(--down)"></i>Stop loss</span></div>
+        <h3 class="sub-h">Morning view</h3><div class="morning-slot"></div></div></section>`).join("");
+    planCharts.clear();
+    loadPlanCharts();
+  }
+  for (const [sym, e] of entries) {
+    const card = $(`.plan-card[data-sym="${sym}"]`);
+    $(".call-slot", card).innerHTML = callHtml(sym, S.live[sym], ph);
+    $(".morning-slot", card).innerHTML = morningHtml(sym, e);
+    drawPlanChartLines(sym);
+  }
   const job = m.ai_job || {};
   $("#planStamp").innerHTML = `Plan built ${esc(m.built_at)}${job.running ? ` · AI view running since ${esc(job.started)}…` : ""}.
     <button class="btn small-btn" id="planRefresh">Refresh data</button>
     ${m.session.trading && !PREVIEW_AT ? `<button class="btn small-btn" id="planAi" ${job.running ? "disabled" : ""}>Run AI view now (~20 min)</button>` : ""}`;
   $("#planRefresh").onclick = async () => { $("#planRefresh").disabled = true; S.morning = await api("/api/morning/refresh", { method: "POST" }).catch(() => S.morning); renderPlan(); };
   if ($("#planAi")) $("#planAi").onclick = async () => { try { await api("/api/morning/ai", { method: "POST" }); } catch (e) { alert(e.message); } loadMorning(); };
+}
+
+// One small live chart per index in the Plan tab: 5-minute candles of the last sessions, EMA 9 / 21,
+// the expected range for today, and entry / stop / target when there is a trade.
+const planCharts = new Map();
+function planChart(sym) {
+  if (planCharts.has(sym)) return planCharts.get(sym);
+  const el = $(`.plan-card[data-sym="${sym}"] .plan-chart`); if (!el) return null;
+  const ch = LightweightCharts.createChart(el, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--muted"),
+      fontFamily: "Inter, system-ui, sans-serif" }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } },
+    rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false }, crosshair: { mode: 0 } });
+  const up = cssVar("--up"), down = cssVar("--down");
+  const c = { ch, candles: ch.addCandlestickSeries({ borderVisible: false, upColor: up, downColor: down, wickUpColor: up, wickDownColor: down }),
+    e9: ch.addLineSeries({ ...lineOpts, color: cssVar("--ema9") }), e21: ch.addLineSeries({ ...lineOpts, color: cssVar("--ema21") }), lines: [], fitted: false };
+  planCharts.set(sym, c);
+  return c;
+}
+async function loadPlanCharts() {
+  for (const [sym] of planEntries() || []) {
+    const c = planChart(sym); if (!c) continue;
+    try {
+      const r = await api(`/api/candles/${sym}?tf=5m&limit=300`);
+      const t = (b) => b.time + IST_OFFSET, closes = r.bars.map((b) => b.close), e9 = ema(closes, 9), e21 = ema(closes, 21);
+      c.candles.setData(r.bars.map((b) => ({ time: t(b), open: b.open, high: b.high, low: b.low, close: b.close })));
+      c.e9.setData(r.bars.map((b, i) => ({ time: t(b), value: e9[i] })));
+      c.e21.setData(r.bars.map((b, i) => ({ time: t(b), value: e21[i] })));
+      if (!c.fitted) { const n = r.bars.length; c.ch.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 3 }); c.fitted = true; }
+      const note = $(`.plan-card[data-sym="${sym}"] .chart-note`); if (note) note.textContent = `5-minute candles · ${r.source === "dhan" ? "Dhan live" : "Yahoo (can be delayed)"}`;
+      drawPlanChartLines(sym);
+    } catch (e) { console.warn(e); }
+  }
+}
+function drawPlanChartLines(sym) {
+  const c = planCharts.get(sym); if (!c) return;
+  c.lines.forEach((l) => c.candles.removePriceLine(l)); c.lines = [];
+  const mk = (price, color, title, style = 2) => price && c.lines.push(c.candles.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
+  const em = (S.morning?.indices?.[sym] || S.extraCtx[sym])?.context?.expected_move;
+  if (em && S.morning.session.trading) { mk(em.day_high, cssVar("--muted"), "Expected high", 3); mk(em.day_low, cssVar("--muted"), "Expected low", 3); }
+  const p = S.live[sym];
+  if (p?.verdict?.safe && p.signal?.side !== "WAIT") { mk(p.signal.entry, cssVar("--text"), "Entry"); mk(p.signal.stop_loss, cssVar("--down"), "Stop loss"); mk(p.signal.target, cssVar("--up"), "Target"); }
 }
 
 function renderPlan() { renderSession(); renderRisk(); renderPlanCards(); }
@@ -782,9 +882,10 @@ async function loadMorning() {
   renderPlan(); loadLive();
 }
 async function loadLive() {
+  if (S.morning && phase(S.morning.session).key !== "stale") loadPlanCharts();
   if (!S.morning || !["wait", "live"].includes(phase(S.morning.session).key)) return;
-  for (const sym of Object.keys(S.morning.indices)) {
-    try { S.live[sym] = await api("/api/plan/" + sym); } catch { /* keep the last one */ }
+  for (const [sym] of planEntries() || []) {
+    try { S.live[sym] = await api("/api/plan/" + encodeURIComponent(sym)); } catch { /* keep the last one */ }
   }
   renderPlanCards();
 }
