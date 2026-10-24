@@ -131,7 +131,9 @@ table.t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-
 .t th:first-child, .t td:first-child { text-align: left; }
 .t tr.pick td { background: var(--up-soft); font-weight: 600; }
 .t tr:last-child td { border-bottom: 0; }
-.trades { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 10px; }
+.trades { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.trades .trade { display: grid; justify-items: center; gap: 2px; }
+.trades small { font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .trades span { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
 .trades .w { background: var(--up); } .trades .l { background: var(--down); }
 .note { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
@@ -230,7 +232,8 @@ table.oc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .t td.left, .t th.left { text-align: left; }
 .t.research td { vertical-align: top; }
 /* keep wide tables inside their card on small screens */
-.page, .tab, .tab > *, .card { min-width: 0; max-width: 100%; }
+.page { min-width: 0; }
+.tab, .tab > *, .card { min-width: 0; max-width: 100%; }
 .card .body { overflow-x: auto; }
 @media (max-width: 720px) { .page { padding: 14px 12px 32px; } .page-inner { padding: 12px 12px 0; } .big { font-size: 22px; } }
 .t td.num { white-space: nowrap; }

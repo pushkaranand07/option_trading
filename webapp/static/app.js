@@ -241,12 +241,20 @@ function renderRecord(p) {
     <td>${t}× risk${+t === r.chosen ? " ✓" : ""}</td><td>${x.trades}</td><td>${x.win_rate ?? "—"}${x.win_rate != null ? "%" : ""}</td>
     <td class="${cls(x.avg_r)}">${x.avg_r != null ? sign(x.avg_r) + x.avg_r : "—"}</td></tr>`).join("");
   const side = (k, label) => { const x = r.by_side[k]; return x.trades ? `${label}: <b>${x.win_rate}%</b> of ${x.trades}` : `${label}: none`; };
-  const chips = r.last.slice().reverse().map((t) => `<span class="${t.r > 0 ? "w" : "l"}" title="${esc(t.time.slice(0, 16))} ${t.side} → ${sign(t.r)}${t.r}× risk">${t.r > 0 ? "W" : "L"}</span>`).join("");
+  const recent = r.last.slice().reverse();                                    // oldest first
+  const won = recent.filter((t) => t.r > 0).length;
+  const chips = recent.map((t) => `<div class="trade" title="${esc(t.time.slice(0, 10))} · ${t.side === "BUY" ? "buy" : "sell"} setup · ${sign(t.r)}${t.r}× risk after costs">
+      <span class="${t.r > 0 ? "w" : "l"}">${t.r > 0 ? "W" : "L"}</span><small class="${cls(t.r)}">${sign(t.r)}${t.r}</small></div>`).join("");
+  const target = r.by_target[String(r.chosen)] || {};
   $("#record").innerHTML = `<div class="card-head"><h2>Track record of this setup</h2></div>
     <div class="body"><p class="small muted" style="margin-top:0">We replayed this exact rule over the last ${r.days} trading days: one trade a day, entry after 9:45 AM, exit by 3:15 PM, ${r.cost_pct}% costs included.</p>
       <table class="t"><thead><tr><th>Profit target</th><th>Trades</th><th>Win rate</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="small" style="margin:10px 0 0">${side("BUY", "Buy setups")} · ${side("SELL", "Sell setups")}</p>
-      ${chips ? `<div class="small muted" style="margin-top:10px">Latest trades (oldest → newest)</div><div class="trades">${chips}</div>` : ""}
+      ${chips ? `<div class="small" style="margin-top:12px"><b>The last ${recent.length} of these ${target.trades ?? recent.length} trades</b> (${r.chosen}× risk target), oldest → newest:
+        ${won} won, ${recent.length - won} lost</div>
+        <div class="trades">${chips}</div>
+        <div class="small muted"><b class="up">W</b> = the trade made money after costs · <b class="down">L</b> = it lost money.
+        The number under each box is the result in units of risk: +1.5 = gained 1.5× what was risked, −1.0 = lost the full risk. Hover a box for its date.</div>` : ""}
       <p class="note">"Avg result" is the average gain per trade as a share of what you risked: +0.10 means you made 10% of your risk per trade on average. A big win rate with a negative average still loses money.</p></div>`;
 }
 
