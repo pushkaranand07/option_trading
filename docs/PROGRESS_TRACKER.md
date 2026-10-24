@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `█████████████████████░░░░` 85% (89/105 tasks)
+**Overall:** `█████████████████████░░░░` 85% (90/106 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 11:41_
+_Last updated: 2026-10-24 12:02_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -34,8 +34,9 @@ _Last updated: 2026-10-24 11:41_
 | `quant/weekend-sessions` | Bug fix: weekend NSE sessions never downloaded | 11 sessions recovered, store + IV + GARCH + regime rebuilt | merged (PR #20) |
 | `quant/phase-7-chronos` | 7 Pretrained time-series model | Chronos-Bolt **not kept** (GARCH better) | merged (PR #22) |
 | `quant/results-iron-fly` | Event window: results-day IV crush | spec frozen first; **rejected** (costs > edge) | merged (PR #23) |
-| `quant/results-fly-overpriced` | Re-test: only overpriced events | spec frozen first; **rejected** (−4.7%/trade) | **open PR** |
-| `quant/option-quotes` | Measured option spreads, captured nightly | first snapshot: real ≈ 0.85× model on fly legs | **open PR** (includes the one above) |
+| `quant/results-fly-overpriced` | Re-test: only overpriced events | spec frozen first; **rejected** (−4.7%/trade) | merged (PR #24) |
+| `quant/option-quotes` | Measured option spreads, captured nightly | first snapshot: real ≈ 0.85× model on fly legs | merged (PR #25) |
+| `quant/trade-journal` | Phase 5: analyse your own Dhan trades | built and tested; needs your tradebook export | **open PR** |
 
 ---
 
@@ -107,8 +108,12 @@ _Last updated: 2026-10-24 11:41_
 
 ## Phase 5 — Your own idea as exact rules
 <!-- progress:phase -->
-`░░░░░░░░░░░░░░░░░░░░░░░░░` 0% (0/4)
+`█████░░░░░░░░░░░░░░░░░░░░` 20% (1/5)
 <!-- /progress:phase -->
+- [x] **Trade-journal analyser** for your own Dhan tradebook (`python scripts/trade_journal.py <file>`,
+  `--horizon intraday|week|month|long|all`): FIFO round trips; results by holding period, buying vs selling,
+  instrument, underlying, entry hour, weekday and your own reason/tag column; charges from the file or estimated.
+  Keep the file in `reports/journal/` (gitignored) — waiting for your export
 - [ ] Idea written in the specification template
 - [ ] Coded as a causal signal, leak check passes
 - [ ] Walk-forward vs baselines, ≤ 30 combinations
@@ -289,7 +294,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 
 ## Start here tomorrow
 ### State
-- **Git:** PRs #1–#23 merged. Open: `quant/results-fly-overpriced`, then `quant/option-quotes` (built on it) — merge both, then `git checkout main` and `git pull`
+- **Git:** PRs #1–#25 merged. Open: `quant/trade-journal` — merge it, then `git checkout main` and `git pull`
   (the 19:30 job runs whatever is checked out). Start new work on a new branch from `main`:
   `git checkout main`, `git pull`, `git checkout -b quant/<next-thing>`.
 - **Data:** NSE store complete 2018-01-01 to 2026-10-22 (F&O, option chain, participant OI, delivery, index closes,
@@ -325,6 +330,7 @@ every 10 sessions pays ~16% a year before it earns anything.
 - The "something else" bug description
 
 ## Log
+- 2026-10-24 — Phase 5 started from your side: trade-journal analyser for your Dhan tradebook (by holding period: intraday / week / month / longer).
 - 2026-10-24 — Real option spreads measured from NSE's closing bid/ask (0.85× the slippage model on fly legs); captured nightly from now on.
 - 2026-10-24 — Results fly cost diagnosis (break-even at ½ the assumed slippage) and overpriced-only re-test: rejected (−4.7%/trade).
 - 2026-10-24 — Event-window test: results-day iron butterfly rejected (984 trades, −6.5%/trade); IV crush real but smaller than trading friction.
