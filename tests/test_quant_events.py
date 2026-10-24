@@ -87,3 +87,26 @@ def test_quiet_entries_skip_sessions_near_results():
     q = ev.quiet_entries(DAYS, [date(2026, 3, 5)], buffer=1)
     assert q == [0, 1, 5, 6, 7]                       # 4-, 5-, 6-Mar are within one session of 5-Mar
     assert np.all(np.diff(q) > 0)
+
+
+@pytest.mark.unit
+def test_overpriced_filter_uses_only_earlier_results_windows():
+    days = pd.bdate_range("2024-01-01", periods=120).date
+    closes = pd.Series(100.0, index=days)
+    windows = []
+    for k in range(6):                                    # six past windows, each a 4% move
+        entry, exit_ = days[10 * k], days[10 * k + 2]
+        closes[exit_:] *= 1.04
+        windows.append((days[10 * k + 1], entry, exit_))
+    future = (days[101], days[100], days[102])
+    closes[days[102]:] *= 1.50                            # a huge move AFTER the trade's entry
+    windows.append(future)
+
+    def trade(implied):
+        return ev.FlyTrade("X", future[0], future[1], future[2], days[110], {}, 1, 1.0, 1.0, implied_move=implied)
+
+    kept = ev.overpriced([trade(0.049), trade(0.051)], windows, closes)
+    # Median past move 4% -> threshold 5%: only the 5.1% trade is kept; the later 50% move is never seen.
+    assert [t.implied_move for t in kept] == [0.051]
+    assert kept[0].hist_move == pytest.approx(0.04)
+    assert ev.overpriced([trade(0.10)], windows[:3] + [future], closes) == []   # < 4 earlier windows

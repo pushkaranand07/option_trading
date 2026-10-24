@@ -110,6 +110,8 @@ class FlyTrade:
     charges: float = 0.0
     pnl: float = 0.0
     flags: list[str] = field(default_factory=list)
+    implied_move: float = float("nan")      # ATM straddle (entry closes) / parity forward
+    hist_move: float = float("nan")         # set by ``overpriced``
 
     @property
     def return_on_risk(self) -> float:
@@ -117,7 +119,7 @@ class FlyTrade:
 
 
 def build_fly(day_chain: pd.DataFrame, params: FlyParams = DEFAULT_FLY):
-    """Strikes and entry marks for one (day, expiry); None if it can't be built."""
+    """Strikes, entry marks, flags and the parity forward for one (day, expiry); None if it can't be built."""
     atm = expiry_atm(day_chain, params.risk_free, min_contracts=1)
     if atm is None:
         return None
@@ -148,7 +150,7 @@ def build_fly(day_chain: pd.DataFrame, params: FlyParams = DEFAULT_FLY):
             flags.append(f"{leg} untraded at entry, settlement price used")
     if any(not np.isfinite(p) for p in prices.values()):
         return None
-    return strikes, prices, flags
+    return strikes, prices, flags, atm["forward"]
 
 
 def window_trade(prep: dict, symbol: str, lot: float, entry: date, exit_: date, event_date: date | None = None,
@@ -166,7 +168,7 @@ def window_trade(prep: dict, symbol: str, lot: float, entry: date, exit_: date, 
     built = build_fly(g[g["expiry"] == expiry], params)
     if built is None:
         return None
-    strikes, prices, flags = built
+    strikes, prices, flags, forward = built
     fills = {leg: _fill(p, buying=SIGN[leg] > 0, slip=slippage) for leg, p in prices.items()}
     credit = sum(-SIGN[leg] * fills[leg] for leg in LEGS)
     width = max(strikes["short_put"] - strikes["long_put"], strikes["long_call"] - strikes["short_call"])
@@ -181,7 +183,8 @@ def window_trade(prep: dict, symbol: str, lot: float, entry: date, exit_: date, 
             return None                      # can't be priced on the exit day: no trade recorded
         marks[leg] = v
     trade = FlyTrade(symbol, event_date, entry, exit_, expiry, strikes, lot, credit, width - credit,
-                     entry_prices=fills, flags=list(flags))
+                     entry_prices=fills, flags=list(flags),
+                     implied_move=(prices["short_put"] + prices["short_call"]) / forward)
     for leg in LEGS:
         fill = _fill(marks[leg], buying=SIGN[leg] < 0, slip=slippage)
         charges += fill_charges(OPTIONS, lot, fill, "buy" if SIGN[leg] < 0 else "sell", rates)
@@ -234,3 +237,26 @@ def quiet_entries(days: list[date], event_dates: list[date], buffer: int = 5) ->
         i = idx.searchsorted(d)
         blocked.update(range(i - buffer, i + buffer + 1))
     return [i for i in range(len(days)) if i not in blocked]
+
+
+def overpriced(trades: list[FlyTrade], windows: list[tuple[date, date, date]], closes: pd.Series,
+               ratio: float = 1.25, lookback: int = 8, min_history: int = 4) -> list[FlyTrade]:
+    """Trades whose implied move is at least ``ratio`` x the median absolute move of the
+    stock's previous results windows (entry close -> exit close) that ended before the
+    trade's entry: the last ``lookback``, at least ``min_history``. Sets ``hist_move``."""
+    closes = closes.copy()
+    closes.index = pd.to_datetime(closes.index).date
+    past = []                                         # (exit, |move|) per window, in time order
+    for _, entry, exit_ in sorted(windows, key=lambda w: w[1]):
+        a, b = closes.get(entry), closes.get(exit_)
+        if a is not None and b is not None and np.isfinite(a) and np.isfinite(b) and a > 0:
+            past.append((exit_, abs(b / a - 1)))
+    kept = []
+    for t in trades:
+        moves = [m for x, m in past if x < t.entry_date][-lookback:]
+        if len(moves) < min_history:
+            continue
+        t.hist_move = float(np.median(moves))
+        if t.implied_move >= ratio * t.hist_move:
+            kept.append(t)
+    return kept
