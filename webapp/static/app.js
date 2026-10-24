@@ -76,7 +76,11 @@ function renderChips() {
       <span class="num">${q ? fmt(q.ltp) : "—"}</span> ${q ? `<span class="${cls(q.change)} small">${pct(q.change_pct)}</span>` : ""}</button>`;
   }).join("");
 }
-$("#chips").onclick = (e) => { const b = e.target.closest(".chip"); if (b) selectSymbol(b.dataset.sym); };
+$("#chips").onclick = (e) => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  selectSymbol(b.dataset.sym);
+  if (!INSTRUMENT_TABS.includes(S.tab)) showTab("today");     // from Plan, Map, Research or My Trades: open its page
+};
 
 function renderInst() {
   const q = S.quotes[S.sym];
