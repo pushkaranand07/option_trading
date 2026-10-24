@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `████████████████████░░░░░` 81% (75/93 tasks)
+**Overall:** `████████████████████░░░░░` 80% (81/101 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `█████████████████████████` 100% (9,196/9,196 files)
+**NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-23 22:30_
+_Last updated: 2026-10-24 10:08_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -29,6 +29,9 @@ _Last updated: 2026-10-23 22:30_
 | `quant/phase-10-ship` | Ship what's validated | expected move in the report, daily refresh scheduled | merged (PR #10) |
 | `fix/windows-test-portability` | Bug fix | done | merged (PR #5) |
 | `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
+| `quant/holdout-2015` (+ stress, paper) | Proof plan Stages 0–2, backward holdout | VRP condor **rejected** by holdout; paper = observation | merged (PRs #11–#16) |
+| `quant/market-map` | Market Map 2021–26 (timeline, impact map, network) | built; page under `reports/market_map/` | **open PR** |
+| `quant/weekend-sessions` | Bug fix: weekend NSE sessions never downloaded | 11 sessions recovered, store rebuilt | **open PR** |
 
 ---
 
@@ -51,7 +54,7 @@ _Last updated: 2026-10-23 22:30_
 - [x] Yahoo prices through the data layer, stopping at yesterday
 - [x] Cost model at 2026 rates with sources (Dhan + statutory)
 - [x] Parser fixes: untitled / full-month participant files, lot sizes per day
-- [x] Full 2018–2026 download finished (6,503 files; the 379 "missing" are market holidays — confirmed: 0 missing sessions)
+- [x] Full 2018–2026 download finished (6,503 files; the 379 "missing" are market holidays — confirmed: 0 missing weekday sessions; the weekend special sessions were missed until 2026-10-24, see Bug fixes)
 - [x] Store built for every year: participant and delivery on all 2,172 F&O days, 31/31 symbols ≥98%, IV on 65,984 symbol-days; lot sizes exact
 - [x] Data-quality report: 0 missing sessions in any dataset; 6,516 index bars from NSE, 58 stock gaps filled from NSE; all 14 stock jumps >20% verified as real events (COVID 23-Mar-2020, Adani, BHEL — checked against NSE prices)
 - [ ] Cost model matched to a real Dhan contract note within ₹1 (needs your numbers)
@@ -180,7 +183,7 @@ _Last updated: 2026-10-23 22:30_
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`████████████████████████░` 95% (18/19)
+`████████████████████████░` 95% (19/20)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -201,7 +204,30 @@ _Last updated: 2026-10-23 22:30_
 - [x] Scheduled refresh never ran: path with spaces (0x80070002), skipped on battery / no catch-up, closable console window (0xC000013A) → windowless `pythonw` + `--log`; verified by a real scheduled run (PR #12)
 - [x] Prices stopped at yesterday even after the close → today's bar included from 16:00 (regime was a day behind)
 - [x] Condor simulator 100× faster on repeated runs (chain prepared once, strikes memoised), identical results
+- [x] **Weekend NSE sessions were never downloaded** (the backfill walked Mon–Fri only). Every weekend since 2015 probed
+  (1,232); **11 real sessions recovered**: Budget days 28-Feb-2015, 1-Feb-2020, 1-Feb-2025, **Sun 1-Feb-2026**;
+  Muhurat 30-Oct-2016, 27-Oct-2019, 14-Nov-2020, 12-Nov-2023; special live sessions 20-Jan, 2-Mar, 18-May-2024.
+  Weekends now cost one request each in the nightly job (found by the Market Map's news cross-check)
 - [ ] "Something else" bug you mentioned (waiting for your description)
+
+## Market Map 2021–26 (requested 2026-10-24)
+<!-- progress:phase -->
+`██████████████████░░░░░░░` 71% (5/7)
+<!-- /progress:phase -->
+- [x] Page in the project: `python scripts/market_map.py` → `reports/market_map/india-market-map.html` (open in a
+  browser; gitignored because it embeds NSE data). Timeline (NIFTY, India VIX, options traded; regime shading),
+  impact map, event → impact ledger, market network by period
+- [x] Researched events with sources in `docs/market_events_2021_2026.json`: 54 regulatory (SEBI, NSE, RBI, Budget /
+  Finance Acts) + 53 market events (elections, wars, tariffs, Adani, Fed); plus data-detected big days and lot changes
+- [x] Every impact measured from NSE files (day / 20-day NIFTY move, VIX, realised vol, options value traded,
+  FII long share). News figures cross-checked against NSE closes: 19/22 exact; 1 date fixed, 1 intraday figure removed
+- [x] Options activity measured by **value traded**, not contract count (lot-size changes distort counts: NIFTY 50→25
+  in Apr-2024 doubled contracts for the same trading)
+- [x] Findings: elections move NIFTY most (median 2.7% on the day, VIX then falls), geopolitics 2.1% (VIX +2 pts);
+  tax and margin rules ~0.2% (typical day 0.5%). F&O rules move *where* options trade: when BANKNIFTY weeklies ended
+  (Nov-2024) NIFTY options value +33–43%, BANKNIFTY −52–70%
+- [ ] Rebuilt with the recovered weekend sessions (Budget days measured on their own session)
+- [ ] Page refreshed by the 19:30 daily job
 
 ---
 
@@ -240,7 +266,8 @@ every 10 sessions pays ~16% a year before it earns anything.
 
 ## Start here tomorrow
 ### State
-- **Git:** everything is merged into GitHub `main` (PRs #1–#10). Start new work on a new branch from `main`:
+- **Git:** PRs #1–#16 merged. Open: `quant/market-map`, `quant/weekend-sessions` — merge both, then
+  `git checkout main` and `git pull` (the 19:30 job runs whatever is checked out). Start new work on a new branch from `main`:
   `git checkout main`, `git pull`, `git checkout -b quant/<next-thing>`.
 - **Data:** NSE store complete 2018-01-01 to 2026-10-22 (F&O, option chain, participant OI, delivery, index closes,
   prices, IV, exact lot sizes) in `~/.tradingagents/cache/quant/store/`. Tonight's 19:30 refresh adds 23-Oct.
@@ -275,6 +302,9 @@ every 10 sessions pays ~16% a year before it earns anything.
 - The "something else" bug description
 
 ## Log
+- 2026-10-24 — Market Map 2021–26 built in the project (107 researched events + data-detected ones, impact measured
+  from NSE). Its news cross-check exposed a data bug: weekend NSE sessions were never downloaded → fixed, 11 sessions
+  recovered (incl. Sunday 1-Feb-2026 Budget), store rebuilt.
 - 2026-10-23 — Plan written; Phase 0 gates and trial log; NSE downloader started; Phase 1 code done.
 - 2026-10-23 — Phase 2 harness: random signal rejected, planted edge found; MA trend rejected.
 - 2026-10-23 — Phase 3 part 1: GARCH beats historical vol on 31/31 symbols; ATM IV tracks India VIX.
