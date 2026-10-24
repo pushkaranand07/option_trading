@@ -8,14 +8,14 @@
 > **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 
 <!-- progress:overall -->
-**Overall:** `████████████████████░░░░░` 80% (81/101 tasks)
+**Overall:** `█████████████████████░░░░` 82% (83/101 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 10:08_
+_Last updated: 2026-10-24 10:34_
 
 | Branch | Phase | Status | In GitHub `main`? |
 |---|---|---|---|
@@ -31,7 +31,7 @@ _Last updated: 2026-10-24 10:08_
 | `fix/option-backtester-exits` | Bug fix | done | merged (PR #6) |
 | `quant/holdout-2015` (+ stress, paper) | Proof plan Stages 0–2, backward holdout | VRP condor **rejected** by holdout; paper = observation | merged (PRs #11–#16) |
 | `quant/market-map` | Market Map 2021–26 (timeline, impact map, network) | built; page under `reports/market_map/` | **open PR** |
-| `quant/weekend-sessions` | Bug fix: weekend NSE sessions never downloaded | 11 sessions recovered, store rebuilt | **open PR** |
+| `quant/weekend-sessions` | Bug fix: weekend NSE sessions never downloaded | 11 sessions recovered, store + IV + GARCH + regime rebuilt | **open PR** |
 
 ---
 
@@ -212,7 +212,7 @@ _Last updated: 2026-10-24 10:08_
 
 ## Market Map 2021–26 (requested 2026-10-24)
 <!-- progress:phase -->
-`██████████████████░░░░░░░` 71% (5/7)
+`█████████████████████████` 100% (7/7)
 <!-- /progress:phase -->
 - [x] Page in the project: `python scripts/market_map.py` → `reports/market_map/india-market-map.html` (open in a
   browser; gitignored because it embeds NSE data). Timeline (NIFTY, India VIX, options traded; regime shading),
@@ -226,8 +226,9 @@ _Last updated: 2026-10-24 10:08_
 - [x] Findings: elections move NIFTY most (median 2.7% on the day, VIX then falls), geopolitics 2.1% (VIX +2 pts);
   tax and margin rules ~0.2% (typical day 0.5%). F&O rules move *where* options trade: when BANKNIFTY weeklies ended
   (Nov-2024) NIFTY options value +33–43%, BANKNIFTY −52–70%
-- [ ] Rebuilt with the recovered weekend sessions (Budget days measured on their own session)
-- [ ] Page refreshed by the 19:30 daily job
+- [x] Rebuilt with the recovered weekend sessions: store years 2019/2020/2023–2026, IV, GARCH and regime re-run;
+  Sunday 1-Feb-2026 Budget now measured on its own session (NIFTY −1.96%, close 24,825.45 = the reported close)
+- [x] Page refreshed by the 19:30 daily job (step `market_map`, after the tracker; in PR `quant/market-map`)
 
 ---
 
