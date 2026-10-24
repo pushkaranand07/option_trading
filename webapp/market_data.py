@@ -25,11 +25,13 @@ SCRIP_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master.csv"
 CACHE_DIR = Path(os.getenv("TRADINGAGENTS_CACHE_DIR") or Path.home() / ".tradingagents" / "cache")
 
 # symbol: (display name, Dhan security id, Dhan segment, Yahoo symbol, option lot size, strike step)
+# The lot sizes here are only a fallback: exchanges revise them (NIFTY 75 -> 65 in Jan-2026), so the live lot
+# comes from Dhan's scrip master (``index_lots``). Fallback values as listed there on 2026-10-24.
 INDICES = {
-    "NIFTY": ("NIFTY 50", 13, "IDX_I", "^NSEI", 75, 50),
-    "BANKNIFTY": ("NIFTY BANK", 25, "IDX_I", "^NSEBANK", 35, 100),
-    "FINNIFTY": ("FIN NIFTY", 27, "IDX_I", "NIFTY_FIN_SERVICE.NS", 65, 50),
-    "MIDCPNIFTY": ("MIDCAP SELECT", 442, "IDX_I", "NIFTY_MID_SELECT.NS", 140, 25),
+    "NIFTY": ("NIFTY 50", 13, "IDX_I", "^NSEI", 65, 50),
+    "BANKNIFTY": ("NIFTY BANK", 25, "IDX_I", "^NSEBANK", 30, 100),
+    "FINNIFTY": ("FIN NIFTY", 27, "IDX_I", "NIFTY_FIN_SERVICE.NS", 60, 50),
+    "MIDCPNIFTY": ("MIDCAP SELECT", 442, "IDX_I", "NIFTY_MID_SELECT.NS", 120, 25),
     "SENSEX": ("SENSEX", 51, "IDX_I", "^BSESN", 20, 100),
 }
 
@@ -108,14 +110,47 @@ class Dhan:
 dhan = Dhan()
 
 
-def _load_scrip_master() -> dict[str, tuple[int, str]]:
-    """NSE cash-market equities: trading symbol -> (security id, company name). Refreshed daily."""
+def _scrip_master_path() -> Path:
+    """Dhan's public instrument list (no login needed), downloaded at most once a day."""
     path = CACHE_DIR / "dhan-scrip-master.csv"
     if not path.exists() or datetime.fromtimestamp(path.stat().st_mtime).date() != datetime.now().date():
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         r = requests.get(SCRIP_MASTER_URL, timeout=60)
         r.raise_for_status()
         path.write_bytes(r.content)
+    return path
+
+
+def load_index_lots(path: Path) -> dict[str, int]:
+    """Current option lot size per index (NSE and BSE index options) from a scrip-master file."""
+    lots: dict[str, dict[int, int]] = {}
+    with path.open(newline="", encoding="utf-8", errors="replace") as f:
+        for row in csv.DictReader(f):
+            if row.get("SEM_INSTRUMENT_NAME") != "OPTIDX":
+                continue
+            under = (row.get("SEM_TRADING_SYMBOL") or "").split("-")[0].strip().upper()
+            try:
+                lot = int(float(row.get("SEM_LOT_UNITS") or 0))
+            except ValueError:
+                continue
+            if under and lot > 0:
+                counts = lots.setdefault(under, {})
+                counts[lot] = counts.get(lot, 0) + 1
+    # During a lot revision old and new contracts coexist; the most common lot is the current one.
+    return {u: max(c, key=c.get) for u, c in lots.items()}
+
+
+def index_lots() -> dict[str, int]:
+    """Live index lot sizes, refreshed daily; {} when the scrip master cannot be fetched (then INDICES applies)."""
+    try:
+        return _cache.get("index_lots", 3600, lambda: load_index_lots(_scrip_master_path()))
+    except Exception:
+        return {}
+
+
+def _load_scrip_master() -> dict[str, tuple[int, str]]:
+    """NSE cash-market equities: trading symbol -> (security id, company name). Refreshed daily."""
+    path = _scrip_master_path()
     out = {}
     with path.open(newline="", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
@@ -149,7 +184,7 @@ def instrument(symbol: str) -> dict:
     if s in INDICES:
         name, sid, seg, yahoo, lot, step = INDICES[s]
         return {"symbol": s, "name": name, "kind": "INDEX", "id": sid, "segment": seg, "yahoo": yahoo,
-                "lot": lot, "step": step, "has_options": True}
+                "lot": index_lots().get(s, lot), "step": step, "has_options": True}
     eq = equities().get(s)
     return {"symbol": s, "name": eq[1] if eq else s, "kind": "EQUITY", "id": eq[0] if eq else None,
             "segment": "NSE_EQ", "yahoo": f"{s}.NS", "lot": None, "step": None, "has_options": False}
