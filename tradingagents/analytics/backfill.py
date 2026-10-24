@@ -67,6 +67,19 @@ def weekdays(start: date, end: date) -> Iterable[date]:
         day += timedelta(days=1)
 
 
+def calendar_days(start: date, end: date) -> Iterable[date]:
+    day = start
+    while day <= end:
+        yield day
+        day += timedelta(days=1)
+
+
+# NSE sometimes trades on a weekend (Budget days 2025-02-01 and 2026-02-01, Diwali Muhurat
+# sessions, disaster-recovery drills). A weekend is probed with this one file; the other
+# kinds are fetched only if it was published, so a normal weekend costs a single request.
+WEEKEND_PROBE = "indices"
+
+
 def raw_root() -> Path:
     return Path(get_config()["data_cache_dir"]) / "quant" / "raw"
 
@@ -126,7 +139,8 @@ def backfill(
     retry_missing: bool = False,
     progress: Callable[[date, BackfillStats], None] | None = None,
 ) -> BackfillStats:
-    """Fetch every (weekday, kind) not yet in the manifest, oldest first.
+    """Fetch every (day, kind) not yet in the manifest, oldest first. Weekdays get every
+    kind; weekends only the ``WEEKEND_PROBE`` file, plus the rest if NSE traded that day.
 
     Stops cleanly (``stopped_early`` set) if NSE becomes unreachable, so a
     later run resumes where this one stopped rather than marking days missing.
@@ -136,8 +150,15 @@ def backfill(
     manifest = load_manifest(root)
     stats = BackfillStats()
     kinds = tuple(kinds)
-    for day in weekdays(start, end):
-        for kind in kinds:
+    for day in calendar_days(start, end):
+        day_kinds = kinds
+        if day.weekday() >= 5:
+            day_kinds = (WEEKEND_PROBE,) + tuple(k for k in kinds if k != WEEKEND_PROBE)
+        for kind in day_kinds:
+            if day.weekday() >= 5 and kind != WEEKEND_PROBE:
+                probe = manifest.get((day, WEEKEND_PROBE))
+                if not probe or probe.status != "ok":
+                    break                                # no weekend session
             done = manifest.get((day, kind))
             if done and (done.status == "ok" or not retry_missing):
                 stats.skipped += 1
