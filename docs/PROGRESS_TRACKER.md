@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `███████████████████████░░` 91% (91/100 tasks)
+**Overall:** `███████████████████████░░` 92% (92/100 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 14:11_
+_Last updated: 2026-10-24 14:16_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -185,7 +185,7 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`█████████████████████░░░░` 84% (21/25)
+`██████████████████████░░░` 88% (22/25)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -215,7 +215,8 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 - [ ] Web app hard-codes lot sizes (NIFTY 75, BANKNIFTY 35; current 65 / 30) and shows the market open on holidays
 - [x] Option backtester's NSE adapter set bid = ask = close, so slippage did nothing → modelled bid/ask from the
   cost model ([PA-28](PA_28-backtester-modelled-bid-ask.md))
-- [ ] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` is not applied (forwarded only for `openai` / `chatgpt`)
+- [x] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` was ignored → now forwarded (dropped for non-reasoning
+  deployments) ([PA-29](PA_29-azure-reasoning-effort.md)). **Your `.env` says `low`: it now takes effect**
 - [ ] News Analyst prompt does not mention `get_india_fii_dii_flows` although the tool is offered;
   `ALPHA_VANTAGE_API_KEY` missing from `.env.example`; 8 test files lack the `unit` marker
 

@@ -87,8 +87,8 @@ def _coerce_max_tokens(value):
     return n
 
 
-# Providers that take OpenAI's ``openai_reasoning_effort``.
-REASONING_EFFORT_PROVIDERS = ("openai", "chatgpt")
+# Providers that take OpenAI's ``openai_reasoning_effort`` (Azure: verified on a GPT-5 deployment, 2026-10-24).
+REASONING_EFFORT_PROVIDERS = ("openai", "chatgpt", "azure")    # Azure OpenAI deployments of reasoning models (e.g. GPT-5)
 
 
 def build_llm_kwargs(config: dict) -> dict[str, Any]:
