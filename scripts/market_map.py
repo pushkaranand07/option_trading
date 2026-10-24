@@ -1,11 +1,13 @@
-"""Data for the Market Map page: 2021-2026 timeline, event impacts, market network.
+"""Market Map page: 2021-2026 timeline, event impacts, market network.
 
-    python scripts/market_map.py --out <dir>  [--events events.json]
+    python scripts/market_map.py                 # -> reports/market_map/india-market-map.html
+    python scripts/market_map.py --note "added X"   # also logs what changed on the page
 
-Everything is measured from the verified NSE store; events come from a JSON list
-(date, title, category, kind, source) researched from official sources and news,
-plus events detected in the data itself (largest NIFTY days, VIX spikes, lot-size
-changes). Writes <out>/market_map.json.
+Everything is measured from the verified NSE store. Events come from
+docs/market_events_2021_2026.json (regulatory changes and market events, each with
+its official or news source) plus events detected in the data itself (largest NIFTY
+days, lot-size changes). The page is a single HTML file under reports/ (gitignored:
+it embeds NSE data); open it in a browser.
 """
 
 from __future__ import annotations
@@ -23,6 +25,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tradingagents.analytics import datastore as ds  # noqa: E402
 from tradingagents.analytics.prices import load_prices  # noqa: E402
 from tradingagents.analytics.universe import SECTOR_OF, STOCKS  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+TEMPLATE = Path(__file__).with_name("market_map_template.html")
+EVENTS = ROOT / "docs" / "market_events_2021_2026.json"
+OUT = ROOT / "reports" / "market_map"
 
 START = pd.Timestamp("2021-01-01")
 WARMUP = pd.Timestamp("2020-09-01")    # measurement windows before the first 2021 events
@@ -152,8 +159,9 @@ def network(close: pd.DataFrame, df: pd.DataFrame) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--events", type=Path, help="researched events JSON (list of objects)")
+    parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--events", type=Path, default=EVENTS, help="researched events JSON (list of objects)")
+    parser.add_argument("--note", help="one line for the page's update log")
     args = parser.parse_args()
     df, close = build_series()
     events = detected_events(df)
@@ -177,11 +185,23 @@ def main() -> int:
         "network": network(close, df),
     }
     args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / "market_map.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    log_file = args.out / "log.json"
+    log = json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []
+    if args.note:
+        log.insert(0, f"{payload['updated']} — {args.note}")
+        log_file.write_text(json.dumps(log, ensure_ascii=False), encoding="utf-8")
+    payload["log"] = log
+    page = args.out / "india-market-map.html"
+    page.write_text(render(payload), encoding="utf-8")
     print(f"{len(series)} sessions, {len(events)} events, "
-          f"{sum(len(p['links']) for p in payload['network']['periods'].values())} network links -> "
-          f"{args.out / 'market_map.json'}")
+          f"{sum(len(p['links']) for p in payload['network']['periods'].values())} network links -> {page}")
     return 0
+
+
+def render(payload: dict) -> str:
+    """The template with the data embedded, so the page opens straight from disk."""
+    blob = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
+    return TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/", blob)
 
 
 if __name__ == "__main__":

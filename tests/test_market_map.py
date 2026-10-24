@@ -50,3 +50,10 @@ def test_detected_events_include_the_jump_and_the_lot_change():
     assert "NIFTY +9.5% day" in titles                      # log return of +10%
     assert "NIFTY lot size 50 → 25" in titles
     assert not any("BANKNIFTY lot" in t for t in titles)
+
+
+@pytest.mark.unit
+def test_page_embeds_the_data_safely():
+    html = mm.render({"events": [{"title": "</script><b>x"}], "log": []})
+    assert html.startswith("<!doctype html>") and "/*__DATA__*/" not in html
+    assert "</script><b>x" not in html and r"<\/script><b>x" in html
