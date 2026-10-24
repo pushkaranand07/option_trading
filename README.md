@@ -232,7 +232,7 @@ TradingAgents works with any market Yahoo Finance covers, using the exchange-suf
 
 #### Indian market (NSE) data quality
 
-Indian instruments (`*.NS`, `*.BO`, `^NSEI`, `^NSEBANK`, ...) get extra tools and safeguards; for other markets these tools answer "not applicable". Details and the problems each one solves are in [docs/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md](docs/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md) (section 13).
+Indian instruments (`*.NS`, `*.BO`, `^NSEI`, `^NSEBANK`, ...) get extra tools and safeguards; for other markets these tools answer "not applicable". Details and the problems each one solves are in [docs/plans/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md](docs/plans/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md) (section 13).
 
 | Tool (analyst) | What it gives the agents |
 |---|---|

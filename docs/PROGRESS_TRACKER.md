@@ -1,29 +1,31 @@
 # Quant Signal Layer — Progress Tracker
 
-> Plan: [QUANT_SIGNAL_LAYER_PLAN.md](QUANT_SIGNAL_LAYER_PLAN.md).
+> Plan: [QUANT_SIGNAL_LAYER_PLAN.md](plans/QUANT_SIGNAL_LAYER_PLAN.md).
 > Bars are recalculated from the checkboxes below (and the live NSE download log) by
 > `python scripts/update_progress.py`. Tick a box (`[x]`), run the script, and every bar updates.
 >
-> **Picking this up? Read [Start here](#start-here) first.**
-> **How a candidate becomes tradable: [PROOF_PLAN.md](PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
+> **Picking this up? Read [Start here](#start-here) first.** All documentation: [docs/README.md](README.md) (index,
+> architecture, features, guides, and one PA change record per change).
+> **How a candidate becomes tradable: [PROOF_PLAN.md](plans/PROOF_PLAN.md)** (evidence ladder, kill rules, risk limits).
 >
 > The bars count only work that is live or still planned. Items that no longer apply (dropped models, steps that
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `███████████████████████░░` 93% (88/95 tasks)
+**Overall:** `██████████████████████░░░` 88% (88/100 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 12:18_
+_Last updated: 2026-10-24 12:41_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
 | Phases 0–4, 6, 7, 10 tooling, bug fixes, Market Map, weekend sessions, option quotes, trade journal | done | merged (PRs #1–#26) |
-| `quant/phase-9-replay` — quant-report wording fix + replay check | **10-date replay running** | not yet (PR after the replay) |
+| `quant/phase-9-replay` — quant-report wording fix + replay check | merged; **10-date replay running** | merged (PR #27) |
+| `docs/pa-restructure` — docs index, folders, PA_01–PA_26 change records, architecture 01–18 | done | **open PR** |
 
 ---
 
@@ -182,7 +184,7 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Bug fixes (requested 2026-10-23)
 <!-- progress:phase -->
-`████████████████████████░` 95% (19/20)
+`███████████████████░░░░░░` 76% (19/25)
 <!-- /progress:phase -->
 - [x] 5 old Windows test failures (ChatGPT sign-in file mode, CLI upgrade command, yfinance cache path)
 - [x] option_backtester: early exits could land after the planned exit
@@ -202,9 +204,18 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 - [x] Scheduled refresh never ran (path with spaces, battery, closable window) → windowless `pythonw` + `--log`
 - [x] Prices stopped at yesterday even after the close → today's bar included from 16:00
 - [x] Condor simulator 100× faster on repeated runs, identical results
-- [x] **Weekend NSE sessions were never downloaded** → 1,232 weekends probed, **11 real sessions recovered** (Budget
+- [x] **Weekend NSE sessions were never downloaded** → every weekend since 2015 probed (1,232 weekend days), **11 real sessions recovered** (Budget
   days incl. Sunday 1-Feb-2026, Muhurat sessions, 2024 special live sessions)
 - [ ] "Something else" bug you mentioned (**waiting for your description**)
+
+**Found while writing the docs (2026-10-24), not fixed yet** — each needs its own change:
+- [ ] `NSECalendar.from_nse()` never loads special sessions, so the agents' calendar treats Budget-day / Muhurat
+  sessions as closed (the downloader was fixed in PA-19; the calendar was not)
+- [ ] Web app hard-codes lot sizes (NIFTY 75, BANKNIFTY 35; current 65 / 30) and shows the market open on holidays
+- [ ] Option backtester's NSE adapter sets bid = ask = close, so its slippage setting has no effect (only commission)
+- [ ] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` is not applied (forwarded only for `openai` / `chatgpt`)
+- [ ] News Analyst prompt does not mention `get_india_fii_dii_flows` although the tool is offered;
+  `ALPHA_VANTAGE_API_KEY` missing from `.env.example`; 8 test files lack the `unit` marker
 
 ## Market Map 2021–26 (requested 2026-10-24)
 <!-- progress:phase -->
@@ -212,7 +223,8 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 <!-- /progress:phase -->
 - [x] Page in the project: `python scripts/market_map.py` → `reports/market_map/india-market-map.html` (open in a
   browser; gitignored because it embeds NSE data). Timeline, impact map, event → impact ledger, market network
-- [x] Researched events with sources in `docs/market_events_2021_2026.json`: 54 regulatory + 54 market events, plus
+- [x] Researched events with sources in `docs/data/market_events_2021_2026.json`: 54 regulatory changes + 53 market
+  events (99 entries: 8 market reactions merged into their RBI / Budget rows), plus
   data-detected big days and lot changes
 - [x] Every impact measured from NSE files; news figures cross-checked against NSE closes (19/22 exact; 1 date fixed,
   1 intraday figure removed)
@@ -275,6 +287,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-24 — Docs restructured: index (docs/README.md), plans/ data/ architecture/ features/ development/ guides/ archive/, one PA record per change (PA_01–PA_26), link checker (`scripts/check_doc_links.py`).
 - 2026-10-24 — Tracker cleaned: dropped / not-applicable items moved to "on hold" notes; Phase 9 replay (10 dates) started; quant report wording fixed.
 - 2026-10-24 — Phase 5 started from your side: trade-journal analyser for your Dhan tradebook (by holding period: intraday / week / month / longer).
 - 2026-10-24 — Real option spreads measured from NSE's closing bid/ask (0.85× the slippage model); captured nightly from now on.

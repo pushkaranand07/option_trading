@@ -1,6 +1,6 @@
 """Success gates every signal must pass before anything downstream may use it.
 
-The thresholds are fixed before results are seen (docs/QUANT_SIGNAL_LAYER_PLAN.md,
+The thresholds are fixed before results are seen (docs/plans/QUANT_SIGNAL_LAYER_PLAN.md,
 Phase 0), so a disappointing backtest cannot move the goalposts. A gate whose
 evidence was not supplied is ``not_evaluated``, and that is not a pass: a
 strategy is ``approved`` only when every gate was checked and passed.

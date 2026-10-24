@@ -40,7 +40,7 @@ dev = [
     "pytest>=8.0",
     "pytest-subtests>=0.13",
 ]
-# Quant signal layer (docs/QUANT_SIGNAL_LAYER_PLAN.md): volatility, regime and
+# Quant signal layer (docs/plans/QUANT_SIGNAL_LAYER_PLAN.md): volatility, regime and
 # ML models plus the Parquet data store. CPU-only: pip install "tradingagents[quant]".
 quant = [
     "arch>=7.0",

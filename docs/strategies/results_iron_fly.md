@@ -1,6 +1,6 @@
 # Strategy spec — Results-day iron butterfly (IV crush) on stock options
 
-> Stage 0 of [PROOF_PLAN.md](../PROOF_PLAN.md). Frozen 2026-10-24 **before any backtest of it was run**.
+> Stage 0 of [PROOF_PLAN.md](../plans/PROOF_PLAN.md). Frozen 2026-10-24 **before any backtest of it was run**.
 > Any change to these rules is a new strategy and a new trial. Research only — not investment advice.
 
 ## Idea
