@@ -4,8 +4,12 @@ optopsy expects a quote per contract per day with ``bid``, ``ask`` and
 ``delta``. No free source has historical Indian bid/ask, so this adapter builds
 an end-of-day approximation from the bhavcopy and says so:
 
-- ``bid = ask = close`` (the day's last-traded-based close). Pass a spread or
-  slippage model to the optopsy strategy to make fills pessimistic.
+- ``bid`` / ``ask`` = close minus / plus a half-spread, rounded outward to the
+  tick. The default half-spread is the project's cost model (``costs.Slippage``:
+  1 tick + 1% of the price), which measured NSE closing quotes put at ~1.2x the
+  real spread on the strikes that trade (docs/PA_23). With ``bid == ask`` optopsy's
+  slippage modes ("spread", "liquidity", "per_leg") had nothing to work on, so
+  every fill was free; ``half_spread=None`` restores that for comparison.
 - ``delta`` from Black-Scholes with the implied volatility solved from that
   close; contracts whose close cannot be inverted (stale or below intrinsic)
   are dropped and counted.
@@ -22,9 +26,14 @@ Every frame it returns carries ``attrs["approximations"]`` listing these.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from statistics import NormalDist
 
 import pandas as pd
+
+from tradingagents.analytics.costs import DEFAULT_SLIPPAGE
+
+TICK = 0.05
 
 _N = NormalDist()
 DEFAULT_RISK_FREE = 0.065      # ~ India 91-day T-bill; pass the period's actual rate for history
@@ -63,11 +72,27 @@ def implied_vol(price: float, spot: float, strike: float, t: float, r: float, is
     return (low + high) / 2
 
 
+def cost_model_half_spread(price: float) -> float:
+    """1 tick + 1% of the price (``costs.DEFAULT_SLIPPAGE``), per side."""
+    return DEFAULT_SLIPPAGE.option_ticks * DEFAULT_SLIPPAGE.option_tick_size + DEFAULT_SLIPPAGE.option_premium_pct * price
+
+
+def quote_from_close(close: float, half_spread: Callable[[float], float] | None) -> tuple[float, float]:
+    """(bid, ask) around a close, rounded outward to the 0.05 tick; (close, close) without a spread model."""
+    if half_spread is None:
+        return close, close
+    h = half_spread(close)
+    bid = math.floor(round((close - h) / TICK, 6)) * TICK
+    ask = math.ceil(round((close + h) / TICK, 6)) * TICK
+    return max(round(bid, 2), 0.0), round(ask, 2)
+
+
 def bhavcopy_to_optopsy(
     bhav: pd.DataFrame,
     symbol: str,
     underlying: pd.Series | None = None,
     risk_free: float = DEFAULT_RISK_FREE,
+    half_spread: Callable[[float], float] | None = cost_model_half_spread,
 ) -> pd.DataFrame:
     """One symbol's options from unified bhavcopy rows (``derivatives.fo_bhavcopy``).
 
@@ -108,18 +133,20 @@ def bhavcopy_to_optopsy(
         if vol is None:
             dropped_iv += 1
             continue
+        bid, ask = quote_from_close(close, half_spread)
         rows.append({
             "underlying_symbol": symbol, "underlying_price": spot,
             "option_type": "call" if is_call else "put",
             "expiration": pd.Timestamp(rec.expiry), "quote_date": pd.Timestamp(rec.trade_date),
-            "strike": strike, "bid": close, "ask": close,
+            "strike": strike, "bid": bid, "ask": ask,
             "delta": bs_delta(spot, strike, t, risk_free, vol, is_call),
             "implied_volatility": vol, "volume": float(rec.contracts),
             "open_interest": float(rec.open_interest),
         })
     chain = pd.DataFrame(rows)
     chain.attrs["approximations"] = [
-        "end-of-day close used as bid and ask (no historical bid/ask for NSE options)",
+        ("end-of-day close used as bid and ask (no historical bid/ask for NSE options)" if half_spread is None
+         else "bid / ask = close -/+ a modelled half-spread (default: 1 tick + 1% of price; no historical NSE bid/ask)"),
         f"delta from Black-Scholes IV solved from close, r={risk_free:.2%}",
         f"{dropped_untraded} untraded contracts dropped",
         f"{settled} expiry-day contracts valued at intrinsic (NSE final settlement)",

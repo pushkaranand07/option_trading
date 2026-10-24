@@ -108,9 +108,10 @@ The `datetime64[us]` conversion is what `run_strategy` does for you: under panda
 
 ## 5. Known limitations
 
-- **No real bid/ask.** NSE has no free historical option bid/ask, so `bid = ask = close`. The slippage models scale
-  the bid-ask half-spread, which is then zero, so `slippage` settings change nothing. Add costs through
-  `commission`, and treat P&L as optimistic.
+- **Modelled bid/ask.** NSE has no free historical option bid/ask, so the adapter puts bid / ask at close ∓ (1 tick +
+  1% of price), rounded outward to the tick; the `slippage` modes act on that spread. Pass
+  `bhavcopy_to_optopsy(..., half_spread=None)` for the old zero-spread chain. Add brokerage and taxes through
+  `commission`.
 - **End-of-day only.** Stops and targets are checked on daily closes.
 - **Untraded contracts are dropped** (except on expiry day), so a strategy may find no candidates on thin strikes.
 - **Delta is model-derived** (Black-Scholes, with IV solved from the close and an assumed 6.5% risk-free rate).

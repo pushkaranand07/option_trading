@@ -98,7 +98,11 @@ def test_bhavcopy_adapter_builds_optopsy_rows_and_states_its_approximations():
     chain = bhavcopy_to_optopsy(bhav, "NIFTY")
     assert list(chain["option_type"]) == ["call", "put"]
     assert 0.4 < chain.loc[0, "delta"] < 0.7 and -0.6 < chain.loc[1, "delta"] < -0.3
-    assert (chain["bid"] == chain["ask"]).all()
+    # Close 226.4: half-spread 0.05 + 2.264 = 2.314 -> bid 224.05, ask 228.75 (rounded outward to the tick).
+    assert (chain.loc[0, "bid"], chain.loc[0, "ask"]) == (224.05, 228.75)
+    assert (chain["bid"] < chain["ask"]).all()
+    flat = bhavcopy_to_optopsy(bhav, "NIFTY", half_spread=None)        # the old behaviour, for comparison
+    assert (flat["bid"] == flat["ask"]).all()
     assert any("1 untraded" in a for a in chain.attrs["approximations"])
 
 
