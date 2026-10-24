@@ -113,3 +113,16 @@ def test_expected_move_scales_the_forecast_by_the_square_root_of_time(store, tmp
     text = qr.quant_signal_text("RELIANCE.NS", date(2026, 10, 21), root=store, trial_path=tmp_path / "t.sqlite")
     # GARCH 21% annualised known before Wed 21-Oct; 10 sessions -> 21% x sqrt(10/252) = 4.18%
     assert "next 10 sessions: ±4.2% = ±Rs 42 on the last close Rs 1,000" in text
+
+
+@pytest.mark.unit
+def test_rule_judged_tests_show_their_verdict_and_baselines_are_hidden(store, tmp_path):
+    log = tmp_path / "t.sqlite"
+    trial_log.record(trial_log.Trial("results_fly", {}, n_oos_trades=984, verdict="reject"), log)
+    trial_log.record(trial_log.Trial("new_idea", {}, n_oos_trades=150, verdict="pass"), log)
+    trial_log.record(trial_log.Trial("random", {}, n_oos_trades=900, gate_verdict="rejected"), log)
+    text = qr.quant_signal_text("RELIANCE.NS", date(2026, 10, 23), root=store, trial_path=log)
+    assert "results_fly: rejected; 984 out-of-sample trades" in text and "nan" not in text
+    assert "new_idea: passed its backtest; forward paper trading pending, NOT approved" in text
+    assert "random:" not in text
+    assert "NO quant signal has passed the gates" in text          # a backtest pass is not an approval
