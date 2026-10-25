@@ -14,6 +14,7 @@ from datetime import datetime
 
 CONTRACT_INFO = "/api/option-chain-contract-info"
 CHAIN = "/api/option-chain-v3"
+CHART = "/api/chart-databyindex"
 NSE_INDICES = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50")
 CACHE_SECONDS = 30
 
@@ -44,7 +45,10 @@ def _leg(o: dict | None, lot: int) -> dict | None:
     oi, chg = o.get("openInterest") or 0, o.get("changeinOpenInterest") or 0
     return {"oi": oi * lot, "chg_oi": chg * lot, "ltp": o.get("lastPrice") or 0.0, "chg": o.get("change") or 0.0,
             "volume": (o.get("totalTradedVolume") or 0) * lot, "iv": o.get("impliedVolatility") or 0.0,
-            "bid": o.get("buyPrice1") or 0.0, "ask": o.get("sellPrice1") or 0.0}
+            "bid": o.get("buyPrice1") or 0.0, "ask": o.get("sellPrice1") or 0.0,
+            "bid_qty": o.get("buyQuantity1") or 0, "ask_qty": o.get("sellQuantity1") or 0,      # already in units
+            "total_buy_qty": o.get("totalBuyQuantity") or 0, "total_sell_qty": o.get("totalSellQuantity") or 0,
+            "id": o.get("identifier")}
 
 
 def max_pain(rows: list[dict]) -> float | None:
@@ -114,6 +118,27 @@ def lot_size(symbol: str) -> int:
     except Exception:
         pass
     raise ChainError(f"Lot size for {symbol} is not known (not in the NSE F&O store).")
+
+
+def contract(identifier: str, client=None) -> dict:
+    """One option's price through the session (NSE ticks, ~10 s apart) with its high, low and previous close.
+    ``identifier`` as NSE writes it, e.g. ``OPTIDXNIFTY27-10-2026CE22700.00``. NSE stamps the ticks in IST."""
+    if not identifier.startswith(("OPTIDX", "OPTSTK")):
+        raise ChainError("Not an NSE option identifier.")
+    key = ("contract", identifier)
+    with _lock:
+        hit = _cache.get(key)
+        if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
+            return hit[1]
+    raw = (client or _client()).get_json(CHART, {"index": identifier}, ttl=0).data
+    pts = [(int(t) // 1000, float(p)) for t, p in raw.get("grapthData") or [] if p is not None]
+    prices = [p for _, p in pts]
+    out = {"id": identifier, "points": pts, "prev_close": raw.get("closePrice"),
+           "high": max(prices) if prices else None, "low": min(prices) if prices else None,
+           "last": prices[-1] if prices else None}
+    with _lock:
+        _cache[key] = (time.monotonic(), out)
+    return out
 
 
 def chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None) -> dict:

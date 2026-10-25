@@ -198,7 +198,9 @@ def price(plan: StrategyPlan, chain: dict) -> dict:
         px = (q["ask"] or q["ltp"]) if leg.action == "BUY" else (q["bid"] or q["ltp"])
         net += px if leg.action == "SELL" else -px
         legs.append({"action": leg.action, "type": leg.option_type, "strike": leg.strike, "price": px, "ltp": q["ltp"],
-                     "bid": q["bid"], "ask": q["ask"], "iv": q["iv"], "oi": q["oi"]})
+                     "chg": q.get("chg"), "bid": q["bid"], "ask": q["ask"], "bid_qty": q.get("bid_qty"),
+                     "ask_qty": q.get("ask_qty"), "total_buy_qty": q.get("total_buy_qty"),
+                     "total_sell_qty": q.get("total_sell_qty"), "iv": q["iv"], "oi": q["oi"], "id": q.get("id")})
     spot = chain["spot"]
     calls = sorted(x.strike for x in plan.legs if x.option_type == "CE")
     puts = sorted(x.strike for x in plan.legs if x.option_type == "PE")
@@ -240,6 +242,54 @@ def charges(priced: dict, lots: int) -> float:
     return total
 
 
+def _bs(spot: float, strike: float, years: float, iv: float, kind: str, rate: float = 0.065) -> float:
+    """Black-Scholes value of a European option (NSE index options are European)."""
+    if years <= 0 or iv <= 0:
+        return max(0.0, spot - strike) if kind == "CE" else max(0.0, strike - spot)
+    d1 = (math.log(spot / strike) + (rate + iv * iv / 2) * years) / (iv * math.sqrt(years))
+    d2 = d1 - iv * math.sqrt(years)
+    n = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))  # noqa: E731
+    if kind == "CE":
+        return spot * n(d1) - strike * math.exp(-rate * years) * n(d2)
+    return strike * math.exp(-rate * years) * n(-d2) - spot * n(-d1)
+
+
+def _tick(x: float) -> float:
+    return max(0.05, round(round(x / 0.05) * 0.05, 2))
+
+
+def trade_levels(plan: StrategyPlan, priced: dict, chain: dict, days_to_expiry: float | None) -> dict | None:
+    """What each leg's premium should be when the index reaches the AI's target and stop — the numbers to type into
+    the broker's target / stop-loss boxes — and the profit or loss per lot there.
+
+    Each premium is moved from its live price by the Black-Scholes change between today's index level and the
+    target / stop (same implied vol, same day): an estimate for a move today; closer to expiry the option moves more.
+    """
+    tgt, stop = plan.underlying_target, plan.underlying_stop
+    if tgt is None or stop is None or not priced:
+        return None
+    spot, lot = chain["spot"], priced["lot"]
+    years = max(days_to_expiry or 1, 0.5) / 365
+    atm_iv = (chain["summary"].get("atm_iv") or 15) / 100
+    legs, pnl_t, pnl_s = [], 0.0, 0.0
+    for leg in priced["legs"]:
+        iv = (leg["iv"] or 0) / 100 or atm_iv
+        now = _bs(spot, leg["strike"], years, iv, leg["type"])
+        at = {k: _tick(leg["price"] + _bs(lvl, leg["strike"], years, iv, leg["type"]) - now) for k, lvl in
+              (("target", tgt), ("stop", stop))}
+        sgn = 1 if leg["action"] == "BUY" else -1                 # a bought option gains when its premium rises
+        legs.append({**leg, "premium_at_target": at["target"], "premium_at_stop": at["stop"],
+                     "pnl_target_per_lot": sgn * (at["target"] - leg["price"]) * lot,
+                     "pnl_stop_per_lot": sgn * (at["stop"] - leg["price"]) * lot})
+        pnl_t += legs[-1]["pnl_target_per_lot"]
+        pnl_s += legs[-1]["pnl_stop_per_lot"]
+    net_now = abs(priced["net_per_unit"])
+    value = {k: abs(sum((1 if x["action"] == "BUY" else -1) * x[f"premium_at_{k}"] for x in legs)) for k in ("target", "stop")}
+    return {"legs": legs, "pnl_target_per_lot": pnl_t, "pnl_stop_per_lot": pnl_s, "assumed_days": years * 365,
+            "spread": None if len(legs) == 1 else {"now": net_now, "at_target": value["target"], "at_stop": value["stop"],
+                                                   "debit": priced["debit"]}}
+
+
 def warnings(plan: StrategyPlan, priced: dict | None) -> list[str]:
     """Things the trader should see before acting; the proposal stands but is flagged."""
     out = []
@@ -272,7 +322,8 @@ def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
         return out
     if plan.strategy != "no_trade":
         priced = price(plan, ch)
-        out.update(priced=priced, charges_per_lot=charges(priced, 1))
+        out.update(priced=priced, charges_per_lot=charges(priced, 1),
+                   levels=trade_levels(plan, priced, ch, ctx.get("days_to_expiry")))
     out["warnings"] = warnings(plan, out.get("priced"))
     return out
 

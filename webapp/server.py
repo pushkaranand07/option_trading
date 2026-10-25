@@ -172,6 +172,17 @@ async def nse_chain(symbol: str, expiry: str | None = None):
         raise HTTPException(502, str(exc)) from exc
 
 
+@app.get("/api/contract")
+async def nse_contract(id: str):
+    """One option's intraday premium (NSE ticks), high, low and previous close."""
+    try:
+        return await run_in_threadpool(nse_oc.contract, id)
+    except nse_oc.ChainError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
 class StrategyRequest(BaseModel):
     symbol: str
     expiry: str | None = None
