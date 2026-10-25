@@ -246,10 +246,6 @@ table.oc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .timeline { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .timeline div { background: var(--panel-2); border-radius: 10px; padding: 6px 12px; }
 .timeline span { display: block; font-size: 11px; color: var(--muted); }
-.sizing { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
-.sizing input { width: 130px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
-.sizing #riskPct { width: 70px; }
-.sizing #riskOut { flex-basis: 100%; }
 .sub-h { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 8px; }
 .call { border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
 .call.idle { background: var(--panel-2); } .call.stop { background: var(--warn-soft); }

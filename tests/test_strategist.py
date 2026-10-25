@@ -1,4 +1,4 @@
-"""AI strategist: the code, not the LLM, enforces defined risk, prices at bid / ask and sizes to the user's limit;
+"""AI strategist: the code, not the LLM, enforces defined risk and prices per lot at the bid / ask;
 and the NSE option chain is shaped correctly (units, PCR, walls near the money, max pain)."""
 
 import pytest
@@ -53,31 +53,25 @@ def test_pricing_buys_at_the_ask_sells_at_the_bid():
 
 
 @pytest.mark.unit
-def test_sizing_keeps_the_worst_case_plus_charges_inside_the_limit():
-    p = st.price(plan("bear_call_spread", [("SELL", "CE", 22700), ("BUY", "CE", 22800)]), CHAIN)   # 4,680 a lot
-    s = st.size(p, risk_amount=10_000, allocation=None)
-    assert s["lots"] == 2 and s["max_loss"] <= 10_000 and s["charges"] > 0
-    assert st.size(p, risk_amount=10_000, allocation=5_000)["lots"] == 1          # the money set aside binds
-    tight = st.size(p, risk_amount=4_700, allocation=None)                        # 4,680 + charges > 4,700
-    assert tight["lots"] == 0 and "max loss" in tight["reason"]
-    assert st.size(p, risk_amount=None, allocation=None)["lots"] is None
+def test_charges_cover_every_leg_in_and_out():
+    p = st.price(plan("bear_call_spread", [("SELL", "CE", 22700), ("BUY", "CE", 22800)]), CHAIN)
+    one = st.charges(p, 1)
+    assert one > 4 * 20                                   # four orders (2 legs, in and out), ₹20 brokerage each
+    assert st.charges(p, 2) < 2 * one                     # the flat brokerage does not double
 
 
 @pytest.mark.unit
-def test_recommend_flags_poor_reward_and_never_sends_capital(monkeypatch):
+def test_recommend_prices_per_lot_flags_poor_reward_and_refuses_naked_sells(monkeypatch):
     monkeypatch.setattr(st, "build_context", lambda symbol, expiry=None: ({"instrument": symbol}, CHAIN))
-    seen = {}
 
-    def fake_llm(ctx, risk_pct):
-        seen.update(ctx=ctx, risk_pct=risk_pct)
+    def fake_llm(ctx):
         return plan("bear_call_spread", [("SELL", "CE", 22700), ("BUY", "CE", 22800)], underlying_entry_low=22620,
                     underlying_entry_high=22660, underlying_target=22450, underlying_stop=22720)
 
-    out = st.recommend("NIFTY", 1.0, risk_amount=12_345, allocation=50_000, llm=fake_llm)
-    assert "12345" not in str(seen) and seen["risk_pct"] == 1.0
-    assert out["sizing"]["lots"] == 2 and any("break even" in w for w in out["warnings"])
-    bad = st.recommend("NIFTY", 1.0, 10_000, None,
-                       llm=lambda c, r: plan("bear_call_spread", [("SELL", "CE", 22700), ("SELL", "CE", 22800)]))
+    out = st.recommend("NIFTY", llm=fake_llm)
+    assert out["priced"]["max_loss_per_lot"] == pytest.approx(72 * 65) and out["charges_per_lot"] > 0
+    assert any("break even" in w for w in out["warnings"])
+    bad = st.recommend("NIFTY", llm=lambda c: plan("bear_call_spread", [("SELL", "CE", 22700), ("SELL", "CE", 22800)]))
     assert bad["rejected"] and bad["priced"] is None
 
 
