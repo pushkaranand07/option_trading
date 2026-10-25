@@ -7,9 +7,8 @@ entry / target / stop with reasons → **the code** checks and prices it:
 
 - only defined-risk structures (no naked selling — proof plan, risk limit 1); strikes must be on the chain;
 - legs priced at the real bid / ask (buy at the ask, sell at the bid); max loss, max profit, break-evens computed here;
-- lots sized here so the worst case loses at most the user's limit and the outlay fits the money set aside.
+- figures per lot, with the charges for one lot in and out; the user chooses the number of lots.
 
-The user's capital never goes to the LLM: it sees only the risk tolerance as a percentage.
 Research and decision support only; no strategy here has passed the project's validation tests.
 """
 
@@ -145,17 +144,16 @@ def build_context(symbol: str, expiry: str | None = None) -> tuple[dict, dict]:
     return ctx, ch
 
 
-def ask_llm(ctx: dict, risk_pct: float) -> StrategyPlan:
+def ask_llm(ctx: dict) -> StrategyPlan:
     from tradingagents.default_config import build_default_config
     from tradingagents.llm_clients import create_tier_client
 
     llm = create_tier_client(build_default_config(), "deep").get_llm().with_structured_output(StrategyPlan)
-    user = (f"The trader accepts losing at most {risk_pct:g}% of their capital on this trade (the app sizes lots; "
-            f"do not size).\n\nDATA:\n{json.dumps(ctx, default=str)}")
+    user = f"The app prices the legs and shows per-lot figures; do not size.\n\nDATA:\n{json.dumps(ctx, default=str)}"
     return llm.invoke([("system", SYSTEM), ("user", user)])
 
 
-# ---------------------------------------------------------------- checks, pricing and sizing (no LLM)
+# ---------------------------------------------------------------- checks and pricing (no LLM)
 
 def check_structure(plan: StrategyPlan, chain: dict) -> list[str]:
     """Problems that make the proposal unsafe or impossible; empty when it is fine."""
@@ -242,28 +240,6 @@ def charges(priced: dict, lots: int) -> float:
     return total
 
 
-def size(priced: dict, risk_amount: float | None, allocation: float | None) -> dict:
-    """Most lots whose worst case (max loss + charges) stays within ``risk_amount`` and whose outlay fits
-    ``allocation``."""
-    per_lot = priced["max_loss_per_lot"]
-    if not risk_amount or per_lot <= 0:
-        return {"lots": None, "reason": "Enter your capital and max loss to size the trade."}
-    lots = math.floor(risk_amount / per_lot)
-    if allocation and priced["outlay_per_lot"] > 0:
-        lots = min(lots, math.floor(allocation / priced["outlay_per_lot"]))
-    while lots > 0 and lots * per_lot + charges(priced, lots) > risk_amount:
-        lots -= 1
-    if lots <= 0:
-        too_big = "your max loss" if per_lot + charges(priced, 1) > risk_amount else "the money set aside for this trade"
-        return {"lots": 0, "reason": f"One lot needs more than {too_big} (worst case ₹{per_lot + charges(priced, 1):,.0f} "
-                                     f"with charges, outlay ₹{priced['outlay_per_lot']:,.0f}). Skip it, or raise the "
-                                     "limit only if you really accept that loss."}
-    fee = charges(priced, lots)
-    mp = priced["max_profit_per_lot"]
-    return {"lots": lots, "units": lots * priced["lot"], "charges": fee, "max_loss": lots * per_lot + fee,
-            "max_profit": None if mp is None else lots * mp - fee, "outlay": lots * priced["outlay_per_lot"]}
-
-
 def warnings(plan: StrategyPlan, priced: dict | None) -> list[str]:
     """Things the trader should see before acting; the proposal stands but is flagged."""
     out = []
@@ -283,21 +259,20 @@ def warnings(plan: StrategyPlan, priced: dict | None) -> list[str]:
     return out
 
 
-def recommend(symbol: str, risk_pct: float, risk_amount: float | None, allocation: float | None,
-              expiry: str | None = None, llm=None) -> dict:
+def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
     ctx, ch = build_context(symbol, expiry)
     started = datetime.now()
-    plan = (llm or ask_llm)(ctx, risk_pct)
+    plan = (llm or ask_llm)(ctx)
     out = {"symbol": symbol, "expiry": ch["expiry"], "spot": ch["spot"], "lot": ch["lot"],
            "seconds": (datetime.now() - started).seconds, "plan": plan.model_dump(),
            "strategy_text": STRATEGIES[plan.strategy][0], "chain_summary": ch["summary"]}
     problems = check_structure(plan, ch)
     if problems:
-        out.update(rejected=problems, priced=None, sizing=None, warnings=[])
+        out.update(rejected=problems, priced=None, warnings=[])
         return out
     if plan.strategy != "no_trade":
         priced = price(plan, ch)
-        out.update(priced=priced, sizing=size(priced, risk_amount, allocation))
+        out.update(priced=priced, charges_per_lot=charges(priced, 1))
     out["warnings"] = warnings(plan, out.get("priced"))
     return out
 
@@ -308,15 +283,14 @@ _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
 
-def start(symbol: str, risk_pct: float, risk_amount: float | None, allocation: float | None,
-          expiry: str | None = None) -> str:
+def start(symbol: str, expiry: str | None = None) -> str:
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
         _jobs[job_id] = {"status": "running", "symbol": symbol, "started": datetime.now().strftime("%H:%M:%S")}
 
     def run():
         try:
-            result = {"status": "done", "result": recommend(symbol, risk_pct, risk_amount, allocation, expiry)}
+            result = {"status": "done", "result": recommend(symbol, expiry)}
         except Exception as exc:
             result = {"status": "error", "error": f"{type(exc).__name__}: {str(exc)[:400]}"}
         with _jobs_lock:

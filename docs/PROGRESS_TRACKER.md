@@ -19,7 +19,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-24 17:36_
+_Last updated: 2026-10-25 10:08_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -273,7 +273,8 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
   sized from your risk limit), Today, Risk & Volatility, Options (with measured spreads), AI Analysis, Market Map,
   Research, My Trades ([PA-32](PA_32-webapp-tabs.md), [PA-33](PA_33-morning-plan.md)).
 - **AI strategist in the Plan tab** ([PA-34](PA_34-ai-strategist-and-nse-option-chain.md)): one defined-risk options strategy
-  (or none) for the picked instrument, priced at the live bid / ask, sized to your limit, levels on the chart; NSE option chain.
+  (or none) for the picked instrument, priced per lot at the live bid / ask, levels on the chart; NSE option chain.
+  The risk-limit card was removed: figures are per lot and you choose how many ([PA-35](PA_35-remove-risk-limit-card.md)).
 - **Morning plan** weekdays 08:30 (task "TradingAgents morning plan"): NIFTY + BANKNIFTY data and AI view.
 - **Daily refresh** weekdays 19:30. Log: `~/.tradingagents/cache/quant/daily_update.log`; status:
   `~/.tradingagents/cache/quant/daily_status.json`. Remove: `schtasks /Delete /TN "TradingAgents quant daily update" /F`.
@@ -297,6 +298,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-25 — Plan tab: the risk-limit card (capital, max loss %, money for this trade) removed at the user's request; today's call and the AI strategist show per-lot figures.
 - 2026-10-24 — Plan tab: AI options strategist (structure checked, priced and sized by the code; capital never sent to the LLM) and an NSE option chain like the trading apps'.
 - 2026-10-24 — Morning plan: 8:30 AM job (data + AI view for NIFTY and BANKNIFTY) and a Plan tab with the session clock and the live call sized from your risk limit.
 - 2026-10-24 — Web app rebuilt into seven plain-English tabs (risk, measured spreads, research verdicts, market map, trade journal added).

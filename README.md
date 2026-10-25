@@ -4,7 +4,7 @@
 
 Pulse is a personal research system for trading NIFTY, BANKNIFTY and large NSE stocks. Every weekday it reads the
 market before the open, builds a plan, and during the session tells you — in plain English — whether there is a trade
-worth taking, how big it should be for **your** risk limit, and why. A team of AI agents adds a news and sentiment
+worth taking, what one lot costs and loses at the stop, and why. A team of AI agents adds a news and sentiment
 view, and a strict research layer tests every trading idea on years of NSE data before anything is trusted.
 
 > **Research and decision support only — not investment advice.** Pulse never places orders. You decide and trade
@@ -17,7 +17,7 @@ view, and a strict research layer tests every trading idea on years of NSE data 
 | | |
 |---|---|
 | **Morning plan (8:30 AM)** | For NIFTY and BANKNIFTY: trend, last session, expected range for the day, market mood, put-call ratio, foreign-investor positioning, and the AI agents' read of news and sentiment |
-| **Live call (9:45 AM – 3:15 PM)** | "Wait", "No trade right now" with the reason, or "Take this trade" — option, entry, stop, target, and **lots sized so the stop loses at most your limit** |
+| **Live call (9:45 AM – 3:15 PM)** | "Wait", "No trade right now" with the reason, or "Take this trade" — option, entry, stop, target, and **what one lot costs and loses at the stop** |
 | **Risk & volatility** | Calm / choppy / stress regime, expected move for 5 / 10 / 21 days in % and ₹, whether options are cheap or expensive |
 | **Options** | Live option chain, and what each strike really costs to trade (bid-ask spreads measured from NSE every evening) |
 | **AI analysis** | A team of LLM agents — analysts, bull and bear researchers, trader, risk team, portfolio manager — debates one instrument and gives a rating (Buy, Overweight, Hold, Underweight or Sell) with reasons |
@@ -100,8 +100,7 @@ copy .env.example .env      # then add your keys (see below)
 .venv\Scripts\python.exe -m uvicorn webapp.server:app --port 8000
 ```
 
-Open **http://localhost:8000** — the Plan tab opens first. Enter your capital and the most you will lose on one
-trade; they stay in your browser.
+Open **http://localhost:8000** — the Plan tab opens first.
 
 **Schedule the daily jobs:** see [docs/development/scheduled-job-operations.md](docs/development/scheduled-job-operations.md)
 (8:30 AM morning plan, 7:30 PM nightly update).
@@ -113,7 +112,7 @@ trade; they stay in your browser.
 | 8:30 AM | Morning plan built (data + AI view, about 20 minutes) |
 | 9:00 – 9:15 | Pre-open; the Plan tab counts down |
 | 9:15 – 9:45 | **Wait** — the first half hour is watched, not traded |
-| 9:45 AM – 3:15 PM | Live call every 15 seconds: no trade, or a trade sized to your limit |
+| 9:45 AM – 3:15 PM | Live call every 15 seconds: no trade, or a trade with its per-lot cost and loss |
 | 3:15 PM | Exit intraday trades |
 | 3:30 PM | Close (index derivatives close at 3:45 PM from 7-Dec-2026) |
 | 7:30 PM | Nightly update: NSE data, forecasts, Market Map, paper trading, option quotes |

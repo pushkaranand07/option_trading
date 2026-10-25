@@ -80,7 +80,8 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-31](PA_31-small-fixes-prompt-env-test-markers.md) | News-analyst prompt, `.env.example`, unit markers on 8 test files | Done |
 | [PA-32](PA_32-webapp-tabs.md) | Web app in seven simple tabs: Today, Risk, Options, AI, Market Map, Research, My Trades | Done |
 | [PA-33](PA_33-morning-plan.md) | Morning plan at 8:30 AM: session, AI view, levels; live call sized from your risk limit | Done |
-| [PA-34](PA_34-ai-strategist-and-nse-option-chain.md) | Plan tab: AI options strategist (defined risk, priced at bid / ask, sized to your limit) and NSE option chain | Done |
+| [PA-34](PA_34-ai-strategist-and-nse-option-chain.md) | Plan tab: AI options strategist (defined risk, priced at bid / ask) and NSE option chain | Done |
+| [PA-35](PA_35-remove-risk-limit-card.md) | Plan tab: risk-limit card removed; per-lot figures instead of lot sizing | Done |
 
 ---
 

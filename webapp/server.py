@@ -160,7 +160,7 @@ def morning_ai():
     return morning.start_ai_build()
 
 
-# ---------- AI strategist (Plan tab): NSE option chain + one defined-risk strategy sized to the user's limit ----------
+# ---------- AI strategist (Plan tab): NSE option chain + one defined-risk strategy, priced per lot ----------
 
 @app.get("/api/chain/{symbol}")
 async def nse_chain(symbol: str, expiry: str | None = None):
@@ -174,9 +174,6 @@ async def nse_chain(symbol: str, expiry: str | None = None):
 
 class StrategyRequest(BaseModel):
     symbol: str
-    risk_pct: float = 1.0
-    risk_amount: float | None = None      # rupees; sizing only, never sent to the LLM
-    allocation: float | None = None
     expiry: str | None = None
 
 
@@ -185,7 +182,7 @@ def strategy_start(req: StrategyRequest):
     if problem := ai.azure_problem():
         raise HTTPException(400, problem)
     sym = md.instrument(req.symbol)["symbol"]
-    return {"job": strategist.start(sym, req.risk_pct, req.risk_amount, req.allocation, req.expiry)}
+    return {"job": strategist.start(sym, req.expiry)}
 
 
 @app.get("/api/strategy/{job_id}")

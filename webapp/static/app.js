@@ -662,7 +662,7 @@ async function loadJournal() {
   $("#jrBody").innerHTML = html;
 }
 
-// ---------- plan (morning plan + live call + sizing) ----------
+// ---------- plan (morning plan + live call) ----------
 const NAMES = { NIFTY: "NIFTY 50", BANKNIFTY: "NIFTY BANK" };
 S.morning = null; S.live = {};
 
@@ -700,20 +700,6 @@ function renderSession() {
     ${s.trading ? `<div class="timeline">${steps.map(([k, v]) => `<div><span>${k}</span><b class="num">${esc(v)}</b></div>`).join("")}</div>` : ""}</div>`;
 }
 
-function riskLimit() {
-  const cap = +($("#capital").value || 0), pctv = +($("#riskPct").value || 0), alloc = +($("#allocation").value || 0);
-  return { cap, pct: pctv, max: cap > 0 && pctv > 0 ? (cap * pctv) / 100 : null, alloc: alloc > 0 ? alloc : null };
-}
-["capital", "riskPct", "allocation"].forEach((id) => {
-  const el = $("#" + id), saved = store(id); if (saved) el.value = saved;
-  el.addEventListener("input", () => { store(id, el.value); renderRisk(); renderPlanCards(); (planEntries() || []).forEach(([sym]) => renderStrat(sym)); });
-});
-function renderRisk() {
-  const r = riskLimit();
-  $("#riskOut").innerHTML = r.max ? `You lose at most <b>${money(r.max)}</b> on any one trade (${r.pct}% of ${money(r.cap)}).${r.alloc ? ` At most <b>${money(r.alloc)}</b> goes into one trade.` : ""} Trade sizes below follow this.`
-    : `Enter your capital and the most you are willing to lose on one trade (1% is a common limit). Nothing leaves this computer.`;
-}
-
 S.extraCtx = {};
 function planEntries() {
   const m = S.morning; if (!m) return null;
@@ -727,18 +713,12 @@ function planEntries() {
   return null;
 }
 
-function sizeTrade(p) {
-  const leg = p.option, s = p.signal, r = riskLimit();
-  if (!r.max) return null;
-  if (!leg) {                                     // shares (stocks): the stop loses at most the limit
-    const per = Math.abs(s.entry - s.stop_loss), qty = per > 0 ? Math.floor(r.max / per) : 0;
-    return { shares: true, perLot: per, lots: qty, loss: qty * per, cost: qty * s.entry, leverage: r.cap ? (qty * s.entry) / r.cap : null };
-  }
+// One lot (or one share): what it costs and what it loses at the stop. You choose how many.
+function perLot(p) {
+  const leg = p.option, s = p.signal;
+  if (!leg) return { perShare: Math.abs(s.entry - s.stop_loss) };
   const perUnit = leg.premium && leg.stop_loss ? leg.premium - leg.stop_loss : leg.move_sl;   // premium lost at the stop
-  const perLot = perUnit * leg.lot;
-  const lots = perLot > 0 ? Math.floor(r.max / perLot) : 0;
-  return { perLot, lots, approx: !leg.premium, loss: lots * perLot, cost: leg.premium ? leg.premium * leg.lot * lots : null,
-    exposure: s.entry * leg.lot * lots, leverage: r.cap ? (s.entry * leg.lot * lots) / r.cap : null };
+  return { loss: perUnit * leg.lot, approx: !leg.premium, cost: leg.premium ? leg.premium * leg.lot : null };
 }
 
 function callHtml(sym, p, ph) {
@@ -751,26 +731,18 @@ function callHtml(sym, p, ph) {
     return `<div class="call stop"><b>No trade right now.</b> ${esc(v.blockers[0] || "No clean setup.")}
       <div class="small muted">Checked again every 15 seconds until 15:15. Not trading is a position too.</div></div>`;
   }
-  const up = s.side === "BUY", z = sizeTrade(p);
+  const up = s.side === "BUY", z = perLot(p);
   if (!leg) {
-    const sz = !z ? `<div class="small warn-c">Enter your capital and risk limit above to see how many shares.</div>`
-      : z.lots < 1 ? `<div class="small warn-c">One share risks ${money(z.perLot)} — more than your limit. Skip this trade.</div>`
-      : `<div class="levels"><div class="lv"><span>Shares</span><b>${z.lots}</b><small>intraday (MIS)</small></div>
-          <div class="lv"><span>Max loss at stop</span><b class="down">${money(z.loss)}</b><small>within your limit</small></div>
-          <div class="lv"><span>Position value</span><b>${money(z.cost)}</b><small>your broker asks a margin on this</small></div>
-          <div class="lv"><span>Leverage</span><b>${z.leverage != null ? z.leverage.toFixed(1) + "×" : "—"}</b><small>value ÷ capital</small></div></div>`;
+    const sz = `<div class="small">Each share loses about <b>${rupee(z.perShare)}</b> at the stop — pick the quantity so the total is a loss you accept.</div>`;
     return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
       <div class="what"><b>${up ? "Buy" : "Short-sell"} ${esc(nameOf(sym))}</b> · intraday, exit by 15:15</div>
       <div class="levels"><div class="lv"><span>Entry</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss</span><b class="down">${fmt(s.stop_loss)}</b></div>
         <div class="lv"><span>Target</span><b class="up">${fmt(s.target)}</b></div></div>${sz}
       <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs). One trade a day. Not a validated edge — use your judgment.</div></div>`;
   }
-  const sizing = !riskLimit().max ? `<div class="small warn-c">Enter your capital and risk limit above to see how many lots.</div>`
-    : z.lots < 1 ? `<div class="small warn-c">One lot risks about ${money(z.perLot)} — more than your limit of ${money(riskLimit().max)}. Skip this trade.</div>`
-    : `<div class="levels"><div class="lv"><span>Lots</span><b>${z.lots}</b><small>${z.lots * leg.lot} units</small></div>
-        <div class="lv"><span>Max loss at stop</span><b class="down">${z.approx ? "≈ " : ""}${money(z.loss)}</b><small>within your limit</small></div>
-        <div class="lv"><span>Money needed</span><b>${z.cost != null ? money(z.cost) : "premium × lots"}</b><small>option premium paid</small></div>
-        <div class="lv"><span>Leverage</span><b>${z.leverage != null ? z.leverage.toFixed(1) + "×" : "—"}</b><small>index exposure ÷ capital</small></div></div>`;
+  const sizing = `<div class="levels"><div class="lv"><span>One lot</span><b>${leg.lot}</b><small>units</small></div>
+        <div class="lv"><span>Loss at stop, a lot</span><b class="down">${z.approx ? "≈ " : ""}${money(z.loss)}</b><small>before charges</small></div>
+        <div class="lv"><span>Money needed, a lot</span><b>${z.cost != null ? money(z.cost) : "premium × lot"}</b><small>option premium paid</small></div></div>`;
   return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
     <div class="what"><b>Buy ${esc(NAMES[sym] || nameOf(sym))} ${fmt0(leg.strike)} ${leg.kind}</b>${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}</div>
     <div class="levels"><div class="lv"><span>Entry (index)</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss (index)</span><b class="down">${fmt(s.stop_loss)}</b></div>
@@ -886,7 +858,7 @@ function drawPlanChartLines(sym) {
   }
 }
 
-function renderPlan() { renderSession(); renderRisk(); renderPlanCards(); }
+function renderPlan() { renderSession(); renderPlanCards(); }
 
 async function loadMorning() {
   try { S.morning = await api("/api/morning" + (PREVIEW_AT ? "?date=" + PREVIEW_AT.slice(0, 10) : "")); } catch (e) { $("#planBody").innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
@@ -903,8 +875,7 @@ async function loadLive() {
 
 // ---------- Plan tab: NSE option chain and the AI strategist ----------
 // The chain comes from NSE (OI in units, as trading apps show it). The AI proposes one defined-risk strategy or
-// none; the server checks it, prices it at the bid / ask and sizes it to the risk limit. Capital never leaves here
-// except as the rupee limit used for sizing.
+// none; the server checks it and prices it at the bid / ask, per lot.
 S.nse = {}; S.nseExp = {}; S.nseView = store("nseView") || "oi"; S.strat = {};
 const STRAT_NAMES = { no_trade: "No trade", long_call: "Buy a call", long_put: "Buy a put", bull_call_spread: "Bull call spread",
   bear_put_spread: "Bear put spread", bull_put_spread: "Bull put spread", bear_call_spread: "Bear call spread", iron_condor: "Iron condor" };
@@ -974,20 +945,19 @@ function renderNseChain(sym) {
 
 function renderStrat(sym) {
   const slot = $(`.plan-card[data-sym="${sym}"] .strat-slot`); if (!slot) return;
-  const st = S.strat[sym] || {}, r = riskLimit();
+  const st = S.strat[sym] || {};
   const ask = `<div class="strat-ask"><button class="btn primary strat-go" ${st.running ? "disabled" : ""}>${st.running ? "Analysing…" : st.result ? "Ask again" : `Analyse ${esc(NAMES[sym] || nameOf(sym))} with AI`}</button>
     <span class="small muted">${st.running ? `<span class="spinner"></span> Reading the chart, trend, volatility, option chain and news view (about a minute) — started ${esc(st.started || "")}`
-      : `Uses expiry <b>${esc(S.nseExp[sym] || "nearest")}</b> (pick another in the chain below) and your limit${r.max ? ` of <b>${money(r.max)}</b>` : " — enter capital above to get lot sizes"}. The AI sees your risk %, never your capital.`}</span></div>`;
+      : `Uses expiry <b>${esc(S.nseExp[sym] || "nearest")}</b> (pick another in the chain below). Figures are per lot; you choose how many.`}</span></div>`;
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result) : "");
   $(".strat-go", slot).onclick = () => startStrat(sym);
 }
 
 async function startStrat(sym) {
-  const r = riskLimit();
   S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; renderStrat(sym);
   try {
     const { job } = await api("/api/strategy", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: sym, risk_pct: r.pct || 1, risk_amount: r.max, allocation: r.alloc, expiry: S.nseExp[sym] || null }) });
+      body: JSON.stringify({ symbol: sym, expiry: S.nseExp[sym] || null }) });
     stratJobs[sym] = job; store("stratJobs", JSON.stringify(stratJobs));
     pollStrat(sym, job);
   } catch (e) { S.strat[sym] = { error: e.message }; renderStrat(sym); }
@@ -1004,7 +974,7 @@ async function pollStrat(sym, job) {
 Object.entries(stratJobs).forEach(([sym, job]) => pollStrat(sym, job));   // a result survives a page reload
 
 function stratHtml(res) {
-  const a = res.plan, pr = res.priced, z = res.sizing;
+  const a = res.plan, pr = res.priced;
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
   const head = `<div class="strat-head"><div><div class="ask">AI suggestion · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
@@ -1022,11 +992,7 @@ function stratHtml(res) {
       <div class="lv"><span>Worst case a lot</span><b class="down">${money(pr.max_loss_per_lot)}</b><small>before charges</small></div>
       <div class="lv"><span>Best case a lot</span><b class="up">${pr.max_profit_per_lot == null ? "open-ended" : money(pr.max_profit_per_lot)}</b><small>${pr.reward_to_risk != null ? `${pr.reward_to_risk.toFixed(2)}× the risk` : ""}</small></div>
       <div class="lv wide"><div><span>Break-even at expiry</span><b>${pr.breakevens.map(fmt0).join(" / ")}</b></div><div><span>Lot size</span><b>${pr.lot}</b></div></div></div>` : "";
-  const size = !pr ? "" : z?.lots == null ? `<div class="small warn-c">${esc(z?.reason || "")}</div>`
-    : z.lots === 0 ? `<div class="call stop small"><b>Too big for your limit.</b> ${esc(z.reason)}</div>`
-    : `<div class="levels sized"><div class="lv"><span>Lots for your limit</span><b>${z.lots}</b><small>${z.units} units</small></div>
-        <div class="lv"><span>Worst case</span><b class="down">${money(z.max_loss)}</b><small>incl. ${money(z.charges)} charges</small></div>
-        <div class="lv"><span>Money needed</span><b>${money(z.outlay)}</b><small>${pr.debit ? "premium paid" : "≈ margin for the spread"}</small></div></div>`;
+  const size = pr ? `<div class="small muted">Per lot. Charges for one lot, in and out: about ${money(res.charges_per_lot)}. Choose the number of lots so the worst case is a loss you accept.</div>` : "";
   const kl = (a.key_levels || []).map((l) => `<li><b class="num">${fmt0(l.price)}</b> ${esc(l.label)}</li>`).join("");
   return `<div class="call ${a.strategy === "no_trade" ? "idle" : a.bias === "bearish" ? "go-down" : a.bias === "bullish" ? "go-up" : "idle"}">${head}
       ${a.strategy !== "no_trade" ? `<div class="levels">${levels.map(([k, x, s2, c]) => `<div class="lv"><span>${k}</span><b class="${c || ""}">${x}</b><small>${s2}</small></div>`).join("")}</div>${legs}${econ}${size}` : ""}
