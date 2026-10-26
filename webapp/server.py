@@ -7,6 +7,7 @@ then open http://localhost:8000
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -22,6 +23,7 @@ from pydantic import BaseModel  # noqa: E402
 
 from webapp import (  # noqa: E402
     ai,
+    latency,
     market_data as md,
     morning,
     option_chain as nse_oc,
@@ -35,6 +37,17 @@ from webapp import (  # noqa: E402
 STATIC = Path(__file__).parent / "static"
 app = FastAPI(title="Pulse Trader")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+md.start_refresh_ahead()
+
+
+@app.middleware("http")
+async def time_requests(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    route = request.scope.get("route")
+    if route is not None and request.url.path.startswith("/api/"):
+        latency.observe(f"api {request.method} {route.path}", time.perf_counter() - started)
+    return response
 
 
 async def _call(fn, *args):
@@ -60,6 +73,12 @@ def status():
     }
 
 
+@app.get("/api/latency")
+def latency_report():
+    """p50 / p95 / p99 per API route and per data fetch, over the last requests since the server started."""
+    return latency.report()
+
+
 @app.get("/api/search")
 async def search(q: str):
     return await _call(md.search, q)
@@ -73,10 +92,14 @@ async def quotes(symbols: str):
 @app.get("/api/candles/{symbol}")
 async def candles(symbol: str, tf: str = "5m", limit: int = 1500):
     df, source = await _call(md.candles, symbol, tf)
+    open_now = signals.market_open()
+    age, stale = md.bar_age(df), md.stale_bars(df, tf, open_now)
     df = df.iloc[-limit:]
     bars = [{"time": int(ts.timestamp()), "open": r.open, "high": r.high, "low": r.low,
              "close": r.close, "volume": r.volume} for ts, r in zip(df.index, df.itertuples(), strict=True)]
-    return {"symbol": symbol.upper(), "tf": tf, "source": source, "bars": bars}
+    return {"symbol": symbol.upper(), "tf": tf, "source": source, "bars": bars,
+            "data": {"last_bar_age_s": round(age) if age is not None else None, "stale": stale is not None,
+                     "live": open_now and source in ("dhan", "yahoo") and stale is None}}
 
 
 @app.get("/api/plan/{symbol}")

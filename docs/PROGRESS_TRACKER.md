@@ -298,6 +298,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-26 — Backend latency (PA-28): requests now read memory. A background refresh keeps the data in use fresh, and identical requests share one fetch. Measured p99 1,277 → 139 ms and p95 737 → 95 ms. A plan on a stopped feed or saved prices is blocked. Sub-second prices still need the Dhan feed (your decision).
 - 2026-10-26 — Docs: 16 small change records folded into the records they belong to; the remaining 27 renumbered PA-01 to PA-27 (the index has an old → new table).
 - 2026-10-26 — Risk / Options costs / Research tabs now say which NSE close their end-of-day data is from and when the next 7:30 PM update is due; a missed nightly run is flagged.
 - 2026-10-26 — Prices: NSE's free chain is 30-60 s old and updates every ~45 s (measured); Pulse's own extra delay cut to ~25 s, and every price now shows its age. Real time needs the Dhan token.

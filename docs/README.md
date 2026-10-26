@@ -74,6 +74,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-25](PA_25-trade-record.md) | Trade Record tab: take the AI's trade as a dummy 1-lot trade, live monitoring with target / stop flags, P&L history | Done |
 | [PA-26](PA_26-evidence-score-and-ai-track-record.md) | Pulse evidence score (0-100) for every AI suggestion, debit-spread check fixed, one retry, AI track record by score | Done |
 | [PA-27](PA_27-pulse-trade-ranking.md) | Pulse trade ranking: concrete trades (strike, entry, target, stop per leg) best first, iron butterfly accepted | Done |
+| [PA-28](PA_28-backend-latency.md) | Backend latency: one fetch per key, refresh-ahead, stale-feed blockers, p50/p95/p99 at `/api/latency` (p99 1.3 s → 0.14 s) | Done |
 
 **Renumbered on 2026-10-26.** Sixteen small records were folded into the ones they belong to and the rest numbered 01–27. Pull requests and commits before that date use the old numbers:
 

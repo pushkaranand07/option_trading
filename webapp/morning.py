@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -121,8 +122,10 @@ def build(day: date | None = None, with_ai: bool = True, calendar=None, keep_ai:
     day = day or date.today()
     plan = {"built_at": datetime.now().strftime("%Y-%m-%d %H:%M"), "session": session(day, calendar), "indices": {}}
     old = load(day) if keep_ai else None
+    with ThreadPoolExecutor(len(INDICES)) as pool:              # the indices' data is independent
+        contexts = dict(zip(INDICES, pool.map(lambda s: context(s, day), INDICES), strict=True))
     for symbol, ticker in INDICES.items():
-        entry = {"context": context(symbol, day), "ai": None}
+        entry = {"context": contexts[symbol], "ai": None}
         if with_ai and plan["session"]["trading"]:
             try:
                 entry["ai"] = ai_view(ticker, day)

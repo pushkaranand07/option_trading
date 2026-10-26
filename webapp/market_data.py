@@ -7,10 +7,14 @@ caching every response for at least that long.
 
 from __future__ import annotations
 
+import contextlib
 import csv
+import json
+import logging
 import os
 import threading
 import time as _time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -19,6 +23,9 @@ import pandas as pd
 import requests
 import yfinance as yf
 
+from webapp import latency
+
+logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 DHAN_BASE = "https://api.dhan.co/v2"
 SCRIP_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master.csv"
@@ -44,22 +51,113 @@ class DataError(Exception):
 
 
 class _TTLCache:
+    """Each value is kept ``ttl`` seconds from the moment its fetch started, so its age never exceeds ``ttl``.
+
+    One fetch per key at a time: callers that miss together wait for that fetch instead of repeating it,
+    and a result never replaces one whose fetch started later. While the market is open, ``refresh_ahead``
+    refetches the keys read in the last ``HOT_SECONDS`` shortly before they expire, so a request reads
+    memory instead of waiting on Yahoo / NSE / Dhan.
+    """
+
+    HOT_SECONDS = 90
+    LEAD = 1.0          # refetch this long before expiry, or twice the key's last fetch time (at most 40% of the ttl)
+    BACKOFF = 30.0      # a key whose refetch failed is left to the requests for this long
+    WORKERS = 4         # refetches at once, so one slow source does not hold up the rest
+
     def __init__(self):
-        self._d: dict = {}
+        self._d: dict = {}              # key -> (monotonic time the fetch started, value)
+        self._uses: dict = {}           # key -> (fn, ttl, last read)
+        self._failed: dict = {}         # key -> monotonic time of the last failed refetch
+        self._took: dict = {}           # key -> seconds its last fetch took
+        self._key_locks: dict = {}
         self._lock = threading.Lock()
 
     def get(self, key, ttl: float, fn):
+        now = _time.monotonic()
         with self._lock:
+            self._uses[key] = (fn, ttl, now)
             hit = self._d.get(key)
-            if hit and _time.monotonic() - hit[0] < ttl:
+            if hit and now - hit[0] < ttl:
                 return hit[1]
+            key_lock = self._key_locks.setdefault(key, threading.Lock())
+        with key_lock:
+            with self._lock:
+                hit = self._d.get(key)
+                if hit and _time.monotonic() - hit[0] < ttl:     # another caller fetched it meanwhile
+                    return hit[1]
+            return self._fetch(key, fn)
+
+    def _fetch(self, key, fn):
+        started = _time.monotonic()
         value = fn()
+        took = _time.monotonic() - started
+        latency.observe(f"fetch {key[0] if isinstance(key, tuple) else key}", took)
         with self._lock:
-            self._d[key] = (_time.monotonic(), value)
+            self._took[key] = took
+            old = self._d.get(key)
+            if old is None or old[0] <= started:
+                self._d[key] = (started, value)
+            else:
+                value = old[1]
         return value
+
+    def refresh_ahead(self) -> int:
+        """Refetch the hot keys about to expire, up to ``WORKERS`` at once; returns how many were refetched."""
+        now = _time.monotonic()
+        with self._lock:
+            due = [(k, fn) for k, (fn, ttl, read) in self._uses.items()
+                   if now - read < self.HOT_SECONDS and k in self._d
+                   and now - self._d[k][0] >= ttl - min(max(self.LEAD, 2 * self._took.get(k, 0)), ttl * 0.4)
+                   and now - self._failed.get(k, -1e9) >= self.BACKOFF]
+        if not due:
+            return 0
+        with ThreadPoolExecutor(min(self.WORKERS, len(due))) as pool:
+            return sum(pool.map(lambda kf: self._refresh(*kf), due))
+
+    def _refresh(self, key, fn) -> bool:
+        with self._lock:
+            key_lock = self._key_locks.setdefault(key, threading.Lock())
+        if not key_lock.acquire(blocking=False):                # a request is fetching it right now
+            return False
+        try:
+            self._fetch(key, fn)
+            return True
+        except Exception as exc:
+            self._failed[key] = _time.monotonic()
+            logger.warning("Refresh of %s failed: %s", key, exc)
+            return False
+        finally:
+            key_lock.release()
 
 
 _cache = _TTLCache()
+_refresher: threading.Thread | None = None
+
+
+def start_refresh_ahead(tick: float = 0.25) -> None:
+    """Keep the data in use fresh in the background while the market is open (the server calls this once)."""
+    global _refresher
+    if _refresher is not None:
+        return
+
+    def run():
+        from webapp import signals
+
+        index_lots()                                         # parse the scrip master before the first request
+        open_checked, is_open = -1e9, False
+        while True:
+            if _time.monotonic() - open_checked > 30:
+                try:
+                    is_open = signals.market_open()
+                except Exception:
+                    is_open = False
+                open_checked = _time.monotonic()
+            if is_open:
+                _cache.refresh_ahead()
+            _time.sleep(tick)
+
+    _refresher = threading.Thread(target=run, name="refresh-ahead", daemon=True)
+    _refresher.start()
 
 
 # ---------- Dhan ----------
@@ -140,10 +238,27 @@ def load_index_lots(path: Path) -> dict[str, int]:
     return {u: max(c, key=c.get) for u, c in lots.items()}
 
 
+def _parsed_scrip_master(name: str, parse):
+    """``parse(path)`` of today's scrip master. Parsing its ~216k rows takes seconds, so the result is kept
+    beside the file and parsed again only when a new file is downloaded."""
+    path = _scrip_master_path()
+    side, stamp = path.with_name(f"{path.stem}.{name}.json"), path.stat().st_mtime
+    try:
+        saved = json.loads(side.read_text(encoding="utf-8"))
+        if saved["stamp"] == stamp:
+            return saved["data"]
+    except (OSError, ValueError, KeyError):
+        pass
+    data = parse(path)
+    with contextlib.suppress(OSError):
+        side.write_text(json.dumps({"stamp": stamp, "data": data}), encoding="utf-8")
+    return data
+
+
 def index_lots() -> dict[str, int]:
     """Live index lot sizes, refreshed daily; {} when the scrip master cannot be fetched (then INDICES applies)."""
     try:
-        return _cache.get("index_lots", 3600, lambda: load_index_lots(_scrip_master_path()))
+        return _cache.get("index_lots", 3600, lambda: _parsed_scrip_master("lots", load_index_lots))
     except Exception:
         return {}
 
@@ -171,7 +286,8 @@ def equities() -> dict[str, tuple[int, str]]:
     global _equities
     if not _equities and dhan.enabled:
         try:
-            _equities = _cache.get("scrip", 3600, _load_scrip_master)
+            _equities = {s: tuple(v) for s, v in _cache.get(
+                "scrip", 3600, lambda: _parsed_scrip_master("equities", lambda _: _load_scrip_master())).items()}
         except Exception:
             _equities = {}
     return _equities
@@ -267,6 +383,25 @@ TIMEFRAMES = {
     "1h": ("60", 89, "3mo", "60m"),
     "1D": (None, 730, "2y", "1d"),
 }
+
+# While the market is open, a last bar that started longer ago than this means the feed has stopped:
+# two bars (Yahoo's bars arrive a few minutes late, so one bar is not enough).
+MAX_BAR_AGE = {"1m": 180, "5m": 600, "15m": 1800, "1h": 7200}
+
+
+def bar_age(df: pd.DataFrame, now: datetime | None = None) -> float | None:
+    """Seconds since the last bar started, or None without bars."""
+    if df is None or df.empty:
+        return None
+    return ((now or datetime.now(IST)) - df.index[-1].to_pydatetime()).total_seconds()
+
+
+def stale_bars(df: pd.DataFrame, tf: str, market_open: bool, now: datetime | None = None) -> float | None:
+    """The last bar's age in seconds when it is too old to trade on (market open only), else None."""
+    age = bar_age(df, now)
+    if not market_open or tf not in MAX_BAR_AGE:
+        return None
+    return age if age is not None and age > MAX_BAR_AGE[tf] else None
 
 
 def candles(symbol: str, tf: str = "5m") -> tuple[pd.DataFrame, str]:
