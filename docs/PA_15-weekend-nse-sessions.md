@@ -1,10 +1,10 @@
-# PA-19 — Weekend NSE special sessions downloaded (Budget days, Muhurat, special live sessions)
+# PA-15 — Weekend NSE special sessions downloaded (Budget days, Muhurat, special live sessions)
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/backfill.py`, `tests/test_quant_backfill.py`, `scripts/update_progress.py`, `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-18](PA_18-market-map-2021-26.md) (the Market Map cross-check that found the bug), [PA-03](PA_03-quant-foundation-nse-data-store.md) (downloader and store), [PA-05](PA_05-garch-volatility-and-vrp-condor.md) (GARCH, IV), [PA-08](PA_08-regime-detection-hmm.md) (regime), [PA-17](PA_17-backward-holdout-2015.md) (2015–17 holdout files), [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md), [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
+| **Related** | [PA-14](PA_14-market-map-2021-26.md) (the Market Map cross-check that found the bug), [PA-03](PA_03-quant-foundation-nse-data-store.md) (downloader and store), [PA-05](PA_05-garch-volatility-and-vrp-condor.md) (GARCH, IV), [PA-06](PA_06-regime-detection-hmm.md) (regime), [PA-13](PA_13-backward-holdout-2015.md) (2015–17 holdout files), [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md), [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
 | **Pull request** | #19 and #20 (branch `quant/weekend-sessions`) |
 | **Date** | 2026-10-24 |
 
@@ -16,7 +16,7 @@ NSE occasionally trades on a Saturday or Sunday: Union Budget days, Diwali Muhur
 (disaster-recovery) sessions. None of these sessions were in the data store, so any measurement touching them was
 wrong or missing.
 
-It was found when the Market Map's news cross-check ([PA-18](PA_18-market-map-2021-26.md)) could not match the
+It was found when the Market Map's news cross-check ([PA-14](PA_14-market-map-2021-26.md)) could not match the
 **Sunday 2026-02-01 Budget session**.
 
 ## 2. Root cause / findings
@@ -71,7 +71,7 @@ Unit suite at PR #20: 1,333 passed.
 
 - The 2026-02-01 NIFTY close in the rebuilt store (24,825.45) equals the reported close.
 - The Market Map was rebuilt with the recovered sessions; the Sunday 2026-02-01 Budget is now measured on its own
-  session (NIFTY −1.96%) ([PA-18](PA_18-market-map-2021-26.md)).
+  session (NIFTY −1.96%) ([PA-14](PA_14-market-map-2021-26.md)).
 - The nightly job now probes each weekend as part of its normal download step.
 
 ## 8. Risks and open items
@@ -79,7 +79,7 @@ Unit suite at PR #20: 1,333 passed.
 - The probe relies on NSE publishing the index-close file for every session; a session with only some files published
   would be missed. Not recorded whether this has ever happened.
 - Backtests and validations run before this fix (for example the VRP condor results in
-  [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md) to [PA-17](PA_17-backward-holdout-2015.md)) used a store
+  [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md) to [PA-13](PA_13-backward-holdout-2015.md)) used a store
   without these sessions. Whether they were re-run: not recorded.
 - The 2015 and 2016 sessions fall in the holdout years (2015–17 files), which are kept outside the main store; how they
   are used there: not recorded.
@@ -88,7 +88,7 @@ Unit suite at PR #20: 1,333 passed.
 
 Merged here on 2026-10-26; the full text is in git history.
 
-- **PA-27 — special sessions in the calendar (2026-10-24).** `NSECalendar.from_nse()` never filled `special_sessions`,
+- **Special sessions in the calendar (2026-10-24).** `NSECalendar.from_nse()` never filled `special_sessions`,
   so the agents' tools treated Budget Sundays and Muhurat sessions as closed days. Two sources fix it:
   - **past dates:** `KNOWN_SPECIAL_SESSIONS`, the 11 weekend sessions since 2015, each verified from NSE's files (this
     record);

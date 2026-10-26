@@ -1,10 +1,10 @@
-# PA-15 — Proof plan, approach A (predict move size), quiet-stock condor rejected, VRP spec frozen, paper-trading ledger
+# PA-11 — Proof plan, approach A (predict move size), quiet-stock condor rejected, VRP spec frozen, paper-trading ledger
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `docs/PROOF_PLAN.md` (now [plans/PROOF_PLAN.md](plans/PROOF_PLAN.md)), [strategies/vrp_condor_pooled.md](strategies/vrp_condor_pooled.md), `tradingagents/analytics/ml/move_size.py`, `tradingagents/analytics/ml/inputs.py`, `tradingagents/analytics/quiet_condor.py`, `tradingagents/analytics/paper.py`, `tradingagents/analytics/paper_strategies.py`, `tradingagents/analytics/condor.py`, `tradingagents/analytics/vrp.py`, `scripts/quant_move_size.py`, `scripts/quant_quiet_condor.py`, `scripts/quant_paper.py`, `scripts/quant_vrp_condor.py`, `scripts/quant_daily_update.py`, tests for each, `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md) (the re-test that made the condor a candidate), [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) (LightGBM), [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) (daily refresh), [PA-13](PA_11-ship-expected-move-and-daily-refresh.md), [PA-16](PA_16-stage2-stress-tests.md), [PA-17](PA_17-backward-holdout-2015.md), [plans/PROOF_PLAN.md](plans/PROOF_PLAN.md), [strategies/vrp_condor_pooled.md](strategies/vrp_condor_pooled.md), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
+| **Related** | [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md) (the re-test that made the condor a candidate), [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) (LightGBM), [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) (daily refresh), [PA-09](PA_09-ship-expected-move-and-daily-refresh.md), [PA-12](PA_12-stage2-stress-tests.md), [PA-13](PA_13-backward-holdout-2015.md), [plans/PROOF_PLAN.md](plans/PROOF_PLAN.md), [strategies/vrp_condor_pooled.md](strategies/vrp_condor_pooled.md), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
 | **Pull request** | #14 (branch `quant/move-size`; builds on #12 and #13 — merging it merged all three) |
 | **Date** | 2026-10-23 |
 
@@ -17,7 +17,7 @@ Research and decision support only — not investment advice.
 - There was no written rule for when a strategy that "looks good in a backtest" may be traded on Dhan with real money.
 - Every direction model so far ("will it rise", "will it beat the others") had no edge. An open question was whether
   the *size* of a move is easier to predict than its direction.
-- The pooled VRP condor ([PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md)) was the strongest candidate but
+- The pooled VRP condor ([PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md)) was the strongest candidate but
   missed the 100-trade gate; only future data can supply more trades.
 
 ## 2. Root cause / findings
@@ -114,5 +114,5 @@ stop, both filled at the next session's close.
   may differ from the backtest more than usual.
 - Rare signal: ~21 months of paper trading needed.
 - The proof plan said the quiet-stock condor was the best hope for a faster answer; it was rejected in the same PR.
-- Follow-up: Stage 2 stress tests in [PA-16](PA_16-stage2-stress-tests.md); the backward holdout in
-  [PA-17](PA_17-backward-holdout-2015.md) rejected the VRP condor and turned paper trading into observation only.
+- Follow-up: Stage 2 stress tests in [PA-12](PA_12-stage2-stress-tests.md); the backward holdout in
+  [PA-13](PA_13-backward-holdout-2015.md) rejected the VRP condor and turned paper trading into observation only.

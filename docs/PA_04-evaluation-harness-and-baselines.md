@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/evaluate.py`, `tradingagents/analytics/costs.py`, `tradingagents/analytics/prices.py`, `tradingagents/dataflows/vendors/yahoo/market.py`, `scripts/quant_evaluate.py`, `scripts/quant_build_store.py`, `tests/test_quant_evaluate.py`, `tests/test_quant_costs.py` |
-| **Related** | [PA-03](PA_03-quant-foundation-nse-data-store.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-08](PA_08-regime-detection-hmm.md) (regime gate) · [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) (ledger cost fix) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) · [plans/QUANT_SIGNAL_LAYER_PLAN.md](plans/QUANT_SIGNAL_LAYER_PLAN.md) |
+| **Related** | [PA-03](PA_03-quant-foundation-nse-data-store.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-06](PA_06-regime-detection-hmm.md) (regime gate) · [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) (ledger cost fix) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) · [plans/QUANT_SIGNAL_LAYER_PLAN.md](plans/QUANT_SIGNAL_LAYER_PLAN.md) |
 | **Pull request** | #3 (branch `quant/phase-2-harness`); commit `d4609fd` |
 | **Date** | 2026-10-23 |
 
@@ -66,7 +66,7 @@ Run on real data for the MA-trend result above (tracker, Phase 2: "First real re
 ## 8. Risks and open items
 
 - Ledger costs on resizes and flips did not match the daily series; fixed after an independent review in
-  [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) (`088d6b6`).
+  [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) (`088d6b6`).
 - Stopping at yesterday was later relaxed to include today's bar from 16:00 (tracker bug list; record not in this PR).
 - The MA trend rule was later dropped at the user's request (tracker, Phase 6 "On hold").
 - Research and decision support only; not investment advice.

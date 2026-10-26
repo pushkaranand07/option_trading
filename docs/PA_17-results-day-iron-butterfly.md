@@ -1,10 +1,10 @@
-# PA-21 — Results-day iron butterfly (IV crush) on stock options: rejected
+# PA-17 — Results-day iron butterfly (IV crush) on stock options: rejected
 
 | | |
 |---|---|
 | **Status** | Done (merged) — strategy **rejected** |
 | **Scope** | `tradingagents/analytics/events.py`, `scripts/quant_results_fly.py`, `tests/test_quant_events.py`, [strategies/results_iron_fly.md](strategies/results_iron_fly.md) |
-| **Related** | [PA-22](PA_22-results-fly-overpriced-retest.md) (re-test), [PA-23](PA_23-option-quotes-measured-spreads.md) (measured spreads), [architecture/14](architecture/14-option-strategy-simulators-and-costs.md) |
+| **Related** | [PA-18](PA_18-results-fly-overpriced-retest.md) (re-test), [PA-19](PA_19-option-quotes-measured-spreads.md) (measured spreads), [architecture/14](architecture/14-option-strategy-simulators-and-costs.md) |
 | **Pull request** | #23 (branch `quant/results-iron-fly`) |
 | **Date** | 2026-10-24 |
 
@@ -72,7 +72,7 @@ passed; ruff clean.
 
 ## 8. Risks and open items
 
-- The verdict depends on the slippage assumption — diagnosed in [PA-22](PA_22-results-fly-overpriced-retest.md) and
-  measured in [PA-23](PA_23-option-quotes-measured-spreads.md).
+- The verdict depends on the slippage assumption — diagnosed in [PA-18](PA_18-results-fly-overpriced-retest.md) and
+  measured in [PA-19](PA_19-option-quotes-measured-spreads.md).
 - For trading on Dhan: selling butterflies or straddles on stock options into results is right about the market but
   loses to costs.

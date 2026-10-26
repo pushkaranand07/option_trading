@@ -1,10 +1,10 @@
-# PA-17 — Backward holdout 2015–21 rejects the VRP condor; paper trading kept as observation only
+# PA-13 — Backward holdout 2015–21 rejects the VRP condor; paper trading kept as observation only
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/holdout.py`, `scripts/quant_holdout.py`, `tradingagents/analytics/paper.py`, `tradingagents/analytics/paper_strategies.py`, `scripts/quant_paper.py`, `tests/test_quant_holdout.py`, `tests/test_quant_paper.py`, `docs/PROOF_PLAN.md`, `docs/strategies/vrp_condor_pooled.md`, `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-16](PA_16-stage2-stress-tests.md) (Stage 2, included in this PR), [PA-15](PA_15-proof-plan-move-size-and-paper-trading.md) (spec and ledger), [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md), [PA-03](PA_03-quant-foundation-nse-data-store.md) (downloader and store), [plans/PROOF_PLAN.md](plans/PROOF_PLAN.md), [strategies/vrp_condor_pooled.md](strategies/vrp_condor_pooled.md), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
+| **Related** | [PA-12](PA_12-stage2-stress-tests.md) (Stage 2, included in this PR), [PA-11](PA_11-proof-plan-move-size-and-paper-trading.md) (spec and ledger), [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md), [PA-03](PA_03-quant-foundation-nse-data-store.md) (downloader and store), [plans/PROOF_PLAN.md](plans/PROOF_PLAN.md), [strategies/vrp_condor_pooled.md](strategies/vrp_condor_pooled.md), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
 | **Pull request** | #16 (branch `quant/holdout-2015`; builds on #15 — merging it merged both) |
 | **Date** | 2026-10-23 |
 

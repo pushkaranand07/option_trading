@@ -1,10 +1,10 @@
-# PA-36 — AI trade explained like a broker order: premium levels per leg, leg ticket, chart marks
+# PA-24 — AI trade explained like a broker order: premium levels per leg, leg ticket, chart marks
 
 | | |
 |---|---|
 | **Status** | Done |
 | **Scope** | `webapp/strategist.py` (`trade_levels`, Black-Scholes), `webapp/option_chain.py` (depth fields, `contract`), `webapp/server.py` (`GET /api/contract`), `webapp/static/*` (AI result card, ticket), `tests/test_strategist.py` |
-| **Related** | [PA-34](PA_34-ai-strategist-and-nse-option-chain.md), [PA-35](PA_33-morning-plan.md), [features/webapp](features/webapp.md) |
+| **Related** | [PA-23](PA_23-ai-strategist-and-nse-option-chain.md), [PA-22](PA_22-morning-plan.md), [features/webapp](features/webapp.md) |
 | **Pull request** | branch `feature/trade-ticket` |
 | **Date** | 2026-10-25 |
 
@@ -116,7 +116,7 @@ Unit suite: 1,496 passed. Ruff is clean, and `node --check` passes.
 
 Merged here on 2026-10-26; the full text is in git history.
 
-- **PA-41 — legs by their job in Dhan.** A spread's protective BUY leg showed a target below its entry, which Dhan's
+- **Legs by their job in Dhan.** A spread's protective BUY leg showed a target below its entry, which Dhan's
   Super order cannot take (a BUY needs target > entry > stop). Legs are now shown by role:
 
   | Leg | In Dhan | Target / stop loss shown |

@@ -1,10 +1,10 @@
-# PA-10 — Relative-strength model (Phase 6, second model), data completion, and the remaining bug fixes
+# PA-08 — Relative-strength model (Phase 6, second model), data completion, and the remaining bug fixes
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/ml/{relative,inputs}.py`, `scripts/quant_relative.py`, `scripts/quant_ml.py`, `tests/test_quant_relative.py`; fixes in `option_backtester/exits.py`, `tradingagents/analytics/{datastore,prices,volatility_model,vrp}.py`, `scripts/quant_{build_store,regime,vol_forecasts}.py`, `webapp/{market_data,planner}.py`; `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-02](PA_02-webapp.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-07](PA_05-garch-volatility-and-vrp-condor.md) · [PA-08](PA_08-regime-detection-hmm.md) · [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) · [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) · [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md) · [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) |
+| **Related** | [PA-02](PA_02-webapp.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-06](PA_06-regime-detection-hmm.md) · [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) · [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) · [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md) · [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) |
 | **Pull request** | #9 (branch `quant/phase-6b-relative`); 17 commits from `8df7ad0` to `f1592f2`. No PR description. The real-data verdict was committed in `df898d7` (PR #10) |
 | **Date** | 2026-10-23 |
 
@@ -77,8 +77,8 @@
   0 missing sessions in any dataset; 6,516 index bars from NSE; 58 stock gaps filled from NSE; all 14 stock jumps
   > 20% verified as real events (e.g. COVID 23-Mar-2020, Adani, BHEL).
 - Verdicts recorded on this branch: VRP condor rejected ([PA-05](PA_05-garch-volatility-and-vrp-condor.md)), LightGBM
-  with NSE features rejected ([PA-09](PA_09-agent-quant-tool-and-lightgbm.md)), regime passes as a risk input
-  ([PA-08](PA_08-regime-detection-hmm.md)).
+  with NSE features rejected ([PA-07](PA_07-agent-quant-tool-and-lightgbm.md)), regime passes as a risk input
+  ([PA-06](PA_06-regime-detection-hmm.md)).
 - Lot sizes: 99.6% match with NSE's stated lots (tracker).
 
 ## 7. Verification
@@ -89,6 +89,6 @@ store; stock jumps checked against NSE prices.
 ## 8. Risks and open items
 
 - A **turnover-matched random baseline** was needed to judge the relative-strength book fairly — added in
-  [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md) along with a buffer re-test.
+  [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md) along with a buffer re-test.
 - Remaining warnings come from third-party packages (pandas-ta-classic, empyrical).
 - Research and decision support only; not investment advice.

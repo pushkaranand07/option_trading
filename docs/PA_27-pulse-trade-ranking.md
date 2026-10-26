@@ -1,10 +1,10 @@
-# PA-40 — Pulse trade ranking: concrete trades with strikes, entry, target and stop, best first
+# PA-27 — Pulse trade ranking: concrete trades with strikes, entry, target and stop, best first
 
 | | |
 |---|---|
 | **Status** | Done |
 | **Scope** | `webapp/strategist.py` (`rank`, `_structures`, `_index_levels`; iron-butterfly check), `webapp/server.py` (`GET /api/rank/{symbol}`), `webapp/static/*` (ranked table in the AI strategist section), `tests/test_strategist.py` |
-| **Related** | [PA-36](PA_36-trade-ticket-and-premium-levels.md), [PA-39](PA_39-evidence-score-and-ai-track-record.md), [features/webapp](features/webapp.md) |
+| **Related** | [PA-24](PA_24-trade-ticket-and-premium-levels.md), [PA-26](PA_26-evidence-score-and-ai-track-record.md), [features/webapp](features/webapp.md) |
 | **Pull request** | branch `feature/trade-ranking` |
 | **Date** | 2026-10-26 |
 
@@ -40,9 +40,9 @@ The ranking is built from rules, with no LLM, in about 5 s:
 - **Filters.** Each candidate is checked like an AI proposal: defined risk, legs on the chain. It is dropped if:
   - a leg has no live two-sided quote;
   - it does not make money at the target and lose at the stop.
-- **Pricing.** At the bid / ask, with the premium target and stop per leg (Black-Scholes, as in PA-36), P&L per lot,
+- **Pricing.** At the bid / ask, with the premium target and stop per leg (Black-Scholes, as in PA-24), P&L per lot,
   charges and warnings.
-- **Ranking.** By the PA-39 evidence score, then by profit-to-loss at the levels. Short reasoning is generated for
+- **Ranking.** By the PA-26 evidence score, then by profit-to-loss at the levels. Short reasoning is generated for
   each trade: the rule, the strikes' distance from the money, buying vs selling premium, and the exit plan.
 - **Endpoint:** `GET /api/rank/{symbol}?expiry=`. Returns the top 8, with how many candidates were considered.
 

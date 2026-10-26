@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | Part 1: `tradingagents/analytics/volatility_model.py`, `tradingagents/analytics/implied_vol.py`, `scripts/quant_vol_forecasts.py`, `tests/test_quant_{volatility,implied_vol}.py`. Part 2: `tradingagents/analytics/condor.py`, `tradingagents/analytics/vrp.py`, `costs.fill_charges`, `scripts/quant_vrp_condor.py`, `tests/test_quant_{condor,vrp}.py` |
-| **Related** | [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-08](PA_08-regime-detection-hmm.md) · [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) · [PA-10](PA_10-relative-strength-model.md) · [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) · [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md) · [PA-17](PA_17-backward-holdout-2015.md) · [PA-20](PA_20-chronos-pretrained-model.md) · [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
+| **Related** | [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-06](PA_06-regime-detection-hmm.md) · [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) · [PA-08](PA_08-relative-strength-model.md) · [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) · [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md) · [PA-13](PA_13-backward-holdout-2015.md) · [PA-16](PA_16-chronos-pretrained-model.md) · [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
 | **Pull request** | #4 (branch `quant/phase-3-garch`), commit `a98625c` (part 1). Part 2 (`9d5941a`, `29b95c3`) and the GARCH convergence fix (`a99eca7`) were merged through #7 (branch `quant/phase-4-regime`) |
 | **Date** | 2026-10-23 |
 
@@ -66,7 +66,7 @@ iron condor (sell a put spread and a call spread together; losses capped by the 
 
 - **Exit check 1 passed:** GARCH beat historical vol out of sample on **31/31 symbols** (29 stocks + 2 indices).
   Pooled QLIKE figures for this run: not recorded in the PR (a later comparison at 10 sessions gave GARCH 0.336 vs
-  EWMA 0.370 — [PA-20](PA_20-chronos-pretrained-model.md)).
+  EWMA 0.370 — [PA-16](PA_16-chronos-pretrained-model.md)).
 - **Exit check 2 — VRP condor rejected on both indices** (run after the full store build; recorded in `554807d`,
   PR #9). 2021-04 → 2026-05 out of sample, 18 settings, costs + slippage:
 
@@ -83,24 +83,24 @@ iron condor (sell a put spread and a call spread together; losses capped by the 
 
 Run on the real NSE store (NIFTY, BANKNIFTY; 31 symbols for GARCH). Before the condor verdict, its accounting was
 corrected: lot sizes made exact and spread close cost capped at the spread width
-([PA-09](PA_09-agent-quant-tool-and-lightgbm.md)); returns stated on capital at 2% risk per trade and parameter
-stability computed ([PA-10](PA_10-relative-strength-model.md), `7e7b979`).
+([PA-07](PA_07-agent-quant-tool-and-lightgbm.md)); returns stated on capital at 2% risk per trade and parameter
+stability computed ([PA-08](PA_08-relative-strength-model.md), `7e7b979`).
 
 ## 8. Risks and open items
 
-- GARCH is **in use** as a risk input (expected move, [PA-11](PA_11-ship-expected-move-and-daily-refresh.md)), not as
+- GARCH is **in use** as a risk input (expected move, [PA-09](PA_09-ship-expected-move-and-daily-refresh.md)), not as
   a trading signal.
 - End-of-day closes are not simultaneous fills; a wing and a short leg may be marked at different times.
 - Open decision handed to the user at the time: how to get more condor trades (pool indices, add stock options,
-  weekly entries, weekly expiries). Followed up in [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md); the
-  pooled version later failed the backward holdout ([PA-17](PA_17-backward-holdout-2015.md)).
+  weekly entries, weekly expiries). Followed up in [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md); the
+  pooled version later failed the backward holdout ([PA-13](PA_13-backward-holdout-2015.md)).
 - Research and decision support only; not investment advice.
 
 ## Folded-in changes (option backtester accuracy)
 
 These small records were merged here on 2026-10-26; the full text is in git history.
 
-- **PA-07 — exit fixes (2026-10-23, PR #6).** The options engine taken from optopsy could report trades a trader never
+- **Exit fixes (2026-10-23, PR #6).** The options engine taken from optopsy could report trades a trader never
   had and overstate profit:
   - take-profit / stop-loss scans ran past a planned early exit (`exit_dte`);
   - commission never reached realized P&L;
@@ -109,7 +109,7 @@ These small records were merged here on 2026-10-26; the full text is in git hist
   Fixed in `option_backtester/exits.py`, `simulator.py` and the NSE adapter: the scan stops at the planned exit,
   commission × quantity is deducted, and every expiry-day contract settles at intrinsic against the underlying close,
   as NSE settles it. Covered by regression tests in `tests/test_option_backtester_fixes.py`.
-- **PA-28 — modelled bid / ask (2026-10-24).** The NSE adapter set `bid = ask = close`, so the backtester's slippage
+- **Modelled bid / ask (2026-10-24).** The NSE adapter set `bid = ask = close`, so the backtester's slippage
   modes cost nothing. Quotes are now built around each close with the quant layer's cost model
   (`costs.DEFAULT_SLIPPAGE`: 1 tick + 1% per side, rounded outward to ₹0.05). That is about 1.2× the measured
   half-spread on liquid strikes: slightly pessimistic, the safe side. `half_spread=None` restores the old quotes for

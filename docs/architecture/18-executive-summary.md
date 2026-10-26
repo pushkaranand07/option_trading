@@ -46,7 +46,7 @@ That is the system working: each idea looked good somewhere and was caught befor
 
 - Progress: see the [tracker](../PROGRESS_TRACKER.md) (bars count only live work).
 - Checked: in 10 full GPT-5 analyses the agents quoted 799 quant numbers with none invented and never called a signal
-  validated ([PA-25](../PA_25-phase9-replay-and-report-wording.md)).
+  validated ([PA-21](../PA_21-phase9-replay-and-report-wording.md)).
 - The VRP condor is paper-traded as **observation only** from 2026-10-26.
 - **Most promising next step: the user's own trading** — the trade journal measures what works in real trades; a setup
   from it can be written as exact rules and tested like everything else.

@@ -1,10 +1,10 @@
-# PA-39 — Pulse evidence score, debit-spread fix, one retry, and an AI track record
+# PA-26 — Pulse evidence score, debit-spread fix, one retry, and an AI track record
 
 | | |
 |---|---|
 | **Status** | Done |
 | **Scope** | `webapp/strategist.py` (`check_structure`, `evidence`, retry in `recommend`, auto-record in `start`), `webapp/trade_record.py` (`source`, auto-settle, `by_score`), `webapp/static/*`, `tests/test_strategist.py`, `tests/test_trade_record.py` |
-| **Related** | [PA-34](PA_34-ai-strategist-and-nse-option-chain.md), [PA-38](PA_38-trade-record.md), [features/webapp](features/webapp.md) |
+| **Related** | [PA-23](PA_23-ai-strategist-and-nse-option-chain.md), [PA-25](PA_25-trade-record.md), [features/webapp](features/webapp.md) |
 | **Pull request** | branch `feature/evidence-score` |
 | **Date** | 2026-10-26 |
 

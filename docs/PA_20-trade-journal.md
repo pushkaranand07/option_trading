@@ -1,4 +1,4 @@
-# PA-24 — Trade journal: what works in the user's own Dhan trades
+# PA-20 — Trade journal: what works in the user's own Dhan trades
 
 | | |
 |---|---|

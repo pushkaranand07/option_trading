@@ -1,4 +1,4 @@
-# PA-20 — A pretrained time-series model (Chronos-Bolt) tested against GARCH: not kept
+# PA-16 — A pretrained time-series model (Chronos-Bolt) tested against GARCH: not kept
 
 | | |
 |---|---|

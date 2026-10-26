@@ -7,7 +7,7 @@ an end-of-day approximation from the bhavcopy and says so:
 - ``bid`` / ``ask`` = close minus / plus a half-spread, rounded outward to the
   tick. The default half-spread is the project's cost model (``costs.Slippage``:
   1 tick + 1% of the price), which measured NSE closing quotes put at ~1.2x the
-  real spread on the strikes that trade (docs/PA_23). With ``bid == ask`` optopsy's
+  real spread on the strikes that trade (docs/PA_19). With ``bid == ask`` optopsy's
   slippage modes ("spread", "liquidity", "per_leg") had nothing to work on, so
   every fill was free; ``half_spread=None`` restores that for comparison.
 - ``delta`` from Black-Scholes with the implied volatility solved from that

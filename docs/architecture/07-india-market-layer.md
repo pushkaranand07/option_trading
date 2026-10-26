@@ -78,7 +78,7 @@ is a session.
   `open` (09:15–15:30), `post_close`.
 
 **Special sessions** (a weekend Muhurat or Budget-day session) are trading days. `from_nse()` adds two kinds
-([PA-27](../PA_19-weekend-nse-sessions.md)):
+([PA-15](../PA_15-weekend-nse-sessions.md)):
 
 - `KNOWN_SPECIAL_SESSIONS` — the 11 weekend sessions since 2015, each verified by downloading its NSE files
   (NSE's holiday list covers only the current year, so past sessions come from this list);

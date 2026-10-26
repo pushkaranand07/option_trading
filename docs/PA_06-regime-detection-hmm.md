@@ -1,10 +1,10 @@
-# PA-08 — Market regimes with a hidden Markov model (quant Phase 4), plus data repairs and the progress tracker
+# PA-06 — Market regimes with a hidden Markov model (quant Phase 4), plus data repairs and the progress tracker
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/regime.py`, `tradingagents/analytics/vrp.py`, `scripts/quant_regime.py`, `tests/test_quant_regime.py`; data repairs in `backfill.py`, `datastore.py`, `prices.py`, `dataflows/vendors/nse/derivatives.py`, `scripts/quant_build_store.py`; `docs/PROGRESS_TRACKER.md`, `scripts/update_progress.py`. Also carried the Phase 3 part 2 condor work (see [PA-05](PA_05-garch-volatility-and-vrp-condor.md)) |
-| **Related** | [PA-03](PA_03-quant-foundation-nse-data-store.md) · [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) (regime gate fix) · [PA-10](PA_10-relative-strength-model.md) (re-run on NSE VIX) · [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) · [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md) |
+| **Related** | [PA-03](PA_03-quant-foundation-nse-data-store.md) · [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) (regime gate fix) · [PA-08](PA_08-relative-strength-model.md) (re-run on NSE VIX) · [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) · [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/13-volatility-and-regime-models.md](architecture/13-volatility-and-regime-models.md) |
 | **Pull request** | #7 (branch `quant/phase-4-regime`); commits `a99eca7`, `9d5941a`, `29b95c3`, `19a2d08`, `53efdd7`, `8fe08e3`, `d1c618d`. No PR description |
 | **Date** | 2026-10-23 |
 
@@ -27,7 +27,7 @@
 - **Participant OI:** 131 of 549 files in 2018–19 had no title line, and some used a full month name ("June 01,
   2018"); the date is now taken from the file name (`a99eca7`).
 - **Lot sizes:** stated in UDiFF files; in legacy files derived from turnover (`a99eca7`; made exact later in
-  [PA-09](PA_09-agent-quant-tool-and-lightgbm.md)).
+  [PA-07](PA_07-agent-quant-tool-and-lightgbm.md)).
 
 ## 3. Decisions
 
@@ -72,11 +72,11 @@ the regime input and the data repairs (NSE index bars, gap fills, participant pa
 ## 7. Verification
 
 Run on real NIFTY / India VIX / breadth data. After the full download, data quality showed 0 missing sessions in any
-dataset, 6,516 index bars from NSE and 58 stock gaps filled from NSE ([PA-10](PA_10-relative-strength-model.md)).
+dataset, 6,516 index bars from NSE and 58 stock gaps filled from NSE ([PA-08](PA_08-relative-strength-model.md)).
 
 ## 8. Risks and open items
 
 - A single-regime test period could pass the regime gate; fixed in `fdacef1`
-  ([PA-09](PA_09-agent-quant-tool-and-lightgbm.md)).
+  ([PA-07](PA_07-agent-quant-tool-and-lightgbm.md)).
 - The regime is **in use** for risk only (volatility), not direction.
 - Research and decision support only; not investment advice.

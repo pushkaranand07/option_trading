@@ -1,10 +1,10 @@
-# PA-14 — Re-tests of the two fixable rejections: pooled 4-book VRP condor (close), relative strength with a turnover buffer (still rejected)
+# PA-10 — Re-tests of the two fixable rejections: pooled 4-book VRP condor (close), relative strength with a turnover buffer (still rejected)
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/condor.py`, `tradingagents/analytics/vrp.py`, `tradingagents/analytics/ml/relative.py`, `tradingagents/analytics/prices.py`, `scripts/quant_vrp_condor.py`, `scripts/quant_relative.py`, `scripts/quant_daily_update.py`, `scripts/quant_daily_update.cmd`, `tests/test_quant_condor.py`, `tests/test_quant_vrp.py`, `tests/test_quant_relative.py`, `tests/test_quant_datastore.py`, `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-05](PA_05-garch-volatility-and-vrp-condor.md) (first VRP condor test), [PA-10](PA_10-relative-strength-model.md) (first relative-strength test), [PA-13](PA_11-ship-expected-move-and-daily-refresh.md) (scheduler fix, included in this PR), [PA-15](PA_15-proof-plan-move-size-and-paper-trading.md) (what came next), [PA-17](PA_17-backward-holdout-2015.md) (the holdout that later rejected the pooled condor), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
+| **Related** | [PA-05](PA_05-garch-volatility-and-vrp-condor.md) (first VRP condor test), [PA-08](PA_08-relative-strength-model.md) (first relative-strength test), [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) (scheduler fix, included in this PR), [PA-11](PA_11-proof-plan-move-size-and-paper-trading.md) (what came next), [PA-13](PA_13-backward-holdout-2015.md) (the holdout that later rejected the pooled condor), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
 | **Pull request** | #13 (branch `quant/retest-condor-relative`) |
 | **Date** | 2026-10-23 |
 
@@ -20,7 +20,7 @@ Two earlier strategies had been rejected for reasons that looked fixable rather 
   spread together, with losses capped by the long "wings". The VRP (volatility risk premium) version sells only when
   implied volatility is high relative to the GARCH forecast. It was rejected on NIFTY and BANKNIFTY because it made
   only 15–19 trades in 5 years; the gate needs at least 100 out-of-sample trades.
-- **Relative strength** ([PA-10](PA_10-relative-strength-model.md)): a model that picks the stocks likely to beat the
+- **Relative strength** ([PA-08](PA_08-relative-strength-model.md)): a model that picks the stocks likely to beat the
   other 28. It was rejected on costs (−1.2% a year after costs), and its random baseline was unfair.
 
 Each fix was declared before running, and every run counts toward the trial log.
@@ -58,7 +58,7 @@ Each fix was declared before running, and every run counts toward the trial log.
 | Turnover-matched random baseline | `ml/relative.py` | Random stocks with exactly the model's swaps per rebalance, never re-picking one just dropped |
 | Script flag | `scripts/quant_relative.py` | `--keep`; every relative-strength variant counts toward the deflated Sharpe's number of trials |
 | Today's bar after the close | `tradingagents/analytics/prices.py` | Prices include today's bar once the market has closed (16:00), else stop at yesterday |
-| Scheduler fix | `scripts/quant_daily_update.*` | Carried in from #12 — see [PA-13](PA_11-ship-expected-move-and-daily-refresh.md) |
+| Scheduler fix | `scripts/quant_daily_update.*` | Carried in from #12 — see [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) |
 
 ## 5. Tests
 
@@ -110,6 +110,6 @@ Verdict: **still rejected.** The picks do not beat the average.
 
 - The pooled condor missed four gates; its parameters were unstable across folds (stability 0.41).
 - Trial count keeps rising (72 condor variants by this point), which lowers the deflated Sharpe of anything found later.
-- Follow-up: the condor was frozen and sent to paper trading in [PA-15](PA_15-proof-plan-move-size-and-paper-trading.md),
-  stress-tested in [PA-16](PA_16-stage2-stress-tests.md), and **rejected by the backward holdout** in
-  [PA-17](PA_17-backward-holdout-2015.md).
+- Follow-up: the condor was frozen and sent to paper trading in [PA-11](PA_11-proof-plan-move-size-and-paper-trading.md),
+  stress-tested in [PA-12](PA_12-stage2-stress-tests.md), and **rejected by the backward holdout** in
+  [PA-13](PA_13-backward-holdout-2015.md).

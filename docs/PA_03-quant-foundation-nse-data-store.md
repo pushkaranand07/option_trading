@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/{gates,trial_log,universe,backfill,datastore,prices,costs}.py`, `scripts/quant_backfill.py`, `scripts/quant_build_store.py`, `tests/test_quant_{gates,backfill,datastore,costs}.py`, `pyproject.toml`; plan `docs/QUANT_SIGNAL_LAYER_PLAN.md` (now [plans/QUANT_SIGNAL_LAYER_PLAN.md](plans/QUANT_SIGNAL_LAYER_PLAN.md)) |
-| **Related** | [PA-01](PA_01-india-market-intelligence-baseline.md) · [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-08](PA_08-regime-detection-hmm.md) (data repairs) · [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) (lot sizes) · [PA-10](PA_10-relative-strength-model.md) (data complete) · [PA-19](PA_19-weekend-nse-sessions.md) · [PA-23](PA_23-option-quotes-measured-spreads.md) · [architecture/10-quant-layer-overview.md](architecture/10-quant-layer-overview.md) · [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
+| **Related** | [PA-01](PA_01-india-market-intelligence-baseline.md) · [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-06](PA_06-regime-detection-hmm.md) (data repairs) · [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) (lot sizes) · [PA-08](PA_08-relative-strength-model.md) (data complete) · [PA-15](PA_15-weekend-nse-sessions.md) · [PA-19](PA_19-option-quotes-measured-spreads.md) · [architecture/10-quant-layer-overview.md](architecture/10-quant-layer-overview.md) · [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
 | **Pull request** | #2 (branch `quant/phase-0-1-foundation`); commit `d52ed0c` (the PR also carried `9b71aeb`, see [PA-01](PA_01-india-market-intelligence-baseline.md)) |
 | **Date** | 2026-10-23 |
 
@@ -87,16 +87,16 @@ belong to this change.
 ## 7. Verification
 
 Code and tests only at merge. The full download, store build and data-quality report were completed later on the
-same day ([PA-10](PA_10-relative-strength-model.md): 0 missing sessions in any dataset).
+same day ([PA-08](PA_08-relative-strength-model.md): 0 missing sessions in any dataset).
 
 ## 8. Risks and open items
 
 - **Cost model vs a real Dhan contract note within ₹1** — the Phase 1 exit check — still open; needs the user's
   contract note.
 - Survivorship: the universe leans optimistic by construction.
-- Participant-OI parsing and lot sizes needed fixes ([PA-08](PA_08-regime-detection-hmm.md),
-  [PA-09](PA_09-agent-quant-tool-and-lightgbm.md)); weekend special sessions were missed until
-  [PA-19](PA_19-weekend-nse-sessions.md); slippage was later measured, not assumed ([PA-23](PA_23-option-quotes-measured-spreads.md)).
+- Participant-OI parsing and lot sizes needed fixes ([PA-06](PA_06-regime-detection-hmm.md),
+  [PA-07](PA_07-agent-quant-tool-and-lightgbm.md)); weekend special sessions were missed until
+  [PA-15](PA_15-weekend-nse-sessions.md); slippage was later measured, not assumed ([PA-19](PA_19-option-quotes-measured-spreads.md)).
 - The plan placed the store under `data_cache/quant/`; the code uses the TradingAgents cache dir
   (`~/.tradingagents/cache/quant/`).
 - Research and decision support only; not investment advice.

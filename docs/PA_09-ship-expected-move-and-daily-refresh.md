@@ -1,10 +1,10 @@
-# PA-11 — Ship what is validated: expected move in the quant report, scheduled daily refresh
+# PA-09 — Ship what is validated: expected move in the quant report, scheduled daily refresh
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/quant_report.py`, `scripts/quant_build_store.py`, `scripts/quant_daily_update.cmd` (new), `tests/test_quant_report.py`, `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-08](PA_08-regime-detection-hmm.md) · [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) · [PA-10](PA_10-relative-strength-model.md) · [PA-12](PROGRESS_TRACKER.md) · PA-13 · [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) · [architecture/16-quant-context-in-agents.md](architecture/16-quant-context-in-agents.md) |
+| **Related** | [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-06](PA_06-regime-detection-hmm.md) · [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) · [PA-08](PA_08-relative-strength-model.md) · [the tracker handoff](PROGRESS_TRACKER.md) · [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) · [architecture/16-quant-context-in-agents.md](architecture/16-quant-context-in-agents.md) |
 | **Pull request** | #10 (branch `quant/phase-10-ship`); commits `df898d7`, `f089dfe`, `48c6932` |
 | **Date** | 2026-10-23 |
 
@@ -55,12 +55,12 @@ First end-to-end daily refresh on real data: all 5 steps OK in 6.6 min; `daily_s
 ## 7. Verification
 
 Daily refresh run end to end on real data (PR test plan). Whether the scheduled 19:30 run itself worked was not
-checked in this PR — it did not run (PA-13).
+checked in this PR — it did not run (PA-09).
 
 ## 8. Risks and open items
 
 - The scheduled task never ran on its first evening (path with spaces, battery defaults, closable console window);
-  fixed in PA-13.
+  fixed in PA-09.
 - The expected move is a risk measure only; it says nothing about direction.
 - Research and decision support only; not investment advice.
 
@@ -68,7 +68,7 @@ checked in this PR — it did not run (PA-13).
 
 Merged here on 2026-10-26; the full text is in git history.
 
-- **PA-13 — the 19:30 refresh never ran (2026-10-23).** There were three causes:
+- **The 19:30 refresh never ran (2026-10-23).** There were three causes:
   - Task Scheduler split the path at the space in `C:\coding\stock market` (0x80070002);
   - the default task settings skipped runs on battery and never caught up a missed start;
   - closing the visible console window killed the run (0xC000013A).

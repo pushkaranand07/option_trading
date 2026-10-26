@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `webapp/` (`server.py`, `market_data.py`, `signals.py`, `planner.py`, `ai.py`, `static/`, `requirements.txt`) |
-| **Related** | [PA-01](PA_01-india-market-intelligence-baseline.md) · [PA-10](PA_10-relative-strength-model.md) (webapp lint fixes) · [architecture/01-system-overview.md](architecture/01-system-overview.md) · [architecture/06-data-vendors.md](architecture/06-data-vendors.md) · [architecture/09-cli-webapp-and-reports.md](architecture/09-cli-webapp-and-reports.md) |
+| **Related** | [PA-01](PA_01-india-market-intelligence-baseline.md) · [PA-08](PA_08-relative-strength-model.md) (webapp lint fixes) · [architecture/01-system-overview.md](architecture/01-system-overview.md) · [architecture/06-data-vendors.md](architecture/06-data-vendors.md) · [architecture/09-cli-webapp-and-reports.md](architecture/09-cli-webapp-and-reports.md) |
 | **Pull request** | #1 (branch `webapp`); PR commit `f47d680`, on `main` as `b82a6e4` |
 | **Date** | 2026-10-22 (merged) |
 
@@ -65,7 +65,7 @@ Not recorded.
 ## 8. Risks and open items
 
 - Three ruff findings in `webapp/` (ambiguous variable name, duplicate branch, string-split literal) were left
-  until `8df7ad0` ([PA-10](PA_10-relative-strength-model.md)).
+  until `8df7ad0` ([PA-08](PA_08-relative-strength-model.md)).
 - The planner's win-rate thresholds are fixed constants; whether they were checked out of sample: not recorded.
 - Dhan and Azure credentials live only in the local `.env`; never commit them.
 - Research and decision support only; not investment advice.
@@ -74,24 +74,24 @@ Not recorded.
 
 Merged here on 2026-10-26; the full texts are in git history.
 
-- **PA-30 — real lot sizes and holidays.**
+- **Real lot sizes and holidays.**
   - Hard-coded index lots were wrong (NIFTY 75 → 65 in Jan-2026). They are now read from Dhan's public scrip master,
     taking the most common lot per index (NIFTY 65, BANKNIFTY 30, FINNIFTY 60, MIDCPNIFTY 120, SENSEX 20), with the
     table as fallback.
   - Market open / closed now comes from the NSE calendar, so holidays are closed and special sessions open.
-- **PA-32 — tabs.** The single page became tabs chosen by the user: Today, Risk & Volatility, Options, AI Analysis,
+- **Tabs.** The single page became tabs chosen by the user: Today, Risk & Volatility, Options, AI Analysis,
   Market Map, Research, My Trades. Plan and Trade Record were added later. Every card answers one plain question.
   Tabs load on first open; `#risk`, `#trades`, … open a tab directly.
-- **PA-37 — surviving a dropped connection.** When Yahoo or the internet is unreachable, charts and the live call
+- **Surviving a dropped connection.** When Yahoo or the internet is unreachable, charts and the live call
   serve the last good candles, kept in memory and in `~/.tradingagents/cache/webapp_candles/`. They are labelled
   "saved (last bar …)" instead of failing with 502. The trigger was the PC's DNS outage on 2026-10-25.
-- **PA-42 — fresher option prices.** Measured live: NSE's free option chain updates about every 45 s and is already
+- **Fresher option prices.** Measured live: NSE's free option chain updates about every 45 s and is already
   30–60 s old when fetched.
   - Pulse's own delay was cut from about 60 s to about 25 s: server cache 30 → 10 s, Plan-tab chain refresh
     30 → 15 s.
   - Every price shows NSE's timestamp and its age.
   - Real time needs the Dhan API token.
-- **PA-43 — end-of-day data dates.** Risk, Options costs and Research use NSE's end-of-day files, downloaded by the
+- **End-of-day data dates.** Risk, Options costs and Research use NSE's end-of-day files, downloaded by the
   7:30 PM job, so on a weekday morning they show the previous close.
   - `quant.freshness()` (NSE calendar) adds a line on each tab: "End-of-day data from Fri 23 Oct — the latest NSE
     close. Next update today 7:30 PM".

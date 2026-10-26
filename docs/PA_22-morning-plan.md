@@ -1,10 +1,10 @@
-# PA-33 — Morning plan: ready before the open, a live call sized from your risk limit
+# PA-22 — Morning plan: ready before the open, a live call sized from your risk limit
 
 | | |
 |---|---|
 | **Status** | Done |
 | **Scope** | new `webapp/morning.py`, `scripts/morning_plan.py` + `.cmd`, `webapp/server.py` (`/api/morning*`), `webapp/static/*` (Plan tab), `tests/test_morning_plan.py`; Windows task "TradingAgents morning plan" |
-| **Related** | [PA-32](PA_02-webapp.md) (tabs), [PA-27](PA_19-weekend-nse-sessions.md) (calendar), [features/webapp](features/webapp.md), [development/scheduled-job-operations](development/scheduled-job-operations.md) |
+| **Related** | [PA-02](PA_02-webapp.md) (tabs), [PA-15](PA_15-weekend-nse-sessions.md) (calendar), [features/webapp](features/webapp.md), [development/scheduled-job-operations](development/scheduled-job-operations.md) |
 | **Pull request** | branch `feature/morning-plan` |
 | **Date** | 2026-10-24 |
 
@@ -80,7 +80,7 @@ The Plan tab screenshotted at Saturday 16:03 (closed), and previews of 2026-10-2
 
 Merged here on 2026-10-26; the full text is in git history.
 
-- **PA-35 — risk-limit card removed (2026-10-25, user).** The Capital / Max loss % / Money-for-this-trade card was
+- **Risk-limit card removed (2026-10-25, user).** The Capital / Max loss % / Money-for-this-trade card was
   removed at the user's request.
   - Today's call and the AI strategist show **per-lot** figures (loss at the stop, premium, charges) and the user picks
     the number of lots.

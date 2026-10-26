@@ -1,10 +1,10 @@
-# PA-25 — Phase 9 exit check: replaying full analyses, and clearer verdict wording for the agents
+# PA-21 — Phase 9 exit check: replaying full analyses, and clearer verdict wording for the agents
 
 | | |
 |---|---|
 | **Status** | Done — **no invented quant numbers and no validation claims in 10 full analyses** (on reading every flag); the automatic v1 rule did not pass (too broad) and v2 was declared for future replays |
 | **Scope** | `tradingagents/analytics/quant_report.py` (`_validation_lines`), `tradingagents/analytics/replay_check.py`, `scripts/quant_replay.py`, `tests/test_quant_report.py`, `tests/test_replay_check.py` |
-| **Related** | [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) (the agent tool), [architecture/16](architecture/16-quant-context-in-agents.md), [features/quant-report](features/quant-report.md) |
+| **Related** | [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) (the agent tool), [architecture/16](architecture/16-quant-context-in-agents.md), [features/quant-report](features/quant-report.md) |
 | **Pull request** | #27 (branch `quant/phase-9-replay`, the check and the wording fix); results and check v2: branch `quant/phase-9-result` |
 | **Date** | 2026-10-24 |
 

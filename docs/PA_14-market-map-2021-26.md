@@ -1,10 +1,10 @@
-# PA-18 — Market Map 2021–26: regulatory changes and market events measured against NSE data
+# PA-14 — Market Map 2021–26: regulatory changes and market events measured against NSE data
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `scripts/market_map.py`, `scripts/market_map_template.html`, `docs/market_events_2021_2026.json` (now [data/market_events_2021_2026.json](data/market_events_2021_2026.json)), `scripts/quant_daily_update.py`, `tests/test_market_map.py`, `tests/test_quant_daily.py` |
-| **Related** | [PA-19](PA_19-weekend-nse-sessions.md) (weekend-session bug this work exposed), [PA-03](PA_03-quant-foundation-nse-data-store.md) (NSE store), [PA-08](PA_08-regime-detection-hmm.md) (regime shading), [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) and [PA-13](PA_11-ship-expected-move-and-daily-refresh.md) (daily refresh), [architecture/17-market-map.md](architecture/17-market-map.md), [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
+| **Related** | [PA-15](PA_15-weekend-nse-sessions.md) (weekend-session bug this work exposed), [PA-03](PA_03-quant-foundation-nse-data-store.md) (NSE store), [PA-06](PA_06-regime-detection-hmm.md) (regime shading), [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) and [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) (daily refresh), [architecture/17-market-map.md](architecture/17-market-map.md), [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
 | **Pull request** | #17, #18, #21 (all branch `quant/market-map`) |
 | **Date** | 2026-10-24 |
 
@@ -23,7 +23,7 @@ own verified NSE data — and kept inside the project rather than published anyw
 **News figures vs NSE closes.** NIFTY moves quoted in news reports were cross-checked against the NSE index closes in
 the store: **19 of 22 exact**. One event date was corrected (US tariffs → 2025-04-03) and one intraday figure was
 removed. The cross-check of the Sunday 2026-02-01 Budget session could not be matched because that session was missing
-from the store — the weekend-session bug fixed in [PA-19](PA_19-weekend-nse-sessions.md).
+from the store — the weekend-session bug fixed in [PA-15](PA_15-weekend-nse-sessions.md).
 
 **Contract counts mislead.** NSE changed lot sizes during 2021–26, which makes contract counts jump without any change
 in activity. Options activity is therefore measured by **notional value traded**.
@@ -37,7 +37,7 @@ in activity. Options activity is therefore measured by **notional value traded**
 | Tax and margin rule changes | ~0.2% |
 | A typical day | 0.5% |
 | When BANKNIFTY weekly options ended (Nov-2024) | NIFTY options value +33–43%, BANKNIFTY −52–70% |
-| Sunday 2026-02-01 Budget, measured on its own session (after PA-19) | NIFTY −1.96% |
+| Sunday 2026-02-01 Budget, measured on its own session (after PA-15) | NIFTY −1.96% |
 
 ## 3. Decisions
 
@@ -64,7 +64,7 @@ in activity. Options activity is therefore measured by **notional value traded**
 | Researched events (#18, #21) | `docs/market_events_2021_2026.json`: SEBI, NSE, RBI and Budget / Finance Act changes plus market events, each with a source URL |
 | Daily job (#18) | `scripts/quant_daily_update.py` rebuilds the page after the tracker step, every weekday at 19:30 |
 
-The events file was later moved to `docs/data/` in the docs restructure ([PA-26](development/documentation-standards.md)).
+The events file was later moved to `docs/data/` in the docs restructure (2026-10-24).
 
 ## 5. Tests
 
@@ -90,7 +90,7 @@ The events file was later moved to `docs/data/` in the docs restructure ([PA-26]
 ## 7. Verification
 
 - News-quoted NIFTY moves checked against NSE closes (19/22 exact; corrections applied).
-- After the weekend-session fix ([PA-19](PA_19-weekend-nse-sessions.md)) the page was rebuilt; the Sunday 2026-02-01
+- After the weekend-session fix ([PA-15](PA_15-weekend-nse-sessions.md)) the page was rebuilt; the Sunday 2026-02-01
   Budget session is measured on its own session (−1.96%), and its NIFTY close in the store (24,825.45) equals the
   reported close.
 
