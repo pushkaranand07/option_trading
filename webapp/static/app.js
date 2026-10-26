@@ -443,7 +443,7 @@ async function pollAI(jobId, sym) {
 }
 
 // ---------- tabs ----------
-const TABS = ["plan", "today", "risk", "options", "ai", "map", "research", "trades"];
+const TABS = ["plan", "record", "today", "risk", "options", "ai", "map", "research", "trades"];
 const INSTRUMENT_TABS = ["today", "risk", "options", "ai"];
 const loaded = {};
 
@@ -469,6 +469,7 @@ function showTab(tab, force = false) {
   if (tab === "map") loadMap();
   if (tab === "research") loadResearch();
   if (tab === "trades") loadJournalFiles();
+  if (tab === "record") loadRecord();
 }
 $("#tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) showTab(b.dataset.tab); };
 addEventListener("hashchange", () => showTab(location.hash.slice(1)));
@@ -961,6 +962,7 @@ function renderStrat(sym) {
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result, sym) : "");
   $(".strat-go", slot).onclick = () => startStrat(sym);
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
+  if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
   if (S.ticket[sym]) renderTicket(sym);
 }
 
@@ -1038,6 +1040,8 @@ function stratHtml(res, sym) {
   const kl = (a.key_levels || []).map((l) => `<li><b class="num">${fmt0(l.price)}</b> ${esc(l.label)}</li>`).join("");
   return `<div class="call ${a.strategy === "no_trade" ? "idle" : a.bias === "bearish" ? "go-down" : a.bias === "bullish" ? "go-up" : "idle"}">${head}
       ${story}${legs}<div class="ticket-slot"></div>${together}${econ}
+      ${pr ? `<div class="take-row">${res._taken ? `<span class="badge up">Recorded ✓</span> <span class="small">Follow it on the <a href="#record">Trade Record</a> tab.</span>`
+        : `<button class="btn primary take-trade">Take this trade (dummy, 1 lot)</button> <span class="small muted">Records it on the Trade Record tab at these prices and tracks its profit and loss. No real order.</span>`}</div>` : ""}
       ${lv ? `<div class="small muted">Target and stop premiums are estimates for ${esc(name)} reaching those levels today (Black-Scholes from each option's live price and implied vol). Nearer expiry the options move more.</div>` : ""}
       ${(res.warnings || []).map((w) => `<div class="small warn-c">⚠ ${esc(w)}</div>`).join("")}</div>
     ${read}
@@ -1122,6 +1126,88 @@ function renderTicket(sym) {
   ticketChart.timeScale().fitContent();
 }
 
+// ---------- Trade Record: dummy trades taken from the AI strategist ----------
+// One lot each. Marked live from the NSE chain at the price each leg could be closed at; when the index reaches the
+// AI's target or stop the trade is flagged (never closed for you). Stored on this computer (reports/trade_record).
+async function takeTrade(sym) {
+  const res = S.strat[sym]?.result; if (!res) return;
+  const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
+  try {
+    const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(res) });
+    res._taken = t.id; renderStrat(sym); loaded.record = false;
+  } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
+}
+
+const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"] };
+const legShort = (l) => `${l.action === "BUY" ? "B" : "S"} ${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
+
+async function loadRecord() {
+  const el = $("#recordBody");
+  let d;
+  try { d = await api("/api/trades"); } catch (e) { el.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
+  const s = d.stats;
+  const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
+  const summary = `<section class="card"><div class="card-head"><h2>Summary</h2><span class="small muted">1 lot per trade · after charges</span></div>
+    <div class="body"><div class="levels rec-stats">
+      ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}
+      ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
+      ${stat("Win rate", s.win_rate != null ? s.win_rate.toFixed(0) + "%" : "—")}${stat("Average a trade", money(s.avg), cls(s.avg))}
+      ${stat("Best", money(s.best), "up")}${stat("Worst", money(s.worst), "down")}</div></div></section>`;
+  const open = d.open.length ? d.open.map(openTradeHtml).join("")
+    : `<section class="card"><div class="body"><p class="muted">No open trades. On the Plan tab, ask the AI strategist and press <b>Take this trade</b> to record one here.</p></div></section>`;
+  const hist = !d.closed.length ? `<p class="muted pad">Closed trades appear here with their profit or loss.</p>`
+    : `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Taken</th><th>Closed</th><th>Trade</th><th>Legs: entry → exit</th><th>NIFTY in → out</th><th>Why closed</th><th>Gross</th><th>Charges</th><th>Net P&L</th><th></th></tr></thead><tbody>
+      ${d.closed.map((t) => `<tr><td>${esc(t.taken_at)}</td><td>${esc(t.closed_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
+        <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.entry)} → ${fmt(l.exit)}`).join("<br>")}</td>
+        <td class="num">${fmt0(t.spot_at_entry)} → ${fmt0(t.spot_at_exit)}</td><td class="small">${esc(t.reason)}</td>
+        <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
+        <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("")}</tbody></table></div>`;
+  el.innerHTML = summary + `<h3 class="sub-h rec-h">Open trades</h3>` + open +
+    `<section class="card"><div class="card-head"><h2>History</h2></div>${hist}</section>`;
+  el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
+    if (!confirm("Close this dummy trade at the current prices?")) return;
+    b.disabled = true;
+    try { await api(`/api/trades/${b.dataset.id}/close`, { method: "POST" }); } catch (e) { alert(e.message); }
+    loadRecord();
+  }));
+  el.querySelectorAll(".rec-del").forEach((b) => (b.onclick = async () => {
+    if (!confirm("Remove this trade from the record? (Use this for a trade taken by mistake.)")) return;
+    try { await api(`/api/trades/${b.dataset.id}`, { method: "DELETE" }); } catch (e) { alert(e.message); }
+    loadRecord();
+  }));
+}
+
+function openTradeHtml(t) {
+  const v = t.live || {}, down = t.index_target < t.index_stop, name = NAMES[t.symbol] || t.symbol;
+  const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])];
+  const banners = flags.map((f) => {
+    const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f];
+    const extra = f === "expired" ? "The expiry has passed: close it to settle at the expiry value."
+      : `${a ? `at ${esc(a.at)} (${esc(name)} ${fmt0(a.spot)}${a.pnl != null ? `, P&L then ${money(a.pnl)}` : ""})` : "now"} — close the trade when you are ready.`;
+    return `<div class="rec-flag ${c}"><b>${txt}</b> ${extra}</div>`;
+  }).join("");
+  const plan = { underlying_target: t.index_target, underlying_stop: t.index_stop, underlying_entry_low: t.entry_low, underlying_entry_high: t.entry_high };
+  const lad = v.spot != null && t.index_target != null ? ladder(plan, v.spot, down) : "";
+  return `<section class="card rec-open"><div class="card-head"><h2>${esc(name)} · ${esc(STRAT_NAMES[t.strategy] || t.strategy)}</h2>
+      <div class="rec-pnl ${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}<small>P&L now, before charges</small></div></div>
+    <div class="body">
+      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}</div>
+      ${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
+      ${lad}
+      <table class="t legs"><thead><tr><th>Leg</th><th>Entry</th><th>Now (to close)</th><th>Target</th><th>Stop loss</th><th>P&L</th></tr></thead><tbody>
+        ${t.legs.map((l, i) => {
+          const now = v.legs?.[i]?.now, p = now != null ? (now - l.entry) * (l.action === "BUY" ? 1 : -1) * t.lot : null;
+          return `<tr><td><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(t.symbol, t.expiry, l))}</td>
+            <td class="num">${fmt(l.entry)}</td><td class="num"><b>${fmt(now)}</b></td><td class="num up">${fmt(l.target)}</td><td class="num down">${fmt(l.stop)}</td>
+            <td class="num ${cls(p)}">${p != null ? money(p) : "—"}</td></tr>`;
+        }).join("")}</tbody></table>
+      <div class="rec-actions"><span class="small muted">Book profit if ${esc(name)} reaches <b class="up">${fmt0(t.index_target)}</b> · exit if it reaches <b class="down">${fmt0(t.index_stop)}</b>.
+        Worst case at expiry ${money(t.max_loss_per_lot)}.</span>
+        <span><button class="btn primary small-btn rec-close" data-id="${t.id}">Close trade</button>
+        <button class="btn small-btn rec-del" data-id="${t.id}">Remove</button></span></div>
+    </div></section>`;
+}
+
 // ---------- start ----------
 (async function init() {
   applyChartTheme();
@@ -1134,6 +1220,7 @@ function renderTicket(sym) {
   setInterval(loadPlan, 15000);
   setInterval(() => { if (S.tab === "options") loadChain(); }, 4000);
   setInterval(loadStatus, 60000);
+  setInterval(() => { if (S.tab === "record") loadRecord(); }, 15000);
   setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
   setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym)); }, 30000);
 })();

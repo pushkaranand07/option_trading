@@ -24,6 +24,7 @@
 
 <nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
   <button role="tab" data-tab="plan">Plan</button>
+  <button role="tab" data-tab="record">Trade Record</button>
   <button role="tab" data-tab="today">Today</button>
   <button role="tab" data-tab="risk">Risk &amp; Volatility</button>
   <button role="tab" data-tab="options">Options</button>
@@ -163,6 +164,14 @@
     <p class="tab-intro">Every trading idea is tested on years of NSE data, after real costs, against random luck — before anyone trusts it.
       Here is what passed, what failed, and why.</p>
     <div id="researchBody"><div class="loading"><span class="spinner"></span>Loading…</div></div>
+  </div>
+
+  <!-- ===================== TRADE RECORD ===================== -->
+  <div class="tab" data-tab="record">
+    <p class="tab-intro">Dummy trades you took from the AI strategist on the Plan tab — one lot each, priced at the live bid / ask.
+      Open trades update every 15 seconds; when the index reaches the AI's target or stop you get a flag here, and you close the trade yourself.
+      Practice only: no order is placed. Kept on this computer (folder <code>reports/trade_record</code>).</p>
+    <div id="recordBody"><div class="loading"><span class="spinner"></span>Loading…</div></div>
   </div>
 
   <!-- ===================== MY TRADES ===================== -->
