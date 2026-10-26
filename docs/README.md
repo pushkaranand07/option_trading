@@ -83,6 +83,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-34](PA_34-ai-strategist-and-nse-option-chain.md) | Plan tab: AI options strategist (defined risk, priced at bid / ask) and NSE option chain | Done |
 | [PA-35](PA_35-remove-risk-limit-card.md) | Plan tab: risk-limit card removed; per-lot figures instead of lot sizing | Done |
 | [PA-36](PA_36-trade-ticket-and-premium-levels.md) | AI trade shown like a Dhan order: premium target / stop per leg, tap a leg for its ticket (premium chart, depth), marked on chart and chain | Done |
+| [PA-37](PA_37-candles-survive-a-dropped-connection.md) | Charts and the live call keep the last saved prices when Yahoo / the internet is unreachable | Done |
 
 ---
 
