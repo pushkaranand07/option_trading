@@ -235,6 +235,12 @@ def build_plan(symbol: str) -> dict:
         blockers.append("It's after 2:30 PM: too late to start a new intraday trade.")
     if open_now and t < ENTRY_FROM:
         blockers.append("The first 30 minutes are noisy. Wait until 9:45 AM.")
+    stale = md.stale_bars(bars5, "5m", open_now, sg.now_ist())
+    if open_now and source not in ("dhan", "yahoo"):
+        blockers.append(f"No live prices: this is the last {source}. Wait for the data source to come back.")
+    elif stale is not None:
+        blockers.append(f"The latest price bar is {stale / 60:.0f} min old: the data feed is behind, "
+                        "so this plan is not current.")
 
     safe = not blockers
     is_index = inst["kind"] == "INDEX"
@@ -256,6 +262,8 @@ def build_plan(symbol: str) -> dict:
     return {
         "symbol": inst["symbol"], "name": name, "kind": inst["kind"], "source": source,
         "market_open": open_now, "as_of": str(bars5.index[-1]),
+        "data": {"last_bar_age_s": round(md.bar_age(bars5, sg.now_ist())), "stale": stale is not None,
+                 "built_at": sg.now_ist().isoformat(timespec="seconds")},
         "verdict": {
             "action": action if safe else ("NO SAFE TRADE" if side != "WAIT" else "NO TRADE"),
             "setup": action, "safe": safe, "side": side, "blockers": blockers,

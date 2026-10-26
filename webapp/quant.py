@@ -114,10 +114,19 @@ def _fresh(as_of) -> dict | None:
         return None
 
 
+RISK_TTL = 60   # built from end-of-day files that change once a night; a minute avoids re-reading them per request
+
+
 def risk(symbol: str, on: date | None = None, root: Path | None = None) -> dict:
-    from tradingagents.analytics.quant_report import quant_signal_data
+    from webapp import market_data as md
 
     on = on or date.today()
+    return md._cache.get(("risk", symbol.upper(), on, str(root)), RISK_TTL, lambda: _risk(symbol, on, root))
+
+
+def _risk(symbol: str, on: date, root: Path | None) -> dict:
+    from tradingagents.analytics.quant_report import quant_signal_data
+
     out = quant_signal_data(_TICKER.get(symbol.upper(), symbol.upper()), on, root=root)
     as_of = next((x.get("as_of") for x in (out.get("vol"), out.get("regime"), out.get("iv")) if x and x.get("as_of")), None)
     return out | {"freshness": _fresh(as_of)}

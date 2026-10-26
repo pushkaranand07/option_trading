@@ -8,18 +8,15 @@ the best bid / ask, plus the strike's put-call ratio. NSE reports open interest 
 
 from __future__ import annotations
 
-import threading
-import time
 from datetime import datetime
+
+from webapp import market_data as md
 
 CONTRACT_INFO = "/api/option-chain-contract-info"
 CHAIN = "/api/option-chain-v3"
 CHART = "/api/chart-databyindex"
 NSE_INDICES = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50")
 CACHE_SECONDS = 10            # NSE itself updates about every 45 s; don't add much on top
-
-_cache: dict[tuple, tuple[float, dict]] = {}
-_lock = threading.Lock()
 
 
 class ChainError(Exception):
@@ -125,39 +122,31 @@ def contract(identifier: str, client=None) -> dict:
     ``identifier`` as NSE writes it, e.g. ``OPTIDXNIFTY27-10-2026CE22700.00``. NSE stamps the ticks in IST."""
     if not identifier.startswith(("OPTIDX", "OPTSTK")):
         raise ChainError("Not an NSE option identifier.")
-    key = ("contract", identifier)
-    with _lock:
-        hit = _cache.get(key)
-        if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
-            return hit[1]
+    return md._cache.get(("nse contract", identifier), CACHE_SECONDS, lambda: _contract(identifier, client))
+
+
+def _contract(identifier: str, client) -> dict:
     raw = (client or _client()).get_json(CHART, {"index": identifier}, ttl=0).data
     pts = [(int(t) // 1000, float(p)) for t, p in raw.get("grapthData") or [] if p is not None]
     prices = [p for _, p in pts]
-    out = {"id": identifier, "points": pts, "prev_close": raw.get("closePrice"),
-           "high": max(prices) if prices else None, "low": min(prices) if prices else None,
-           "last": prices[-1] if prices else None}
-    with _lock:
-        _cache[key] = (time.monotonic(), out)
-    return out
+    return {"id": identifier, "points": pts, "prev_close": raw.get("closePrice"),
+            "high": max(prices) if prices else None, "low": min(prices) if prices else None,
+            "last": prices[-1] if prices else None}
 
 
 def chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None) -> dict:
-    """The chain for ``symbol`` (NSE index or F&O stock) and ``expiry`` (default: the nearest), cached 30 s."""
+    """The chain for ``symbol`` (NSE index or F&O stock) and ``expiry`` (default: the nearest), cached 10 s."""
     symbol = symbol.upper()
     client = client or _client()
     exps = expiries(symbol, client)
     expiry = expiry if expiry in exps else exps[0]
-    key = (symbol, expiry)
-    with _lock:
-        hit = _cache.get(key)
-        if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
-            return hit[1]
+    return md._cache.get(("nse chain", symbol, expiry), CACHE_SECONDS, lambda: _chain(symbol, expiry, exps, lot, client))
+
+
+def _chain(symbol: str, expiry: str, exps: list[str], lot: int | None, client) -> dict:
     kind = "Indices" if symbol in NSE_INDICES else "Equity"
     raw = client.get_json(CHAIN, {"type": kind, "symbol": symbol, "expiry": expiry}, ttl=0).data
     if lot is None:
         lot = lot_size(symbol)
-    out = shape(raw, int(lot)) | {"symbol": symbol, "expiry": expiry, "expiries": exps,
-                                  "fetched": datetime.now().strftime("%H:%M:%S")}
-    with _lock:
-        _cache[key] = (time.monotonic(), out)
-    return out
+    return shape(raw, int(lot)) | {"symbol": symbol, "expiry": expiry, "expiries": exps,
+                                   "fetched": datetime.now().strftime("%H:%M:%S")}
