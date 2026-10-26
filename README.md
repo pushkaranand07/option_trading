@@ -21,11 +21,12 @@ view, and a strict research layer tests every trading idea on years of NSE data 
 | **Risk & volatility** | Calm / choppy / stress regime, expected move for 5 / 10 / 21 days in % and ₹, whether options are cheap or expensive |
 | **Options** | Live option chain, and what each strike really costs to trade (bid-ask spreads measured from NSE every evening) |
 | **AI analysis** | A team of LLM agents — analysts, bull and bear researchers, trader, risk team, portfolio manager — debates one instrument and gives a rating (Buy, Overweight, Hold, Underweight or Sell) with reasons |
+| **Trade Record** | Take the AI's suggested trade as a dummy 1-lot trade; it is monitored live, flagged when it reaches its target or stop, and kept in a profit-and-loss history |
 | **Market Map 2021 → today** | Every SEBI / NSE / RBI / Budget change and market event since 2021, with its measured impact on NIFTY, India VIX and options trading |
 | **Research** | Every trading idea tested, with a plain-English verdict: what works, what failed, and why |
 | **My Trades** | Add your Dhan tradebook and see what actually makes or loses money in your own trades — by holding period, buying vs selling, stock, entry time and reason |
 
-All of it lives in one web app with eight simple tabs: **Plan · Today · Risk & Volatility · Options · AI Analysis ·
+All of it lives in one web app with nine simple tabs: **Plan · Trade Record · Today · Risk & Volatility · Options · AI Analysis ·
 Market Map · Research · My Trades**.
 
 ---
@@ -33,7 +34,7 @@ Market Map · Research · My Trades**.
 ## How it works
 
 ```
- NSE archives & APIs ──► point-in-time data store ──► research layer ─────────► web app (8 tabs)
+ NSE archives & APIs ──► point-in-time data store ──► research layer ─────────► web app (9 tabs)
  (F&O, OI, delivery,      (every value dated by when    (volatility, regime,      ▲
   index closes, quotes,    it was actually known)         backtests, verdicts)     │
   board meetings)                                                                  │
@@ -136,7 +137,7 @@ Open **http://localhost:8000** — the Plan tab opens first.
 
 | Path | What is there |
 |---|---|
-| `webapp/` | The Pulse web app (FastAPI + one page, eight tabs) and the morning plan |
+| `webapp/` | The Pulse web app (FastAPI + one page, nine tabs) and the morning plan |
 | `tradingagents/agents/`, `tradingagents/graph/` | The AI agent team and how they debate |
 | `tradingagents/dataflows/vendors/nse/` | NSE data: calendar (holidays, special sessions), derivatives, flows, indices |
 | `tradingagents/analytics/` | Research layer: data store, volatility, regime, backtests, costs, gates, paper trading, journal |

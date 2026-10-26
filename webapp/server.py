@@ -29,6 +29,7 @@ from webapp import (  # noqa: E402
     quant,
     signals,
     strategist,
+    trade_record,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -239,6 +240,42 @@ async def journal_upload(request: Request, name: str):
         return {"name": quant.save_upload(name, await request.body())}
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+# ---------- Trade Record: dummy trades taken from the AI strategist ----------
+
+trade_record.start_monitor()
+
+
+@app.get("/api/trades")
+async def trades():
+    return await _call(trade_record.overview)
+
+
+@app.post("/api/trades")
+async def trade_take(request: Request):
+    """Record the AI suggestion shown on the Plan tab (the strategist's result, as the page has it)."""
+    try:
+        return trade_record.take(await request.json())
+    except (trade_record.TradeError, KeyError, TypeError) as exc:
+        raise HTTPException(400, f"Could not record the trade: {exc}") from exc
+
+
+@app.post("/api/trades/{trade_id}/close")
+async def trade_close(trade_id: str):
+    try:
+        return await run_in_threadpool(trade_record.close, trade_id)
+    except trade_record.TradeError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/api/trades/{trade_id}")
+def trade_delete(trade_id: str):
+    try:
+        trade_record.delete(trade_id)
+    except trade_record.TradeError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True}
 
 
 @app.get("/api/journal")

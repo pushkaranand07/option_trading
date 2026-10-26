@@ -9,13 +9,14 @@
 
 ## 1. What it does
 
-Eight tabs, in plain English (since 2026-10-24, [PA-32](../PA_32-webapp-tabs.md), [PA-33](../PA_33-morning-plan.md), [PA-34](../PA_34-ai-strategist-and-nse-option-chain.md)).
+Nine tabs, in plain English (since 2026-10-24, [PA-32](../PA_32-webapp-tabs.md), [PA-33](../PA_33-morning-plan.md), [PA-34](../PA_34-ai-strategist-and-nse-option-chain.md)).
 **Plan** opens first; the next four follow the index or stock picked at the top; the last three are about the market
 and your own trading.
 
 | Tab | Shows | Data |
 |---|---|---|
 | **Plan** | Today's session (pre-open, open, signal from 9:45, exit by 15:15, close — 15:45 for index F&O from 7-Dec-2026), and for NIFTY and BANKNIFTY: **today's call** (wait / no trade / take this trade, with what one lot costs and loses at the stop; you choose the number of lots) the **AI strategist** (one defined-risk options strategy or none for the picked instrument, with entry / target / stop on the chart, priced per lot at the live bid / ask, with the charges for one lot; each order shown as in Dhan with its target and stop-loss premium, and a ticket per leg — premium chart, depth, how to place it — marked on the chain and the chart, [PA-36](../PA_36-trade-ticket-and-premium-levels.md)), the **NSE option chain** (OI / volume / IV views, per-strike PCR, walls, max pain, the AI's strikes tagged) and the **morning view** (AI rating and reasoning, trend, expected range, last session, regime, PCR, FII positioning, options) | `reports/morning/` (8:30 AM job) + the live rule |
+| **Trade Record** | Dummy trades taken from the AI strategist (1 lot each): live P&L at the close-out price, flags when the index reaches the AI's target or stop (you close the trade), history with gross, charges and net P&L, win rate ([PA-38](../PA_38-trade-record.md)) | `reports/trade_record/trades.json` (on this computer) + NSE chain |
 | **Today** | Should I trade this today? The rule-based answer, chart, trend, track record, BTST, last 10 sessions, glossary | Dhan / Yahoo (below) |
 | **Risk & Volatility** | Market regime (calm / choppy / stress), expected move for 5 / 10 / 21 days in % and ₹ with the likely range, GARCH forecast, implied vol vs forecast | The quant store (validated tools) |
 | **Options** | Live option chain (Dhan), and the measured bid-ask spread per strike: what each trade really costs | Dhan; NSE closing quotes captured nightly |
@@ -87,6 +88,7 @@ new one", and `DH-902` / `806` into "no Data API subscription".
 | `GET /api/chain/NIFTY?expiry=` | NSE option chain: `spot`, `atm`, `lot`, `expiry`, `expiries`, `rows` (±15 strikes; OI and volume in units, PCR) and `summary` (PCR, call / put wall, max pain, ATM IV); 404 when the symbol has no NSE options |
 | `GET /api/contract?id=OPTIDXNIFTY27-10-2026CE22700.00` | One option's premium through the session (NSE ticks), `high`, `low`, `last`, `prev_close` |
 | `POST /api/strategy` with `{"symbol", "expiry"}` | `{"job": "<id>"}` |
+| `GET /api/trades`, `POST /api/trades` (body: the strategist's result), `POST /api/trades/<id>/close`, `DELETE /api/trades/<id>` | Trade Record: open trades with live marks and flags, closed trades, totals |
 | `GET /api/strategy/<id>` | `status`; when done, `result`: `plan` (the AI's read, strategy, legs, levels, reasoning), `priced` (per lot), `charges_per_lot`, `levels` (per leg: premium at the target and the stop, P&L per lot; spread value), `warnings` or `rejected` |
 | `GET /api/optionchain/NIFTY?expiry=` | `spot`, `lot`, `step`, `rows` (±15 strikes) and `view` (ATM, PCR, max pain, bias, support, resistance, ATM IV) |
 | `POST /api/ai` with `{"symbol": "NIFTY", "analysts": ["market","news","social","fundamentals"]}` | `{"job": "<id>"}` |
