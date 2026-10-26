@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done |
 | **Scope** | `webapp/strategist.py` (`trade_levels`, Black-Scholes), `webapp/option_chain.py` (depth fields, `contract`), `webapp/server.py` (`GET /api/contract`), `webapp/static/*` (AI result card, ticket), `tests/test_strategist.py` |
-| **Related** | [PA-34](PA_34-ai-strategist-and-nse-option-chain.md), [PA-35](PA_35-remove-risk-limit-card.md), [features/webapp](features/webapp.md) |
+| **Related** | [PA-34](PA_34-ai-strategist-and-nse-option-chain.md), [PA-35](PA_33-morning-plan.md), [features/webapp](features/webapp.md) |
 | **Pull request** | branch `feature/trade-ticket` |
 | **Date** | 2026-10-25 |
 
@@ -111,3 +111,19 @@ Unit suite: 1,496 passed. Ruff is clean, and `node --check` passes.
 - NSE's tick chart can miss the exact high and low (ticks about 10 s apart): 241.05 vs the app's 247.30 for the
   22700 CE.
 - After the close, OI is NSE's 15:40 snapshot, not the final figure.
+
+## Folded-in change (orders that can be typed into Dhan)
+
+Merged here on 2026-10-26; the full text is in git history.
+
+- **PA-41 — legs by their job in Dhan.** A spread's protective BUY leg showed a target below its entry, which Dhan's
+  Super order cannot take (a BUY needs target > entry > stop). Legs are now shown by role:
+
+  | Leg | In Dhan | Target / stop loss shown |
+  |---|---|---|
+  | Single option; the SELL leg of a credit spread | **Super order** | Yes |
+  | The BUY leg of a credit spread | Limit order, placed first | **none**; sell it right after the SELL leg exits |
+  | Debit-spread and iron-condor legs | Limit orders, closed together by hand at the index levels (buy back the SELL leg first) | Grey, reference only |
+
+  There is never a stop on a spread's bought leg: if it fired alone, the sold leg would be naked. The rule applies to
+  the cards, the ticket, the ranked table, the Trade Record and the ranked trades' exit plan.

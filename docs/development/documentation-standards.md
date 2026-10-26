@@ -1,6 +1,6 @@
 # Documentation standards
 
-> **Status:** Current. Written for the docs restructure ([PA-26](../PA_26-docs-restructure.md)).
+> **Status:** Current. Written for the docs restructure (PA-26).
 > **Scope:** every file under `docs/`.
 > **Last verified against the code:** 2026-10-24
 

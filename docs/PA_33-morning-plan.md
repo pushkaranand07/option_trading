@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done |
 | **Scope** | new `webapp/morning.py`, `scripts/morning_plan.py` + `.cmd`, `webapp/server.py` (`/api/morning*`), `webapp/static/*` (Plan tab), `tests/test_morning_plan.py`; Windows task "TradingAgents morning plan" |
-| **Related** | [PA-32](PA_32-webapp-tabs.md) (tabs), [PA-27](PA_27-calendar-special-sessions.md) (calendar), [features/webapp](features/webapp.md), [development/scheduled-job-operations](development/scheduled-job-operations.md) |
+| **Related** | [PA-32](PA_02-webapp.md) (tabs), [PA-27](PA_19-weekend-nse-sessions.md) (calendar), [features/webapp](features/webapp.md), [development/scheduled-job-operations](development/scheduled-job-operations.md) |
 | **Pull request** | branch `feature/morning-plan` |
 | **Date** | 2026-10-24 |
 
@@ -75,3 +75,13 @@ The Plan tab screenshotted at Saturday 16:03 (closed), and previews of 2026-10-2
   NIFTY BANK show the 8:30 plan with its AI view; other indices and searched stocks get the same view built on the spot
   (`GET /api/morning/context/{symbol}`; no AI — the AI Analysis tab runs it on request). Stocks are sized in shares.
   `?sym=FINNIFTY` in the address opens a given instrument.
+
+## Folded-in change
+
+Merged here on 2026-10-26; the full text is in git history.
+
+- **PA-35 — risk-limit card removed (2026-10-25, user).** The Capital / Max loss % / Money-for-this-trade card was
+  removed at the user's request.
+  - Today's call and the AI strategist show **per-lot** figures (loss at the stop, premium, charges) and the user picks
+    the number of lots.
+  - `POST /api/strategy` takes only `symbol` and `expiry`; the LLM gets no risk input.

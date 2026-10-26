@@ -9,7 +9,7 @@
 
 ## 1. What it does
 
-Nine tabs, in plain English (since 2026-10-24, [PA-32](../PA_32-webapp-tabs.md), [PA-33](../PA_33-morning-plan.md), [PA-34](../PA_34-ai-strategist-and-nse-option-chain.md)).
+Nine tabs, in plain English (since 2026-10-24, [PA-32](../PA_02-webapp.md), [PA-33](../PA_33-morning-plan.md), [PA-34](../PA_34-ai-strategist-and-nse-option-chain.md)).
 **Plan** opens first; the next four follow the index or stock picked at the top; the last three are about the market
 and your own trading.
 
@@ -107,7 +107,7 @@ Indices offered: NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, SENSEX (`market_data.IN
 - **Lot sizes** come from Dhan's public scrip master (most common lot per index, refreshed daily;
   `market_data.index_lots`). If it cannot be fetched, `INDICES` applies (NIFTY 65, BANKNIFTY 30, FINNIFTY 60,
   MIDCPNIFTY 120, SENSEX 20 as of 2026-10-24). Until 2026-10-24 the table was the only source and was out of date
-  (NIFTY 75, BANKNIFTY 35, …) ([PA-30](../PA_30-webapp-lots-and-holidays.md)).
+  (NIFTY 75, BANKNIFTY 35, …) ([PA-30](../PA_02-webapp.md)).
 - **Market status** follows the NSE calendar (holidays, special sessions; Muhurat days closed in regular hours) via
   `signals.market_open`; before 2026-10-24 any weekday 09:15–15:30 counted as open.
 - **The Azure check does not choose the provider.** `/api/ai` requires the three Azure variables, but the graph is

@@ -83,3 +83,18 @@ Unit suite at PR #20: 1,333 passed.
   without these sessions. Whether they were re-run: not recorded.
 - The 2015 and 2016 sessions fall in the holdout years (2015–17 files), which are kept outside the main store; how they
   are used there: not recorded.
+
+## Folded-in change (calendar)
+
+Merged here on 2026-10-26; the full text is in git history.
+
+- **PA-27 — special sessions in the calendar (2026-10-24).** `NSECalendar.from_nse()` never filled `special_sessions`,
+  so the agents' tools treated Budget Sundays and Muhurat sessions as closed days. Two sources fix it:
+  - **past dates:** `KNOWN_SPECIAL_SESSIONS`, the 11 weekend sessions since 2015, each verified from NSE's files (this
+    record);
+  - **upcoming Muhurat sessions:** NSE's holiday master marks them with `*` (e.g. "Diwali Laxmi Pujan\*", Sunday
+    2026-11-08) → `muhurat_days`.
+
+  The holiday master covers only the current year. A Muhurat hour is not modelled: on that day `session_state` reads
+  `pre_market` before 15:30 and `post_close` after. A future non-`*` weekend session must be added to
+  `KNOWN_SPECIAL_SESSIONS`.

@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/condor.py`, `tradingagents/analytics/vrp.py`, `tradingagents/analytics/ml/relative.py`, `tradingagents/analytics/prices.py`, `scripts/quant_vrp_condor.py`, `scripts/quant_relative.py`, `scripts/quant_daily_update.py`, `scripts/quant_daily_update.cmd`, `tests/test_quant_condor.py`, `tests/test_quant_vrp.py`, `tests/test_quant_relative.py`, `tests/test_quant_datastore.py`, `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-05](PA_05-garch-volatility-and-vrp-condor.md) (first VRP condor test), [PA-10](PA_10-relative-strength-model.md) (first relative-strength test), [PA-13](PA_13-daily-refresh-scheduler-fix.md) (scheduler fix, included in this PR), [PA-15](PA_15-proof-plan-move-size-and-paper-trading.md) (what came next), [PA-17](PA_17-backward-holdout-2015.md) (the holdout that later rejected the pooled condor), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
+| **Related** | [PA-05](PA_05-garch-volatility-and-vrp-condor.md) (first VRP condor test), [PA-10](PA_10-relative-strength-model.md) (first relative-strength test), [PA-13](PA_11-ship-expected-move-and-daily-refresh.md) (scheduler fix, included in this PR), [PA-15](PA_15-proof-plan-move-size-and-paper-trading.md) (what came next), [PA-17](PA_17-backward-holdout-2015.md) (the holdout that later rejected the pooled condor), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
 | **Pull request** | #13 (branch `quant/retest-condor-relative`) |
 | **Date** | 2026-10-23 |
 
@@ -58,7 +58,7 @@ Each fix was declared before running, and every run counts toward the trial log.
 | Turnover-matched random baseline | `ml/relative.py` | Random stocks with exactly the model's swaps per rebalance, never re-picking one just dropped |
 | Script flag | `scripts/quant_relative.py` | `--keep`; every relative-strength variant counts toward the deflated Sharpe's number of trials |
 | Today's bar after the close | `tradingagents/analytics/prices.py` | Prices include today's bar once the market has closed (16:00), else stop at yesterday |
-| Scheduler fix | `scripts/quant_daily_update.*` | Carried in from #12 — see [PA-13](PA_13-daily-refresh-scheduler-fix.md) |
+| Scheduler fix | `scripts/quant_daily_update.*` | Carried in from #12 — see [PA-13](PA_11-ship-expected-move-and-daily-refresh.md) |
 
 ## 5. Tests
 

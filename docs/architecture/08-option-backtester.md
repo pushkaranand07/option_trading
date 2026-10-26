@@ -135,7 +135,7 @@ underlying=None, risk_free=0.065)` builds an end-of-day chain from the unified F
 | Rows | Options of `symbol` only (`option_type` CE/PE) |
 | Untraded contracts | Dropped (zero `contracts`): their close is a stale reference. **Except on expiry day** |
 | Underlying | From the bhavcopy's `underlying_price` (UDiFF), or from `underlying` (trade date → spot close), which legacy-format rows need |
-| Bid and ask | close ∓ a modelled half-spread, rounded outward to the ₹0.05 tick; default `cost_model_half_spread` = 1 tick + 1% of price (`half_spread=None` restores `bid = ask = close`) — [PA-28](../PA_28-backtester-modelled-bid-ask.md) |
+| Bid and ask | close ∓ a modelled half-spread, rounded outward to the ₹0.05 tick; default `cost_model_half_spread` = 1 tick + 1% of price (`half_spread=None` restores `bid = ask = close`) — [PA-28](../PA_05-garch-volatility-and-vrp-condor.md) |
 | Time to expiry | Calendar days ÷ 365, at least 0.25 day |
 | Delta | Black-Scholes delta, using the implied volatility solved from the close by bisection (`implied_vol`, range 0.005–5.0) |
 | Non-invertible prices | Dropped and counted (close below intrinsic or otherwise outside what any volatility gives) |
@@ -164,7 +164,7 @@ removing, with reassignment.
 - **Modelled, not real, spreads.** NSE has no historical option bid/ask; the adapter builds bid/ask from the close
   with the project's cost model, which measured closing quotes put at ~1.2× the real spread on liquid strikes (some
   stocks are 3–5× wider). The `spread`, `liquidity` and `per_leg` slippage modes now act on it; until 2026-10-24
-  `bid = ask = close` made them a no-op ([PA-28](../PA_28-backtester-modelled-bid-ask.md)).
+  `bid = ask = close` made them a no-op ([PA-28](../PA_05-garch-volatility-and-vrp-condor.md)).
 - **End-of-day only.** One quote per contract per day; intraday stops are not modelled.
 - **Close is not a tradeable price** for thinly traded strikes even when `contracts > 0`.
 - **Delta depends on the assumed risk-free rate** and on the close being a fair price.

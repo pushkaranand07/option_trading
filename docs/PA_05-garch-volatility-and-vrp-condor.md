@@ -95,3 +95,22 @@ stability computed ([PA-10](PA_10-relative-strength-model.md), `7e7b979`).
   weekly entries, weekly expiries). Followed up in [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md); the
   pooled version later failed the backward holdout ([PA-17](PA_17-backward-holdout-2015.md)).
 - Research and decision support only; not investment advice.
+
+## Folded-in changes (option backtester accuracy)
+
+These small records were merged here on 2026-10-26; the full text is in git history.
+
+- **PA-07 — exit fixes (2026-10-23, PR #6).** The options engine taken from optopsy could report trades a trader never
+  had and overstate profit:
+  - take-profit / stop-loss scans ran past a planned early exit (`exit_dte`);
+  - commission never reached realized P&L;
+  - untraded expiry-day contracts were dropped.
+
+  Fixed in `option_backtester/exits.py`, `simulator.py` and the NSE adapter: the scan stops at the planned exit,
+  commission × quantity is deducted, and every expiry-day contract settles at intrinsic against the underlying close,
+  as NSE settles it. Covered by regression tests in `tests/test_option_backtester_fixes.py`.
+- **PA-28 — modelled bid / ask (2026-10-24).** The NSE adapter set `bid = ask = close`, so the backtester's slippage
+  modes cost nothing. Quotes are now built around each close with the quant layer's cost model
+  (`costs.DEFAULT_SLIPPAGE`: 1 tick + 1% per side, rounded outward to ₹0.05). That is about 1.2× the measured
+  half-spread on liquid strikes: slightly pessimistic, the safe side. `half_spread=None` restores the old quotes for
+  comparison. Backtests run before this were optimistic on option costs; none was used for a trading decision.

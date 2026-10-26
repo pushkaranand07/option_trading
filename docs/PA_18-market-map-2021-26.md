@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `scripts/market_map.py`, `scripts/market_map_template.html`, `docs/market_events_2021_2026.json` (now [data/market_events_2021_2026.json](data/market_events_2021_2026.json)), `scripts/quant_daily_update.py`, `tests/test_market_map.py`, `tests/test_quant_daily.py` |
-| **Related** | [PA-19](PA_19-weekend-nse-sessions.md) (weekend-session bug this work exposed), [PA-03](PA_03-quant-foundation-nse-data-store.md) (NSE store), [PA-08](PA_08-regime-detection-hmm.md) (regime shading), [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) and [PA-13](PA_13-daily-refresh-scheduler-fix.md) (daily refresh), [architecture/17-market-map.md](architecture/17-market-map.md), [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
+| **Related** | [PA-19](PA_19-weekend-nse-sessions.md) (weekend-session bug this work exposed), [PA-03](PA_03-quant-foundation-nse-data-store.md) (NSE store), [PA-08](PA_08-regime-detection-hmm.md) (regime shading), [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) and [PA-13](PA_11-ship-expected-move-and-daily-refresh.md) (daily refresh), [architecture/17-market-map.md](architecture/17-market-map.md), [architecture/11-nse-data-store.md](architecture/11-nse-data-store.md), [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) |
 | **Pull request** | #17, #18, #21 (all branch `quant/market-map`) |
 | **Date** | 2026-10-24 |
 
@@ -64,7 +64,7 @@ in activity. Options activity is therefore measured by **notional value traded**
 | Researched events (#18, #21) | `docs/market_events_2021_2026.json`: SEBI, NSE, RBI and Budget / Finance Act changes plus market events, each with a source URL |
 | Daily job (#18) | `scripts/quant_daily_update.py` rebuilds the page after the tracker step, every weekday at 19:30 |
 
-The events file was later moved to `docs/data/` in the docs restructure ([PA-26](PA_26-docs-restructure.md)).
+The events file was later moved to `docs/data/` in the docs restructure ([PA-26](development/documentation-standards.md)).
 
 ## 5. Tests
 
