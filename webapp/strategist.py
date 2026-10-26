@@ -90,17 +90,27 @@ Rules:
 - Prefer the direction most of the evidence agrees on (daily trend, today's intraday rule, IV vs forecast for
   buying vs selling, room to the target within the expected move, OI walls, FII positioning); the bias must match
   the strategy's direction. Report confidence honestly: high only when most of these agree.
+- If ai_analysis (the multi-agent research team's report: price, news, sentiment, fundamentals, debate, risk team)
+  is given, weigh it alongside the market data. Where it disagrees with the data, say so in your reasoning; the
+  data wins, and a real conflict means lower confidence or no_trade.
 - Prefer no_trade when signals conflict, the trend fights the setup, or the reward does not justify the risk.
   No strategy in this system has a proven edge; say so plainly where relevant.
 - Be specific to this instrument and these numbers. Plain English, no hype."""
+
+
+# (context key, report name in webapp.ai.REPORTS, characters kept): the decision in full, the rest as excerpts.
+ANALYSIS_EXCERPTS = [("final_decision", "Final decision", 3000), ("trader_plan", "Trader's plan", 1500),
+                     ("price_and_indicators", "Price & indicators", 1500), ("news", "News", 1200),
+                     ("social_sentiment", "Social sentiment", 800), ("fundamentals", "Fundamentals", 800)]
 
 
 def _num(x):
     return None if x is None or (isinstance(x, float) and math.isnan(x)) else round(float(x), 2)
 
 
-def build_context(symbol: str, expiry: str | None = None) -> tuple[dict, dict]:
-    """(context for the LLM, the option chain used)."""
+def build_context(symbol: str, expiry: str | None = None, analysis: dict | None = None) -> tuple[dict, dict]:
+    """(context for the LLM, the option chain used). ``analysis``: a finished complete AI analysis
+    (``webapp.analysis``) to build the strategy from; otherwise the morning's AI view, when there is one."""
     from webapp import morning, option_chain as oc, planner
 
     ch = oc.chain(symbol, expiry)
@@ -132,10 +142,15 @@ def build_context(symbol: str, expiry: str | None = None) -> tuple[dict, dict]:
     ctx["implied_vol_vs_forecast"] = mc.get("iv")
     ctx["pcr_history"] = mc.get("pcr")
     ctx["fii_index_futures_long_share"] = mc.get("fii_long_share")
-    plan = morning.load()
-    ai = ((plan or {}).get("indices", {}).get(symbol) or {}).get("ai") or {}
-    if ai.get("decision"):
-        ctx["morning_ai_view"] = {"rating": ai.get("rating"), "decision_excerpt": ai["decision"][:1800]}
+    if analysis:
+        r = analysis.get("reports") or {}
+        ctx["ai_analysis"] = {"rating": analysis.get("rating"), "finished_at": analysis.get("finished"),
+                              **{k: (r.get(name) or "")[:n] for k, name, n in ANALYSIS_EXCERPTS if r.get(name)}}
+    else:
+        plan = morning.load()
+        ai = ((plan or {}).get("indices", {}).get(symbol) or {}).get("ai") or {}
+        if ai.get("decision"):
+            ctx["morning_ai_view"] = {"rating": ai.get("rating"), "decision_excerpt": ai["decision"][:1800]}
     rows = ch["rows"]
     i = [r["strike"] for r in rows].index(ch["atm"]) if ch["atm"] in [r["strike"] for r in rows] else len(rows) // 2
     near = rows[max(0, i - 8): i + 9]
@@ -383,8 +398,8 @@ def evidence(plan: StrategyPlan, ctx: dict, priced: dict | None) -> dict | None:
             "checks": checks}
 
 
-def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
-    ctx, ch = build_context(symbol, expiry)
+def recommend(symbol: str, expiry: str | None = None, llm=None, analysis: dict | None = None) -> dict:
+    ctx, ch = build_context(symbol, expiry, analysis)
     started = datetime.now()
     ask = llm or ask_llm
     plan = ask(ctx)
@@ -397,7 +412,8 @@ def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
     out = {"symbol": symbol, "expiry": ch["expiry"], "spot": ch["spot"], "lot": ch["lot"],
            "seconds": (datetime.now() - started).seconds, "plan": plan.model_dump(),
            "strategy_text": STRATEGIES[plan.strategy][0], "chain_summary": ch["summary"], "retried": retried,
-           "asked_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
+           "asked_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+           "from_analysis": {"rating": analysis.get("rating"), "finished": analysis.get("finished")} if analysis else None}
     if problems:
         out.update(rejected=problems, priced=None, warnings=[])
         return out
@@ -512,6 +528,14 @@ _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
 
+def todays_analysis(symbol: str) -> dict | None:
+    """Today's finished complete AI analysis of ``symbol`` (Plan tab), so "Ask again" builds on it too."""
+    from webapp import analysis
+
+    a = analysis.load(symbol)
+    return a if a and a.get("status") == "done" and str(a.get("finished", "")).startswith(date.today().isoformat()) else None
+
+
 def start(symbol: str, expiry: str | None = None) -> str:
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
@@ -519,7 +543,7 @@ def start(symbol: str, expiry: str | None = None) -> str:
 
     def run():
         try:
-            res = recommend(symbol, expiry)
+            res = recommend(symbol, expiry, analysis=todays_analysis(symbol))
             if res.get("priced"):                      # every valid suggestion goes into the AI track record
                 try:
                     from webapp import trade_record

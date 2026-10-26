@@ -388,3 +388,11 @@ table.rank td.num div { margin-bottom: 4px; }
 .fresh { font-size: 13.5px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); color: var(--muted); margin-bottom: 12px; }
 .fresh b { color: var(--text); }
 .fresh.stale { background: var(--warn-soft); color: var(--warn); }
+
+/* plan tab: complete AI analysis */
+.an-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 10px; }
+.an-head .btn { margin-left: auto; }
+.an-steps { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; color: var(--muted); }
+.an-steps li.done { color: var(--up); font-weight: 600; }
+.an-report { max-height: 460px; overflow: auto; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.an-from { margin: 0 0 8px; }

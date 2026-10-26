@@ -23,6 +23,7 @@ from pydantic import BaseModel  # noqa: E402
 
 from webapp import (  # noqa: E402
     ai,
+    analysis,
     latency,
     market_data as md,
     morning,
@@ -237,6 +238,21 @@ def strategy_status(job_id: str):
     if not job:
         raise HTTPException(404, "Unknown job")
     return job
+
+
+# ---------- Plan tab: complete AI analysis, then the AI strategist's trade built from it ----------
+
+@app.post("/api/analysis")
+def analysis_start(req: StrategyRequest):
+    if problem := ai.azure_problem():
+        raise HTTPException(400, problem)
+    return analysis.start(req.symbol, req.expiry)
+
+
+@app.get("/api/analysis/{symbol}")
+def analysis_status(symbol: str):
+    """The running analysis (its finished steps), else the latest saved one, else status "none"."""
+    return analysis.status(symbol)
 
 
 # ---------- quant layer: risk, spreads, research, market map, trade journal ----------

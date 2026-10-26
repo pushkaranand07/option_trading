@@ -72,7 +72,7 @@ def test_charges_cover_every_leg_in_and_out():
 
 @pytest.mark.unit
 def test_recommend_prices_per_lot_flags_poor_reward_and_refuses_naked_sells(monkeypatch):
-    monkeypatch.setattr(st, "build_context", lambda symbol, expiry=None: ({"instrument": symbol}, CHAIN))
+    monkeypatch.setattr(st, "build_context", lambda symbol, expiry=None, analysis=None: ({"instrument": symbol}, CHAIN))
 
     def fake_llm(ctx, feedback=None):
         return plan("bear_call_spread", [("SELL", "CE", 22700), ("BUY", "CE", 22800)], underlying_entry_low=22620,

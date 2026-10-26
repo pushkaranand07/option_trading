@@ -802,12 +802,13 @@ function renderPlanCards() {
         <h3 class="sub-h">Price chart <span class="small muted chart-note"></span></h3>
         <div class="pc-bar"></div><div class="pc-info small"><span class="pc-readout"></span><span class="pc-hint"></span></div>
         <div class="pc-wrap"><div class="plan-chart"></div></div>
+        <h3 class="sub-h">AI analysis</h3><div class="analysis-slot"></div>
         <h3 class="sub-h">AI strategist</h3><div class="strat-slot"></div>
         <h3 class="sub-h">Option chain <span class="small muted chain-note"></span></h3><div class="chain-slot"></div>
         <h3 class="sub-h">Morning view</h3><div class="morning-slot"></div></div></section>`).join("");
     planCharts.clear();
     loadPlanCharts();
-    for (const [sym] of entries) { renderStrat(sym); loadNseChain(sym).then(() => loadRank(sym)); }
+    for (const [sym] of entries) { renderStrat(sym); loadAnalysis(sym); loadNseChain(sym).then(() => loadRank(sym)); }
   }
   for (const [sym, e] of entries) {
     const card = $(`.plan-card[data-sym="${sym}"]`);
@@ -1243,6 +1244,91 @@ function renderNseChain(sym) {
   if (atm && slot.dataset.centered !== c.expiry) { sc.scrollTop = atm.offsetTop - sc.clientHeight / 2; slot.dataset.centered = c.expiry; }
 }
 
+// ---------- Plan tab: the complete AI analysis below the chart, then the AI strategist's trade built from it ----------
+// The run takes 15-20 minutes on the server; the page polls it, and the latest run per instrument is kept there.
+S.analysis = {};
+const analysisTimers = {};
+const AN_STEPS = { "Price & indicator analysis done": "Price & indicators", "News analysis done": "News",
+  "Social sentiment analysis done": "Social sentiment", "Fundamentals analysis done": "Fundamentals",
+  "Bull vs bear debate settled": "Bull vs bear debate", "Trader drafted a plan": "Trader's plan",
+  "Risk team signed off": "Risk team review", "Strategy built from the analysis": "Options strategy from the analysis" };
+const RATING_TONE = { Buy: "up", Overweight: "up", Hold: "warn", Underweight: "down", Sell: "down" };
+const minsSince = (stamp) => (stamp?.slice(0, 10) === istNow().date ? Math.max(0, istNow().mins - toMins(stamp.slice(11, 16))) : null);
+
+async function loadAnalysis(sym) {
+  clearTimeout(analysisTimers[sym]);
+  try { S.analysis[sym] = await api("/api/analysis/" + encodeURIComponent(sym)); }
+  catch (e) { S.analysis[sym] = { status: "error", error: e.message }; }
+  const a = S.analysis[sym];
+  renderAnalysis(sym);
+  if (a.status === "running") analysisTimers[sym] = setTimeout(() => loadAnalysis(sym), 5000);
+  else if (a.status === "done") adoptAnalysisStrategy(sym, a);
+}
+
+async function startAnalysis(sym) {
+  try {
+    S.analysis[sym] = await api("/api/analysis", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: sym, expiry: S.nseExp[sym] || null }) });
+  } catch (e) { S.analysis[sym] = { status: "error", error: e.message }; }
+  renderAnalysis(sym);
+  if (S.analysis[sym].status === "running") analysisTimers[sym] = setTimeout(() => loadAnalysis(sym), 5000);
+}
+
+// Today's finished analysis puts its trade into the second-opinion card, unless a newer AI suggestion is already there.
+function adoptAnalysisStrategy(sym, a) {
+  const res = a.strategy, cur = S.strat[sym];
+  if (!res || a.finished?.slice(0, 10) !== istNow().date || cur?.running || (cur?.result && cur.result.asked_at >= res.asked_at)) return;
+  S.strat[sym] = { result: res }; S.view[sym] = "ai"; S.ticket[sym] = null;
+  refreshStrat(sym);
+}
+
+function renderAnalysis(sym) {
+  const slot = $(`.plan-card[data-sym="${sym}"] .analysis-slot`); if (!slot) return;
+  const a = S.analysis[sym] || { status: "none" }, name = esc(NAMES[sym] || nameOf(sym)), since = minsSince(a.started);
+  const key = [a.status, a.finished, (a.steps || []).length, since, S.status.azure].join("|");
+  if (slot.dataset.key === key) return;                            // keep the open report tab between polls
+  slot.dataset.key = key;
+  const noAzure = S.status.azure === false;
+  const go = (label) => `<button class="btn primary an-go" ${noAzure ? "disabled" : ""}>${label}</button>`;
+  const azure = noAzure ? `<div class="notice">${esc(S.status.azure_problem || "The AI needs the Azure OpenAI settings in .env.")}</div>` : "";
+  let html;
+  if (a.status === "running") {
+    const done = new Set(a.steps || []);
+    html = `<div class="an-head"><span class="spinner"></span><b>Analysing ${name}</b>
+        <span class="small muted">started ${esc(a.started.slice(11))}${since != null ? ` · ${dur(since)} so far` : ""} · about 15–20 min · you can leave this page</span></div>
+      <ul class="an-steps">${Object.entries(AN_STEPS).map(([k, label]) =>
+        `<li class="${done.has(k) ? "done" : ""}">${done.has(k) ? "✓" : "○"} ${esc(label)}</li>`).join("")}</ul>`;
+  } else if (a.status === "done") {
+    const names = Object.keys(a.reports || {}), today = a.finished?.slice(0, 10) === istNow().date;
+    html = `<div class="an-head"><span class="badge ${RATING_TONE[a.rating] || "flat"}">${esc(a.rating || "—")}</span><b>Complete AI analysis of ${name}</b>
+        <span class="small muted">finished ${esc(today ? a.finished.slice(11) : a.finished)}${a.minutes != null ? ` · took ${a.minutes >= 1 ? dur(Math.round(a.minutes)) : "under a minute"}` : ""}</span>${go("Run again")}</div>
+      ${today ? "" : `<div class="notice">This analysis is from an earlier day. Run it again for today's news and prices.</div>`}
+      <div class="report-tabs">${names.map((n, i) => `<button data-i="${i}" class="${i ? "" : "active"}">${esc(n)}</button>`).join("")}</div>
+      <div class="report an-report"></div>
+      ${a.strategy ? `<p class="small">The AI strategist built a trade from this analysis on the prices at ${esc(a.strategy.asked_at.slice(11))}: <b>${esc(a.strategy.strategy_text || a.strategy.plan?.strategy)}</b>. It is shown below under <b>Second opinion from the AI</b>${today ? "" : " (only today's runs are shown there)"}.</p>`
+        : a.strategy_error ? `<div class="notice">The analysis finished, but the strategy step failed: ${esc(a.strategy_error)}</div>` : ""}`;
+  } else if (a.status === "error") {
+    html = `<div class="notice">The analysis stopped: ${esc(a.error)}</div><div class="an-head">${go("Try again")}</div>`;
+  } else {
+    html = `<p class="small">The full research team reads ${name}: price &amp; indicators, news, social sentiment and fundamentals,
+      then a bull-vs-bear debate, a trader and a risk team. It takes about 15–20 minutes. When it finishes, the AI strategist builds an
+      options trade from it on the prices at that moment, shown below under <b>Second opinion from the AI</b>.</p>
+      <div class="an-head">${go("Run complete AI analysis")}</div>`;
+  }
+  slot.innerHTML = azure + html;
+  if ($(".an-go", slot)) $(".an-go", slot).onclick = () => { $(".an-go", slot).disabled = true; startAnalysis(sym); };
+  const tabs = $(".report-tabs", slot);
+  if (tabs) {
+    const names = Object.keys(a.reports || {});
+    const show = (i) => {
+      $(".an-report", slot).innerHTML = DOMPurify.sanitize(marked.parse(a.reports[names[i]] || ""));
+      tabs.querySelectorAll("button").forEach((b) => b.classList.toggle("active", +b.dataset.i === i));
+    };
+    tabs.onclick = (e) => { const b = e.target.closest("button"); if (b) show(+b.dataset.i); };
+    show(0);
+  }
+}
+
 function renderStrat(sym) {
   const slot = $(`.plan-card[data-sym="${sym}"] .strat-slot`); if (!slot) return;
   const st = S.strat[sym] || {};
@@ -1252,7 +1338,10 @@ function renderStrat(sym) {
   const v = S.view[sym], cand = typeof v === "number" ? S.rank[sym]?.data?.candidates?.[v] : null;
   const detail = cand ? stratHtml(cand, sym) : st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result, sym) : "";
   slot.innerHTML = rankHtml(sym) + `<h4 class="mini-h">Second opinion from the AI</h4>` + ask
-    + (cand && st.result ? `<div class="small"><a href="#" class="show-ai">Show the AI's suggestion instead</a></div>` : "") + detail;
+    + (cand && st.result ? `<div class="small"><a href="#" class="show-ai">Show the AI's suggestion instead</a></div>` : "")
+    + (!cand && st.result?.from_analysis ? `<div class="small muted an-from">Built from the complete AI analysis (above) that finished
+        ${esc(st.result.from_analysis.finished?.slice(11))}, rated <b>${esc(st.result.from_analysis.rating)}</b>; priced on the chain at ${esc(st.result.asked_at.slice(11))}.</div>` : "")
+    + detail;
   slot.querySelectorAll("[data-rank]").forEach((r) => (r.onclick = () => { S.view[sym] = +r.dataset.rank; S.ticket[sym] = null; refreshStrat(sym); }));
   if ($(".show-ai", slot)) $(".show-ai", slot).onclick = (e) => { e.preventDefault(); S.view[sym] = "ai"; S.ticket[sym] = null; refreshStrat(sym); };
   if ($(".rank-refresh", slot)) $(".rank-refresh", slot).onclick = () => loadRank(sym);

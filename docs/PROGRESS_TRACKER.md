@@ -298,6 +298,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-26 — Plan tab (PA-30): complete AI analysis below the chart (~15–20 min, live checklist, report tabs, saved per instrument). When it finishes, the AI strategist builds a trade from it on the prices at that moment and shows it as the second opinion; Ask again also builds on today's analysis.
 - 2026-10-26 — Plan chart (PA-29): cleaner and larger (only the last price, target and stop keep axis labels; zones are shaded bands). Layer toggles; automatic day levels, swings and EMA crossovers; horizontal / trend line tools; Today / 2D / 5D / All zoom; O/H/L/C readout.
 - 2026-10-26 — Backend latency (PA-28): requests now read memory. A background refresh keeps the data in use fresh, and identical requests share one fetch. Measured p99 1,277 → 139 ms and p95 737 → 95 ms. A plan on a stopped feed or saved prices is blocked. Sub-second prices still need the Dhan feed (your decision).
 - 2026-10-26 — Docs: 16 small change records folded into the records they belong to; the remaining 27 renumbered PA-01 to PA-27 (the index has an old → new table).

@@ -50,16 +50,20 @@ def get(job_id: str) -> dict | None:
         return dict(job) if job else None
 
 
-def _run(job_id: str, ticker: str, analysts: list[str]) -> None:
-    job = _jobs[job_id]
-    try:
-        from tradingagents.agents.rating import run_rating
-        from tradingagents.dataflows.config import run_config
-        from tradingagents.default_config import build_default_config
-        from tradingagents.graph.trading_graph import TradingAgentsGraph
+ANALYSTS = ["market", "news", "social", "fundamentals"]
 
+
+def run_analysis(ticker: str, analysts: list[str], on_step=None) -> dict:
+    """The full multi-agent analysis of ``ticker`` today; ``on_step(label)`` is called as each stage finishes.
+    Returns the final graph state; raises with a plain message when Azure rejects the key."""
+    from tradingagents.dataflows.config import run_config
+    from tradingagents.default_config import build_default_config
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+
+    try:
         graph = TradingAgentsGraph(selected_analysts=analysts, config=build_default_config())
         trade_date = date.today().isoformat()
+        done: list[str] = []
         # The same steps as TradingAgentsGraph.propagate, streamed to report progress.
         with run_config(graph.config):
             init = graph.create_run_state(ticker, trade_date)
@@ -69,14 +73,31 @@ def _run(job_id: str, ticker: str, analysts: list[str]) -> None:
                     continue
                 final_state.update(state)
                 for key, label in STEP_LABELS.items():
-                    if final_state.get(key) and label not in job["steps"]:
-                        job["steps"].append(label)
+                    if final_state.get(key) and label not in done:
+                        done.append(label)
+                        if on_step:
+                            on_step(label)
             graph.record_decision(ticker, trade_date, final_state)
-        job.update(status="done", rating=run_rating(final_state), finished=datetime.now().strftime("%H:%M"),
-                   reports={k: final_state.get(v, "") for k, v in REPORTS.items() if final_state.get(v)})
+        return final_state
     except Exception as exc:
         msg = str(exc)
         if "401" in msg or "PermissionDenied" in type(exc).__name__ or "AuthenticationError" in type(exc).__name__:
-            msg = ("Azure rejected the key (401). Key login may be disabled on this Azure resource; "
-                   "enable it under Keys and Endpoint, or use another resource. Details: " + msg[:300])
-        job.update(status="error", error=f"{type(exc).__name__}: {msg[:600]}")
+            raise RuntimeError("Azure rejected the key (401). Key login may be disabled on this Azure resource; "
+                               "enable it under Keys and Endpoint, or use another resource. Details: " + msg[:300]) from exc
+        raise
+
+
+def reports(final_state: dict) -> dict[str, str]:
+    return {k: final_state.get(v, "") for k, v in REPORTS.items() if final_state.get(v)}
+
+
+def _run(job_id: str, ticker: str, analysts: list[str]) -> None:
+    job = _jobs[job_id]
+    try:
+        from tradingagents.agents.rating import run_rating
+
+        final_state = run_analysis(ticker, analysts, job["steps"].append)
+        job.update(status="done", rating=run_rating(final_state), finished=datetime.now().strftime("%H:%M"),
+                   reports=reports(final_state))
+    except Exception as exc:
+        job.update(status="error", error=f"{type(exc).__name__}: {str(exc)[:600]}")
