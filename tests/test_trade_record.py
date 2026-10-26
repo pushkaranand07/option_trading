@@ -115,3 +115,15 @@ def test_live_marks_carry_the_time_of_nses_snapshot():
     tr.take(RESULT)
     stamped = lambda s, e: chain(22600, _q(130, 129, 131), _q(88, 87, 89))(s, e) | {"timestamp": "26-Oct-2026 11:44:29"}  # noqa: E731
     assert tr.overview(stamped)["open"][0]["live"]["as_of"] == "26-Oct-2026 11:44:29"
+
+
+@pytest.mark.unit
+def test_a_range_trade_stops_on_either_side_and_books_profit_on_the_buy_back():
+    from webapp import trade_record as tr
+
+    t = {"index_range": [22460, 22740], "buy_back_at": 70.0,
+         "legs": [{"action": "BUY", "type": "PE"}, {"action": "SELL", "type": "PE"}, {"action": "SELL", "type": "CE"}, {"action": "BUY", "type": "CE"}]}
+    assert tr._flags(t, 22600, [20, 80, 85, 15]) == []                   # costs 130 to close: not yet
+    assert tr._flags(t, 22600, [10, 40, 45, 5]) == ["target"]            # costs 70: half the credit kept
+    assert tr._flags(t, 22455, [5, 150, 20, 1]) == ["stop"]
+    assert tr._flags(t, 22745, None) == ["stop"]

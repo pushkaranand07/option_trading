@@ -76,6 +76,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-27](PA_27-pulse-trade-ranking.md) | Pulse trade ranking: concrete trades (strike, entry, target, stop per leg) best first, iron butterfly accepted | Done |
 | [PA-28](PA_28-backend-latency.md) | Backend latency: one fetch per key, refresh-ahead, stale-feed blockers, p50/p95/p99 at `/api/latency` (p99 1.3 s → 0.14 s) | Done |
 | [PA-29](PA_29-plan-chart-tools.md) | Plan chart: decluttered and larger, layer toggles, automatic day levels / swings / crossovers, drawing tools, O/H/L/C readout | Done |
+| [PA-30](PA_30-plan-ai-analysis.md) | Plan tab: complete AI analysis below the chart (live checklist, report tabs), then the AI strategist's trade built from it in the second-opinion card | Done |
 
 **Renumbered on 2026-10-26.** Sixteen small records were folded into the ones they belong to and the rest numbered 01–27. Pull requests and commits before that date use the old numbers:
 
