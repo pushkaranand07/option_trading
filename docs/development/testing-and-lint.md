@@ -44,7 +44,7 @@ error. Passing `-m` on the command line replaces the `-m "not integration"` from
 | `smoke` | Quick sanity checks |
 
 Test files mark their tests `unit` (with `pytestmark = pytest.mark.unit` or `@pytest.mark.unit`). Eight files had
-no marker, so `-m unit` skipped them, until 2026-10-24 ([PA-31](../PA_31-small-fixes-prompt-env-test-markers.md)).
+no marker, so `-m unit` skipped them, until 2026-10-24 (the small-fixes change).
 Run the full default suite before a pull request.
 
 New tests: mark them `unit` unless they need the network, in which case mark them `integration`.

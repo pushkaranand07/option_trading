@@ -1,10 +1,10 @@
-# PA-38 — Trade Record: take the AI's trade as a dummy trade, monitor it, keep a P&L history
+# PA-25 — Trade Record: take the AI's trade as a dummy trade, monitor it, keep a P&L history
 
 | | |
 |---|---|
 | **Status** | Done |
 | **Scope** | new `webapp/trade_record.py`, `webapp/server.py` (`/api/trades*`, background monitor), `webapp/static/*` (Take button on the Plan tab, new Trade Record tab), `tests/test_trade_record.py` |
-| **Related** | [PA-34](PA_34-ai-strategist-and-nse-option-chain.md), [PA-36](PA_36-trade-ticket-and-premium-levels.md), [features/webapp](features/webapp.md) |
+| **Related** | [PA-23](PA_23-ai-strategist-and-nse-option-chain.md), [PA-24](PA_24-trade-ticket-and-premium-levels.md), [features/webapp](features/webapp.md) |
 | **Pull request** | branch `feature/trade-record` |
 | **Date** | 2026-10-26 |
 

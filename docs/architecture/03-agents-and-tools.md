@@ -63,7 +63,7 @@ historical run's sentiment inputs are not point-in-time.
 
 **News Analyst.** Company news, global macro news (search queries from `global_news_queries`), FRED macro
 series, Polymarket probabilities, and NSE FII/DII flows; its prompt names all five tools
-([PA-31](../PA_31-small-fixes-prompt-env-test-markers.md)).
+([the small-fixes change](../development/testing-and-lint.md)).
 
 **Fundamentals Analyst.** Company overview, the three statements (SEC EDGAR as filed for US filers, then
 Yahoo, per `data_vendors.fundamental_data`), and insider transactions.

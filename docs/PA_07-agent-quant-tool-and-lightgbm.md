@@ -1,10 +1,10 @@
-# PA-09 — Quant report tool for the agents (Phase 9), LightGBM pipeline (Phase 6), sizing (Phase 8) and a bug sweep
+# PA-07 — Quant report tool for the agents (Phase 9), LightGBM pipeline (Phase 6), sizing (Phase 8) and a bug sweep
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | Phase 9: `tradingagents/analytics/quant_report.py`, `tradingagents/agents/tools.py`, `agents/analysts/market_analyst.py`, `agents/managers/portfolio_manager.py`, `tradingagents/reporting.py`. Phase 6: `tradingagents/analytics/ml/{labels,features,model,pipeline,derived}.py`, `scripts/quant_ml.py`. Phase 8: `tradingagents/analytics/sizing.py`. Phase 10 groundwork: `scripts/quant_daily_update.py`. Fixes: `gates.py`, `evaluate.py`, `condor.py`, `vrp.py`, `datastore.py`, `scripts/quant_build_store.py`, lint across quant code. Tests: `tests/test_quant_{ml,report,sizing,daily,gates,condor,evaluate,vrp,datastore}.py` |
-| **Related** | [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-08](PA_08-regime-detection-hmm.md) · [PA-10](PA_10-relative-strength-model.md) · [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) · [PA-13](PA_13-daily-refresh-scheduler-fix.md) · [PA-25](PA_25-phase9-replay-and-report-wording.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) · [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) · [architecture/16-quant-context-in-agents.md](architecture/16-quant-context-in-agents.md) |
+| **Related** | [PA-04](PA_04-evaluation-harness-and-baselines.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [PA-06](PA_06-regime-detection-hmm.md) · [PA-08](PA_08-relative-strength-model.md) · [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) · [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) · [PA-21](PA_21-phase9-replay-and-report-wording.md) · [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md) · [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) · [architecture/15-daily-refresh-and-paper-trading.md](architecture/15-daily-refresh-and-paper-trading.md) · [architecture/16-quant-context-in-agents.md](architecture/16-quant-context-in-agents.md) |
 | **Pull request** | #8 (branch `quant/phase-9-agent-tool`); 18 commits from `157233d` to `f60fa99`. No PR description |
 | **Date** | 2026-10-23 |
 
@@ -116,8 +116,8 @@ NSE's stated lots (1,482 / 1,488). The quant report's behaviour in a live agent 
 ## 8. Risks and open items
 
 - **Phase 9 exit gate** (plan: replay of 50 historical dates, agents never invent numbers) left open — "needs LLM runs,
-  your call on cost" (tracker). Done later as a 10-date replay: [PA-25](PA_25-phase9-replay-and-report-wording.md).
+  your call on cost" (tracker). Done later as a 10-date replay: [PA-21](PA_21-phase9-replay-and-report-wording.md).
 - Meta-labelling and ensemble (rest of Phase 8) need a strategy that passed its tests; none has.
-- The daily job was not yet scheduled ([PA-11](PA_11-ship-expected-move-and-daily-refresh.md)).
+- The daily job was not yet scheduled ([PA-09](PA_09-ship-expected-move-and-daily-refresh.md)).
 - Further LightGBM work was later dropped at the user's request (tracker, Phase 6 "On hold").
 - Research and decision support only; not investment advice.

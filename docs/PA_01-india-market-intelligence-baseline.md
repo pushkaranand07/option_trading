@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | Whole repository (initial import); `tradingagents/dataflows/vendors/nse/`, `tradingagents/analytics/{swings,validation}.py`, `tradingagents/compliance.py`, `option_backtester/`, `tradingagents/integrations/optopsy/`, `tradingagents/agents/{tools.py,analysts/}`, `scripts/india_live_check.py`, plan docs |
-| **Related** | [PA-02](PA_02-webapp.md) · [PA-03](PA_03-quant-foundation-nse-data-store.md) · [PA-06](PA_06-windows-test-portability.md) · [PA-07](PA_07-option-backtester-exit-fixes.md) · [architecture/01-system-overview.md](architecture/01-system-overview.md) · [architecture/06-data-vendors.md](architecture/06-data-vendors.md) · [architecture/07-india-market-layer.md](architecture/07-india-market-layer.md) · [architecture/08-option-backtester.md](architecture/08-option-backtester.md) · [plans/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md](plans/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md) |
+| **Related** | [PA-02](PA_02-webapp.md) · [PA-03](PA_03-quant-foundation-nse-data-store.md) · [the Windows test fix](development/testing-and-lint.md) · [PA-05](PA_05-garch-volatility-and-vrp-condor.md) · [architecture/01-system-overview.md](architecture/01-system-overview.md) · [architecture/06-data-vendors.md](architecture/06-data-vendors.md) · [architecture/07-india-market-layer.md](architecture/07-india-market-layer.md) · [architecture/08-option-backtester.md](architecture/08-option-backtester.md) · [plans/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md](plans/INDIA_MARKET_INTELLIGENCE_BUILD_PLAN.md) |
 | **Pull request** | Direct commits: `0628ada` "Initial commit"; `9b71aeb` "Add India market intelligence…" (reached GitHub `main` as the first commit of PR #2, branch `quant/phase-0-1-foundation`) |
 | **Date** | 2026-10-22 (initial commit and plan section 13); `9b71aeb` committed 2026-10-23 |
 
@@ -83,7 +83,7 @@ plan (then at `docs/` root, now [plans/](plans/)), README section, and `pandas-t
 ## 6. Results
 
 - Existing suite still passed: 1418 passed, with 5 pre-existing failures in ChatGPT-auth, CLI-update and
-  yfinance-cache tests, unrelated to this work (fixed in [PA-06](PA_06-windows-test-portability.md)).
+  yfinance-cache tests, unrelated to this work (fixed in [the Windows test fix](development/testing-and-lint.md)).
 - The SMA-trend example came out `insufficient_evidence` (see section 2).
 
 ## 7. Verification
@@ -97,7 +97,7 @@ Each fix was run against live NSE/Yahoo data with `python scripts/india_live_che
 - **FII/DII history** builds up one day per run; older dates are reported missing, not estimated.
 - **Publication times** in `calendar.EXPECTED_BY` are approximations; status is decided by the date inside the data.
 - **Options backtests** on NSE data use the end-of-day close as both bid and ask — treat P&L as optimistic (later
-  measured: [PA-23](PA_23-option-quotes-measured-spreads.md)).
-- Engine bugs found later: [PA-07](PA_07-option-backtester-exit-fixes.md).
+  measured: [PA-19](PA_19-option-quotes-measured-spreads.md)).
+- Engine bugs found later: [PA-05](PA_05-garch-volatility-and-vrp-condor.md).
 - AGPL obligations apply if the combined code is distributed or offered over a network.
 - Research and decision support only; not investment advice.

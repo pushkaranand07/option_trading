@@ -1,10 +1,10 @@
-# PA-16 — Stage 2 stress tests for the pooled VRP condor: pass, weak spot found
+# PA-12 — Stage 2 stress tests for the pooled VRP condor: pass, weak spot found
 
 | | |
 |---|---|
 | **Status** | Done (merged) |
 | **Scope** | `tradingagents/analytics/stress.py`, `tradingagents/analytics/condor.py` (`offset` parameter), `scripts/quant_stress.py`, `tests/test_quant_stress.py`, `docs/PROOF_PLAN.md`, `docs/strategies/vrp_condor_pooled.md`, `docs/PROGRESS_TRACKER.md` |
-| **Related** | [PA-15](PA_15-proof-plan-move-size-and-paper-trading.md) (proof plan and frozen spec), [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md), [PA-17](PA_17-backward-holdout-2015.md) (next test), [plans/PROOF_PLAN.md](plans/PROOF_PLAN.md), [strategies/vrp_condor_pooled.md](strategies/vrp_condor_pooled.md), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
+| **Related** | [PA-11](PA_11-proof-plan-move-size-and-paper-trading.md) (proof plan and frozen spec), [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md), [PA-13](PA_13-backward-holdout-2015.md) (next test), [plans/PROOF_PLAN.md](plans/PROOF_PLAN.md), [strategies/vrp_condor_pooled.md](strategies/vrp_condor_pooled.md), [architecture/12-evaluation-and-validation.md](architecture/12-evaluation-and-validation.md), [architecture/14-option-strategy-simulators-and-costs.md](architecture/14-option-strategy-simulators-and-costs.md) |
 | **Pull request** | #15 (branch `quant/stage2-stress`) |
 | **Date** | 2026-10-23 |
 
@@ -80,5 +80,5 @@ Every scenario was run on the real NSE store with the frozen rules (`scripts/qua
 
 - Stress tests reuse the same 2021–26 history the settings were chosen on; they test robustness, not new data.
 - The rebound weakness was to be watched in paper trading.
-- Follow-up: the backward holdout on 2015–21 ([PA-17](PA_17-backward-holdout-2015.md)) **failed** and rejected the
+- Follow-up: the backward holdout on 2015–21 ([PA-13](PA_13-backward-holdout-2015.md)) **failed** and rejected the
   strategy.

@@ -1,7 +1,7 @@
 # Quant context in the agents
 
 > **Status:** Current. Phase 9 exit check (10-date replay, 2026-10-24): passed on reading every flag — 0 invented
-> quant numbers, 0 validation claims ([PA-25](../PA_25-phase9-replay-and-report-wording.md)).
+> quant numbers, 0 validation claims ([PA-21](../PA_21-phase9-replay-and-report-wording.md)).
 > **Scope:** `tradingagents/analytics/quant_report.py`, `tradingagents/agents/tools.py` (`get_quant_signal_report`),
 > `tradingagents/agents/analysts/market_analyst.py`, `tradingagents/agents/managers/portfolio_manager.py`,
 > `tradingagents/reporting.py` (`_quant_part`), `tradingagents/analytics/replay_check.py`, `scripts/quant_replay.py`.
@@ -125,7 +125,7 @@ are kept, so a rerun resumes.
 
 The original plan asked for 50 dates and a direction / size check. The proof plan offered 50 / 10 / skip because of
 the LLM cost; the user chose 10 dates and 2 debate rounds (2026-10-24), and the check covers invented numbers and
-validation claims. Result and first findings: [PA-25](../PA_25-phase9-replay-and-report-wording.md).
+validation claims. Result and first findings: [PA-21](../PA_21-phase9-replay-and-report-wording.md).
 
 User-facing doc: [../features/quant-report.md](../features/quant-report.md). Related:
 [13 — volatility and regime models](13-volatility-and-regime-models.md).

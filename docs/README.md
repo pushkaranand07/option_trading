@@ -1,6 +1,6 @@
 # TradingAgents (India) — documentation
 
-> **Status:** Current. Restructured on 2026-10-24 ([PA-26](PA_26-docs-restructure.md)).
+> **Status:** Current. Restructured on 2026-10-24 ([the docs restructure](development/documentation-standards.md)).
 > **Scope:** everything under `docs/`.
 > **Last verified against the code:** 2026-10-24
 
@@ -52,44 +52,55 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-03](PA_03-quant-foundation-nse-data-store.md) | Quant foundation: plan, gates, trial log, universe, NSE downloader, point-in-time store, costs | Done |
 | [PA-04](PA_04-evaluation-harness-and-baselines.md) | Walk-forward evaluation harness and baselines; MA trend rejected | Done |
 | [PA-05](PA_05-garch-volatility-and-vrp-condor.md) | GARCH volatility (validated), implied vol, VRP iron condor (rejected: too few trades) | Done |
-| [PA-06](PA_06-windows-test-portability.md) | Three test files pass on Windows | Done |
-| [PA-07](PA_07-option-backtester-exit-fixes.md) | Option backtester / NSE adapter: early exits, commission, expiry value | Done |
-| [PA-08](PA_08-regime-detection-hmm.md) | Market regimes (HMM, validated as a risk input), data repairs, progress tracker | Done |
-| [PA-09](PA_09-agent-quant-tool-and-lightgbm.md) | Quant report tool for the agents, LightGBM (no edge), sizing, bug sweep | Done |
-| [PA-10](PA_10-relative-strength-model.md) | Relative-strength model (rejected), data completion, remaining bug fixes | Done |
-| [PA-11](PA_11-ship-expected-move-and-daily-refresh.md) | Expected move in the agents' report; scheduled daily refresh | Done |
-| [PA-12](PA_12-tracker-handoff.md) | Tracker end-of-day handoff | Done |
-| [PA-13](PA_13-daily-refresh-scheduler-fix.md) | Scheduled refresh never ran → fixed and verified | Done |
-| [PA-14](PA_14-retest-pooled-condor-and-relative-buffer.md) | Re-tests: pooled 4-book VRP condor (close), relative strength with buffer (rejected) | Done |
-| [PA-15](PA_15-proof-plan-move-size-and-paper-trading.md) | Proof plan; move size (GARCH 0.573 beats LightGBM); quiet-stock condor rejected; paper-trading ledger | Done |
-| [PA-16](PA_16-stage2-stress-tests.md) | Stage 2 stress tests for the VRP condor: pass, weak spot found | Done |
-| [PA-17](PA_17-backward-holdout-2015.md) | Backward holdout 2015–21 rejects the VRP condor; paper trading as observation only | Done |
-| [PA-18](PA_18-market-map-2021-26.md) | Market Map 2021–26: law changes and events measured against NSE data | Done |
-| [PA-19](PA_19-weekend-nse-sessions.md) | Weekend NSE special sessions recovered (11) | Done |
-| [PA-20](PA_20-chronos-pretrained-model.md) | Chronos-Bolt pretrained model vs GARCH: not kept | Done |
-| [PA-21](PA_21-results-day-iron-butterfly.md) | Results-day iron butterfly (IV crush): rejected — edge real, costs larger | Done |
-| [PA-22](PA_22-results-fly-overpriced-retest.md) | Results fly: cost diagnosis; overpriced-only re-test rejected | Done |
-| [PA-23](PA_23-option-quotes-measured-spreads.md) | Option trading costs measured from NSE bid/ask every evening | Done |
-| [PA-24](PA_24-trade-journal.md) | Trade journal for the user's own Dhan trades | Done; waiting for the export |
-| [PA-25](PA_25-phase9-replay-and-report-wording.md) | Phase 9 replay (10 analyses): 0 invented quant numbers, 0 validation claims; clearer verdict wording; check v2 | Done |
-| [PA-26](PA_26-docs-restructure.md) | This documentation restructure | Done |
-| [PA-27](PA_27-calendar-special-sessions.md) | NSE calendar knows special sessions (Budget days, Muhurat) | Done |
-| [PA-28](PA_28-backtester-modelled-bid-ask.md) | Option backtester: modelled bid/ask so slippage counts | Done |
-| [PA-29](PA_29-azure-reasoning-effort.md) | Azure: the reasoning-effort setting is applied | Done |
-| [PA-30](PA_30-webapp-lots-and-holidays.md) | Web app: live lot sizes, holiday-aware market status | Done |
-| [PA-31](PA_31-small-fixes-prompt-env-test-markers.md) | News-analyst prompt, `.env.example`, unit markers on 8 test files | Done |
-| [PA-32](PA_32-webapp-tabs.md) | Web app in seven simple tabs: Today, Risk, Options, AI, Market Map, Research, My Trades | Done |
-| [PA-33](PA_33-morning-plan.md) | Morning plan at 8:30 AM: session, AI view, levels; live call sized from your risk limit | Done |
-| [PA-34](PA_34-ai-strategist-and-nse-option-chain.md) | Plan tab: AI options strategist (defined risk, priced at bid / ask) and NSE option chain | Done |
-| [PA-35](PA_35-remove-risk-limit-card.md) | Plan tab: risk-limit card removed; per-lot figures instead of lot sizing | Done |
-| [PA-36](PA_36-trade-ticket-and-premium-levels.md) | AI trade shown like a Dhan order: premium target / stop per leg, tap a leg for its ticket (premium chart, depth), marked on chart and chain | Done |
-| [PA-37](PA_37-candles-survive-a-dropped-connection.md) | Charts and the live call keep the last saved prices when Yahoo / the internet is unreachable | Done |
-| [PA-38](PA_38-trade-record.md) | Trade Record tab: take the AI's trade as a dummy 1-lot trade, live monitoring with target / stop flags, P&L history | Done |
-| [PA-39](PA_39-evidence-score-and-ai-track-record.md) | Pulse evidence score (0-100) for every AI suggestion, debit-spread check fixed, one retry, AI track record by score | Done |
-| [PA-40](PA_40-pulse-trade-ranking.md) | Pulse trade ranking: concrete trades (strike, entry, target, stop per leg) best first, iron butterfly accepted | Done |
-| [PA-41](PA_41-dhan-ready-leg-orders.md) | Leg orders shown by their job in Dhan: Super order (target / stop) only where Dhan accepts it; protection legs have none | Done |
-| [PA-42](PA_42-fresher-prices-and-data-age.md) | Fresher option prices (Pulse's own delay cut from ~60 s to ~25 s) and the age of NSE's data shown on every price | Done |
-| [PA-43](PA_43-end-of-day-data-dates.md) | Risk, Options costs and Research say which NSE close their data is from and when the next update is due; stale data flagged | Done |
+| [PA-06](PA_06-regime-detection-hmm.md) | Market regimes (HMM, validated as a risk input), data repairs, progress tracker | Done |
+| [PA-07](PA_07-agent-quant-tool-and-lightgbm.md) | Quant report tool for the agents, LightGBM (no edge), sizing, bug sweep | Done |
+| [PA-08](PA_08-relative-strength-model.md) | Relative-strength model (rejected), data completion, remaining bug fixes | Done |
+| [PA-09](PA_09-ship-expected-move-and-daily-refresh.md) | Expected move in the agents' report; scheduled daily refresh | Done |
+| [PA-10](PA_10-retest-pooled-condor-and-relative-buffer.md) | Re-tests: pooled 4-book VRP condor (close), relative strength with buffer (rejected) | Done |
+| [PA-11](PA_11-proof-plan-move-size-and-paper-trading.md) | Proof plan; move size (GARCH 0.573 beats LightGBM); quiet-stock condor rejected; paper-trading ledger | Done |
+| [PA-12](PA_12-stage2-stress-tests.md) | Stage 2 stress tests for the VRP condor: pass, weak spot found | Done |
+| [PA-13](PA_13-backward-holdout-2015.md) | Backward holdout 2015–21 rejects the VRP condor; paper trading as observation only | Done |
+| [PA-14](PA_14-market-map-2021-26.md) | Market Map 2021–26: law changes and events measured against NSE data | Done |
+| [PA-15](PA_15-weekend-nse-sessions.md) | Weekend NSE special sessions recovered (11) | Done |
+| [PA-16](PA_16-chronos-pretrained-model.md) | Chronos-Bolt pretrained model vs GARCH: not kept | Done |
+| [PA-17](PA_17-results-day-iron-butterfly.md) | Results-day iron butterfly (IV crush): rejected — edge real, costs larger | Done |
+| [PA-18](PA_18-results-fly-overpriced-retest.md) | Results fly: cost diagnosis; overpriced-only re-test rejected | Done |
+| [PA-19](PA_19-option-quotes-measured-spreads.md) | Option trading costs measured from NSE bid/ask every evening | Done |
+| [PA-20](PA_20-trade-journal.md) | Trade journal for the user's own Dhan trades | Done; waiting for the export |
+| [PA-21](PA_21-phase9-replay-and-report-wording.md) | Phase 9 replay (10 analyses): 0 invented quant numbers, 0 validation claims; clearer verdict wording; check v2 | Done |
+| [PA-22](PA_22-morning-plan.md) | Morning plan at 8:30 AM: session, AI view, levels; live call with per-lot figures (the risk-limit card was later removed) | Done |
+| [PA-23](PA_23-ai-strategist-and-nse-option-chain.md) | Plan tab: AI options strategist (defined risk, priced at bid / ask) and NSE option chain | Done |
+| [PA-24](PA_24-trade-ticket-and-premium-levels.md) | AI trade shown like a Dhan order: premium target / stop per leg, tap a leg for its ticket (premium chart, depth), marked on chart and chain | Done |
+| [PA-25](PA_25-trade-record.md) | Trade Record tab: take the AI's trade as a dummy 1-lot trade, live monitoring with target / stop flags, P&L history | Done |
+| [PA-26](PA_26-evidence-score-and-ai-track-record.md) | Pulse evidence score (0-100) for every AI suggestion, debit-spread check fixed, one retry, AI track record by score | Done |
+| [PA-27](PA_27-pulse-trade-ranking.md) | Pulse trade ranking: concrete trades (strike, entry, target, stop per leg) best first, iron butterfly accepted | Done |
+
+**Renumbered on 2026-10-26.** Sixteen small records were folded into the ones they belong to and the rest numbered 01–27. Pull requests and commits before that date use the old numbers:
+
+| Old | Now | Old | Now |
+|---|---|---|---|
+| 01 | PA-01 |  23 | PA-19 |
+| 02 | PA-02 |  24 | PA-20 |
+| 03 | PA-03 |  25 | PA-21 |
+| 04 | PA-04 |  26 | removed (git history) |
+| 05 | PA-05 |  27 | in PA-15 |
+| 06 | removed (git history) |  28 | in PA-05 |
+| 07 | in PA-05 |  29 | removed (git history) |
+| 08 | PA-06 |  30 | in PA-02 |
+| 09 | PA-07 |  31 | removed (git history) |
+| 10 | PA-08 |  32 | in PA-02 |
+| 11 | PA-09 |  33 | PA-22 |
+| 12 | removed (git history) |  34 | PA-23 |
+| 13 | in PA-09 |  35 | in PA-22 |
+| 14 | PA-10 |  36 | PA-24 |
+| 15 | PA-11 |  37 | in PA-02 |
+| 16 | PA-12 |  38 | PA-25 |
+| 17 | PA-13 |  39 | PA-26 |
+| 18 | PA-14 |  40 | PA-27 |
+| 19 | PA-15 |  41 | in PA-24 |
+| 20 | PA-16 |  42 | in PA-02 |
+| 21 | PA-17 |  43 | in PA-02 |
+| 22 | PA-18 |
 
 ---
 

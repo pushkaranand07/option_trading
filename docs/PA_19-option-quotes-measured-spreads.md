@@ -1,10 +1,10 @@
-# PA-23 — Option trading costs measured from NSE's bid/ask, every evening
+# PA-19 — Option trading costs measured from NSE's bid/ask, every evening
 
 | | |
 |---|---|
 | **Status** | Done (merged) — capturing nightly since 2026-10-23 |
 | **Scope** | `tradingagents/analytics/quotes.py`, `scripts/quant_option_quotes.py`, `scripts/quant_daily_update.py` (step `quotes`), `tests/test_quant_quotes.py` |
-| **Related** | [PA-21](PA_21-results-day-iron-butterfly.md), [PA-22](PA_22-results-fly-overpriced-retest.md), [features/option-quotes](features/option-quotes.md), [architecture/11](architecture/11-nse-data-store.md) |
+| **Related** | [PA-17](PA_17-results-day-iron-butterfly.md), [PA-18](PA_18-results-fly-overpriced-retest.md), [features/option-quotes](features/option-quotes.md), [architecture/11](architecture/11-nse-data-store.md) |
 | **Pull request** | #25 (branch `quant/option-quotes`) |
 | **Date** | 2026-10-24 |
 

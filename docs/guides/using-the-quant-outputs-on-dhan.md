@@ -48,7 +48,7 @@ The regime does **not** predict direction (returns by regime were not significan
 ## 5. Costs before you trade
 
 - Multi-leg stock-option trades (butterflies, condors) pay the spread on every leg: the results-day butterfly made
-  +5.5% of risk before costs and lost −6.5% after them ([PA-21](../PA_21-results-day-iron-butterfly.md)).
+  +5.5% of risk before costs and lost −6.5% after them ([PA-17](../PA_17-results-day-iron-butterfly.md)).
 - Measured closing spreads are about 1.1% of premium at the money and 1.6% on wings; some stocks are 3–5× worse
   (SUNPHARMA, JSWSTEEL, DIVISLAB on 23-Oct-2026). Prefer limit orders near the mid-price.
 

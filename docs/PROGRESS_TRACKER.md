@@ -19,7 +19,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-26 12:02_
+_Last updated: 2026-10-26 12:12_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -161,7 +161,7 @@ and its exit gate (beats the best single component). There is nothing to combine
 - [x] **Exit gate: 10-date replay — passed on reading every flag** (2026-10-24; GPT-5, 2 debate rounds, 101 min):
   799 quant numbers quoted, **0 invented or distorted, 0 validation claims**. The automatic v1 rule did not pass (643
   flags: it also tested other tools' numbers and matched "cross-validated"); check v2 declared for future replays
-  ([PA-25](PA_25-phase9-replay-and-report-wording.md))
+  ([PA-21](PA_21-phase9-replay-and-report-wording.md))
 
 ## Phase 10 — Paper trading and daily operations
 <!-- progress:phase -->
@@ -211,15 +211,15 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 **Found while writing the docs (2026-10-24), not fixed yet** — each needs its own change:
 - [x] `NSECalendar.from_nse()` never loaded special sessions → now the 11 verified weekend sessions plus NSE's
-  `*`-marked Muhurat holidays (2026-11-08 found live) ([PA-27](PA_27-calendar-special-sessions.md))
+  `*`-marked Muhurat holidays (2026-11-08 found live) ([PA-15](PA_15-weekend-nse-sessions.md))
 - [x] Web app hard-coded lot sizes (NIFTY 75, BANKNIFTY 35; current 65 / 30) and showed the market open on holidays →
-  live lots from Dhan's scrip master, market status from the NSE calendar ([PA-30](PA_30-webapp-lots-and-holidays.md))
+  live lots from Dhan's scrip master, market status from the NSE calendar ([PA-02](PA_02-webapp.md))
 - [x] Option backtester's NSE adapter set bid = ask = close, so slippage did nothing → modelled bid/ask from the
-  cost model ([PA-28](PA_28-backtester-modelled-bid-ask.md))
+  cost model ([PA-05](PA_05-garch-volatility-and-vrp-condor.md))
 - [x] Azure: `TRADINGAGENTS_OPENAI_REASONING_EFFORT` was ignored → now forwarded (dropped for non-reasoning
-  deployments) ([PA-29](PA_29-azure-reasoning-effort.md)). **Your `.env` says `low`: it now takes effect**
+  deployments) ([the Azure reasoning-effort fix](architecture/04-llm-providers-and-configuration.md)). **Your `.env` says `low`: it now takes effect**
 - [x] News Analyst prompt now names `get_india_fii_dii_flows`; `ALPHA_VANTAGE_API_KEY` added to `.env.example`;
-  the 8 unmarked test files marked `unit` (86 more tests in `-m unit`) ([PA-31](PA_31-small-fixes-prompt-env-test-markers.md))
+  the 8 unmarked test files marked `unit` (86 more tests in `-m unit`) ([the small-fixes change](development/testing-and-lint.md))
 
 ## Market Map 2021–26 (requested 2026-10-24)
 <!-- progress:phase -->
@@ -271,10 +271,10 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 - **Trade journal** (`scripts/trade_journal.py`): what works in your own trades, by holding period.
 - **Web app in eight tabs** (`python -m uvicorn webapp.server:app --port 8000`): **Plan** (morning plan + live call
   sized from your risk limit), Today, Risk & Volatility, Options (with measured spreads), AI Analysis, Market Map,
-  Research, My Trades ([PA-32](PA_32-webapp-tabs.md), [PA-33](PA_33-morning-plan.md)).
-- **AI strategist in the Plan tab** ([PA-34](PA_34-ai-strategist-and-nse-option-chain.md)): one defined-risk options strategy
+  Research, My Trades ([PA-02](PA_02-webapp.md), [PA-22](PA_22-morning-plan.md)).
+- **AI strategist in the Plan tab** ([PA-23](PA_23-ai-strategist-and-nse-option-chain.md)): one defined-risk options strategy
   (or none) for the picked instrument, priced per lot at the live bid / ask, levels on the chart; NSE option chain.
-  The risk-limit card was removed: figures are per lot and you choose how many ([PA-35](PA_35-remove-risk-limit-card.md)).
+  The risk-limit card was removed: figures are per lot and you choose how many ([PA-22](PA_22-morning-plan.md)).
 - **Morning plan** weekdays 08:30 (task "TradingAgents morning plan"): NIFTY + BANKNIFTY data and AI view.
 - **Daily refresh** weekdays 19:30. Log: `~/.tradingagents/cache/quant/daily_update.log`; status:
   `~/.tradingagents/cache/quant/daily_status.json`. Remove: `schtasks /Delete /TN "TradingAgents quant daily update" /F`.
@@ -298,6 +298,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-26 — Docs: 16 small change records folded into the records they belong to; the remaining 27 renumbered PA-01 to PA-27 (the index has an old → new table).
 - 2026-10-26 — Risk / Options costs / Research tabs now say which NSE close their end-of-day data is from and when the next 7:30 PM update is due; a missed nightly run is flagged.
 - 2026-10-26 — Prices: NSE's free chain is 30-60 s old and updates every ~45 s (measured); Pulse's own extra delay cut to ~25 s, and every price now shows its age. Real time needs the Dhan token.
 - 2026-10-26 — Leg orders shown by their job in Dhan: Super order with target / stop only on single options and the SELL leg of credit spreads; protection legs show none; other spread legs show reference prices.

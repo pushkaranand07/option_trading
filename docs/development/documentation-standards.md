@@ -1,6 +1,6 @@
 # Documentation standards
 
-> **Status:** Current. Written for the docs restructure ([PA-26](../PA_26-docs-restructure.md)).
+> **Status:** Current. Written for the docs restructure (2026-10-24).
 > **Scope:** every file under `docs/`.
 > **Last verified against the code:** 2026-10-24
 
@@ -29,7 +29,7 @@ File names: lower-case words joined by hyphens; PA records keep the `PA_XX-` pre
 Every document starts with a title and a short block:
 
 ```markdown
-# PA-07 — One line saying what changed
+# PA-05 — One line saying what changed
 
 | | |
 |---|---|

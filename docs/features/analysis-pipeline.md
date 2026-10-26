@@ -104,7 +104,7 @@ analysts and the Portfolio Manager. On top of that:
 
 The CLI shows the live count of LLM calls, tool calls and tokens (`cli/stats_handler.py`). Token use and money
 cost per run are not recorded in the repository. Measured once: the Phase 9 replay's first run (2 debate rounds,
-GPT-5) took 10.0 minutes ([PA-25](../PA_25-phase9-replay-and-report-wording.md)).
+GPT-5) took 10.0 minutes ([PA-21](../PA_21-phase9-replay-and-report-wording.md)).
 
 ## 8. Known issues (from code comments and code)
 
@@ -116,7 +116,7 @@ GPT-5) took 10.0 minutes ([PA-25](../PA_25-phase9-replay-and-report-wording.md))
   and no setting makes output identical across runs (`default_config.py`).
 - **Azure: one deployment for both tiers.** `AZURE_OPENAI_DEPLOYMENT_NAME` is used for quick and deep alike
   (`llm_clients/azure_client.py`).
-- **Azure reasoning effort** is applied since 2026-10-24 ([PA-29](../PA_29-azure-reasoning-effort.md)); runs before
+- **Azure reasoning effort** is applied since 2026-10-24 ([the Azure reasoning-effort fix](../architecture/04-llm-providers-and-configuration.md)); runs before
   that (including the Phase 9 replay) used the deployment's default whatever `.env` said.
 - **REVIEW.** If the Portfolio Manager's decision has no readable rating the run is recorded as `REVIEW`, not
   as Hold; re-run or read the decision yourself (`agents/rating.py`).

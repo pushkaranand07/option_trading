@@ -17,7 +17,7 @@ Weekdays at 19:30, Task Scheduler runs, from the repository root:
 Eight steps in order (download → store → volatility → regime → tracker → market_map → paper → quotes); the first
 failure stops the run. Design and setup: [../architecture/15-daily-refresh-and-paper-trading.md](../architecture/15-daily-refresh-and-paper-trading.md).
 
-**Morning plan** — weekdays at **08:30**, task "TradingAgents morning plan" ([PA-33](../PA_33-morning-plan.md)):
+**Morning plan** — weekdays at **08:30**, task "TradingAgents morning plan" ([PA-22](../PA_22-morning-plan.md)):
 
 ```
 .venv\Scripts\pythonw.exe -W ignore scripts\morning_plan.py --log %USERPROFILE%\.tradingagents\cache\quant\morning_plan.log

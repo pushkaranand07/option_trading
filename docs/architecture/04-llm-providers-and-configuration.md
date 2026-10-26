@@ -78,7 +78,7 @@ Two consequences found in the code:
 - `AZURE_OPENAI_DEPLOYMENT_NAME` applies to **both** tiers. When it is set, the quick and deep tiers call the
   same deployment whatever `quick_think_llm` and `deep_think_llm` say.
 - `openai_reasoning_effort` (`TRADINGAGENTS_OPENAI_REASONING_EFFORT`) is forwarded for `azure` too since
-  2026-10-24 ([PA-29](../PA_29-azure-reasoning-effort.md)); before, it was silently ignored there. The CLI asks the
+  2026-10-24 (the Azure reasoning-effort fix); before, it was silently ignored there. The CLI asks the
   reasoning-effort question only for `openai` and `chatgpt`; on Azure set the variable.
 
 `validate_model()` returns `True` for Azure, so any deployment name is accepted without a warning.

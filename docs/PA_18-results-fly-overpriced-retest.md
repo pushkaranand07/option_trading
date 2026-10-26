@@ -1,10 +1,10 @@
-# PA-22 — Results fly: cost diagnosis and the "only overpriced events" re-test (rejected)
+# PA-18 — Results fly: cost diagnosis and the "only overpriced events" re-test (rejected)
 
 | | |
 |---|---|
 | **Status** | Done (merged) — re-test **rejected**; no more variants of this idea on the same data |
 | **Scope** | `tradingagents/analytics/events.py` (`overpriced`, implied move), `scripts/quant_results_fly.py --overpriced`, [strategies/results_iron_fly_overpriced.md](strategies/results_iron_fly_overpriced.md) |
-| **Related** | [PA-21](PA_21-results-day-iron-butterfly.md), [PA-23](PA_23-option-quotes-measured-spreads.md) |
+| **Related** | [PA-17](PA_17-results-day-iron-butterfly.md), [PA-19](PA_19-option-quotes-measured-spreads.md) |
 | **Pull request** | #24 (branch `quant/results-fly-overpriced`) |
 | **Date** | 2026-10-24 |
 
@@ -33,7 +33,7 @@ legs and 28% on the wings; the wings' exit fills are 14% of all slippage (~1 poi
 |---|---|
 | Trade only when options look overpriced | **Tested** (new spec, frozen first) |
 | Let the wings expire (fewer fills) | **Rejected**: saves ~1 point, and stock options are physically settled — the proof plan's risk rule 5 requires exiting before expiry day |
-| Lower the slippage assumption | **Rejected**: that would be fitting the result; measure it instead ([PA-23](PA_23-option-quotes-measured-spreads.md)) |
+| Lower the slippage assumption | **Rejected**: that would be fitting the result; measure it instead ([PA-19](PA_19-option-quotes-measured-spreads.md)) |
 | Other wing widths / holds until something passes | **Rejected**: tuning on the result |
 
 Filter (frozen in [the spec](strategies/results_iron_fly_overpriced.md)): implied move = ATM straddle / parity forward
@@ -62,5 +62,5 @@ Full run on 29 stocks; trial logged (N = 184); unit suite 1,346 passed; ruff cle
 
 ## 8. Risks and open items
 
-The one open question is real execution cost. Measured spreads ([PA-23](PA_23-option-quotes-measured-spreads.md))
+The one open question is real execution cost. Measured spreads ([PA-19](PA_19-option-quotes-measured-spreads.md))
 came out at 0.85× the model, so the rejection stands unless the user's own fills are near the mid-price.

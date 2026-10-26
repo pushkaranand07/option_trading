@@ -1,10 +1,10 @@
-# PA-34 — AI strategist and NSE option chain in the Plan tab
+# PA-23 — AI strategist and NSE option chain in the Plan tab
 
 | | |
 |---|---|
 | **Status** | Done |
 | **Scope** | new `webapp/option_chain.py`, new `webapp/strategist.py`, `webapp/server.py` (`/api/chain`, `/api/strategy`), `webapp/static/*` (Plan tab), `tests/test_strategist.py` |
-| **Related** | [PA-33](PA_33-morning-plan.md) (Plan tab), [PA-23](PA_23-option-quotes-measured-spreads.md) (measured spreads), [features/webapp](features/webapp.md) |
+| **Related** | [PA-22](PA_22-morning-plan.md) (Plan tab), [PA-19](PA_19-option-quotes-measured-spreads.md) (measured spreads), [features/webapp](features/webapp.md) |
 | **Pull request** | branch `feature/ai-strategist` |
 | **Date** | 2026-10-24 |
 
