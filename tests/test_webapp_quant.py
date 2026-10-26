@@ -81,3 +81,23 @@ def test_journal_upload_and_analysis(tmp_path, monkeypatch):
     assert j["sections"]["By style"][0]["group"] == "option buying"
     with pytest.raises(ValueError, match="not in reports/journal"):
         quant.journal("missing.csv")
+
+
+@pytest.mark.unit
+def test_end_of_day_freshness_knows_the_latest_close_and_the_next_update():
+    from datetime import date, datetime
+
+    from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
+    from webapp import quant
+
+    cal = NSECalendar({date(2026, 11, 10): "Diwali-Balipratipada"})
+    monday_morning = quant.freshness("2026-10-23", datetime(2026, 10, 26, 11, 45), cal)     # Friday's close: current
+    assert not monday_morning["stale"] and monday_morning["next_update"] == "today 7:30 PM"
+    assert monday_morning["as_of_label"] == "Fri 23 Oct"
+    missed = quant.freshness("2026-10-23", datetime(2026, 10, 26, 22, 30), cal)            # the nightly run missed Monday
+    assert missed["stale"] and missed["expected"] == "2026-10-26" and missed["next_update"] == "Tue 27 Oct 7:30 PM"
+    weekend = quant.freshness("2026-10-23", datetime(2026, 10, 25, 10, 0), cal)
+    assert not weekend["stale"] and weekend["next_update"] == "Mon 26 Oct 7:30 PM" and not weekend["today_is_session"]
+    holiday_eve = quant.freshness("2026-11-09", datetime(2026, 11, 9, 23, 0), cal)         # next run skips the holiday
+    assert not holiday_eve["stale"] and holiday_eve["next_update"] == "Wed 11 Nov 7:30 PM"
+    assert quant.freshness(None, datetime(2026, 10, 26, 12, 0), cal)["stale"]

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -77,11 +77,50 @@ IDEA_INFO = {
 
 # ---------------------------------------------------------------- risk & volatility
 
+NIGHTLY = (19, 30)          # the nightly job (Windows task) downloads the day's NSE end-of-day files then
+NIGHTLY_DONE = (22, 0)      # by when that day's data should be in (the job takes 10-90 min)
+
+
+def freshness(as_of: date | str | None, now: datetime | None = None, calendar=None) -> dict:
+    """How current a piece of end-of-day data is: the session it covers, the latest session it could cover by now,
+    whether it is behind (the nightly job missed a day) and when the next update is due."""
+    if calendar is None:
+        from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
+        calendar = NSECalendar.from_nse()
+    now = now or datetime.now()
+    today = now.date()
+    if isinstance(as_of, str):
+        as_of = date.fromisoformat(as_of[:10])
+    done_today = calendar.is_trading_day(today) and (now.hour, now.minute) >= NIGHTLY_DONE
+    expected = today if done_today else calendar.previous_session(today)
+    if calendar.is_trading_day(today) and (now.hour, now.minute) < NIGHTLY:
+        nxt = datetime.combine(today, datetime.min.time()).replace(hour=NIGHTLY[0], minute=NIGHTLY[1])
+    else:
+        d = today + timedelta(days=1)
+        while not calendar.is_trading_day(d):
+            d += timedelta(days=1)
+        nxt = datetime.combine(d, datetime.min.time()).replace(hour=NIGHTLY[0], minute=NIGHTLY[1])
+    stale = as_of is None or as_of < expected
+    return {"as_of": str(as_of) if as_of else None, "as_of_label": f"{as_of:%a %d %b}" if as_of else None,
+            "expected": str(expected), "stale": stale,
+            "next_update": f"{'today' if nxt.date() == today else f'{nxt:%a %d %b}'} {nxt:%I:%M %p}".replace(" 0", " "),
+            "today_is_session": calendar.is_trading_day(today)}
+
+
+def _fresh(as_of) -> dict | None:
+    try:
+        return freshness(as_of)
+    except Exception:                                  # no calendar (offline): the page just skips the line
+        return None
+
+
 def risk(symbol: str, on: date | None = None, root: Path | None = None) -> dict:
     from tradingagents.analytics.quant_report import quant_signal_data
 
     on = on or date.today()
-    return quant_signal_data(_TICKER.get(symbol.upper(), symbol.upper()), on, root=root)
+    out = quant_signal_data(_TICKER.get(symbol.upper(), symbol.upper()), on, root=root)
+    as_of = next((x.get("as_of") for x in (out.get("vol"), out.get("regime"), out.get("iv")) if x and x.get("as_of")), None)
+    return out | {"freshness": _fresh(as_of)}
 
 
 # ---------------------------------------------------------------- measured spreads
@@ -124,7 +163,8 @@ def spreads(symbol: str, root: Path | None = None, strikes_each_side: int = 6) -
         expiries.append({"expiry": str(q["expiry"].iloc[0]), "spot": spot, "atm": atm,
                          "real_vs_model": float((q["half_spread"] / q["model"]).median()),
                          "median_spread_pct": float(q["spread_pct"].median()), "rows": rows})
-    return {"symbol": sym, "available": bool(expiries), "snapshot": days[0].name, "expiries": expiries}
+    return {"symbol": sym, "available": bool(expiries), "snapshot": days[0].name, "expiries": expiries,
+            "freshness": _fresh(days[0].name)}
 
 
 # ---------------------------------------------------------------- research results
@@ -161,8 +201,13 @@ def research(trial_path: Path | None = None, status_file: Path | None = None) ->
             daily = json.loads(status_file.read_text(encoding="utf-8"))
         except ValueError:
             daily = None
+    covered = None                                     # the session the last nightly run brought in
+    if daily and daily.get("finished"):
+        fin = datetime.fromisoformat(daily["finished"])
+        covered = fin.date() if (fin.hour, fin.minute) >= (15, 30) else fin.date() - timedelta(days=1)
     return {"in_use": IN_USE, "tested": tested, "paper": _paper(), "daily_job": daily,
-            "approved": [x["idea"] for x in tested if x["verdict"] == "gates approved"]}
+            "approved": [x["idea"] for x in tested if x["verdict"] == "gates approved"],
+            "freshness": _fresh(covered) if daily else None}
 
 
 def _paper() -> list[dict]:
