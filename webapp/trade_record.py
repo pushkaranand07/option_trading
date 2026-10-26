@@ -1,5 +1,10 @@
 """Trade Record: dummy (paper) trades taken from the AI strategist, monitored live, with a P&L history.
 
+Two kinds, kept apart: trades **you** took (button on the Plan tab; flagged at target / stop, closed by you) and
+**every AI suggestion**, recorded automatically and settled by the rules (at the target or stop when the index
+reaches it — the stop if both — or at expiry), so the record measures how good the AI's suggestions really are,
+by Pulse's evidence score.
+
 One lot per trade. Entry prices are the ones the strategist priced (buy at the ask, sell at the bid). While a trade
 is open it is marked to market from the NSE option chain at the price it could be closed at now (a bought leg at the
 bid, a sold leg at the ask). When the index reaches the AI's target or stop, or the expiry passes, the trade is
@@ -43,8 +48,9 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-def take(result: dict) -> dict:
-    """Record the strategist's proposal (``recommend``'s result) as an open one-lot paper trade."""
+def take(result: dict, source: str = "you") -> dict:
+    """Record the strategist's proposal (``recommend``'s result) as an open one-lot paper trade.
+    ``source``: "you" (taken on the Plan tab) or "ai" (every suggestion, recorded automatically)."""
     plan, priced = result.get("plan") or {}, result.get("priced")
     if result.get("rejected") or not priced or plan.get("strategy") in (None, "no_trade"):
         raise TradeError("There is no trade to take in this suggestion.")
@@ -62,7 +68,9 @@ def take(result: dict) -> dict:
         "entry_high": plan.get("underlying_entry_high"), "index_target": plan.get("underlying_target"),
         "index_stop": plan.get("underlying_stop"), "net_entry": priced["net_per_unit"], "debit": priced["debit"],
         "max_loss_per_lot": priced["max_loss_per_lot"], "max_profit_per_lot": priced["max_profit_per_lot"],
-        "charges": result.get("charges_per_lot"), "legs": legs, "alerts": [],
+        "charges": result.get("charges_per_lot"), "legs": legs, "alerts": [], "source": source,
+        "score": (result.get("evidence") or {}).get("score"), "score_label": (result.get("evidence") or {}).get("label"),
+        "ai_confidence": plan.get("confidence"), "last_spot": result.get("spot"),
     }
     with _lock:
         trades = _load()
@@ -144,29 +152,67 @@ def _remember_flags(trade: dict, view: dict) -> bool:
     return bool(new)
 
 
+def _stats(closed: list[dict], open_: list[dict]) -> dict:
+    nets = [t["net_pnl"] for t in closed]
+    wins = [x for x in nets if x > 0]
+    return {"closed": len(closed), "open": len(open_), "net": sum(nets), "wins": len(wins),
+            "losses": len([x for x in nets if x <= 0]), "win_rate": len(wins) / len(nets) * 100 if nets else None,
+            "avg": sum(nets) / len(nets) if nets else None, "best": max(nets, default=None),
+            "worst": min(nets, default=None), "open_pnl": sum((t.get("live") or {}).get("pnl") or 0 for t in open_)}
+
+
 def overview(chain_fn=None) -> dict:
-    """Open trades with live marks (flags saved), closed trades, and the history's totals."""
+    """Open trades with live marks (flags saved; AI suggestions settled by the rules), closed trades, totals —
+    yours and the AI's separately, the AI's also by evidence score."""
     with _lock:
         trades = _load()
         changed = False
-        open_ = []
         for t in trades:
             if t["status"] != "open":
                 continue
             v = mark(t, chain_fn)
+            if v.get("spot") is not None and v["spot"] != t.get("last_spot"):
+                t["last_spot"] = v["spot"]
+                changed = True
             changed |= _remember_flags(t, v)
-            open_.append(t | {"live": v})
+            if t.get("source") == "ai":
+                changed |= _auto_settle(t, v)
+            t["live"] = v
         if changed:
-            _save(trades)
-    closed = sorted((t for t in trades if t["status"] == "closed"), key=lambda t: t["closed_at"], reverse=True)
-    nets = [t["net_pnl"] for t in closed]
-    wins = [x for x in nets if x > 0]
-    stats = {"closed": len(closed), "open": len(open_), "net": sum(nets), "wins": len(wins),
-             "losses": len([x for x in nets if x <= 0]), "win_rate": len(wins) / len(nets) * 100 if nets else None,
-             "avg": sum(nets) / len(nets) if nets else None, "best": max(nets, default=None),
-             "worst": min(nets, default=None),
-             "open_pnl": sum(t["live"]["pnl"] or 0 for t in open_)}
-    return {"open": sorted(open_, key=lambda t: t["taken_at"], reverse=True), "closed": closed, "stats": stats}
+            _save([{k: x for k, x in t.items() if k != "live"} for t in trades])
+    out = {}
+    for who in ("you", "ai"):
+        mine = [t for t in trades if t.get("source", "you") == who]
+        open_ = sorted((t for t in mine if t["status"] == "open"), key=lambda t: t["taken_at"], reverse=True)
+        closed = sorted((t for t in mine if t["status"] == "closed"), key=lambda t: t["closed_at"], reverse=True)
+        out[who] = {"open": open_, "closed": closed, "stats": _stats(closed, open_)}
+    out["ai"]["by_score"] = {band: _stats([t for t in out["ai"]["closed"] if t.get("score_label") == band], [])
+                             for band in ("Strong", "Moderate", "Weak")}
+    # the page's original keys stay = your trades
+    return out | {"open": out["you"]["open"], "closed": out["you"]["closed"], "stats": out["you"]["stats"]}
+
+
+def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dict:
+    gross = _pnl(t, exits)
+    fee = _charges(t, exits)
+    t.update(status="closed", closed_at=_now(), spot_at_exit=spot, reason=reason, gross_pnl=gross, charges=fee,
+             net_pnl=gross - fee)
+    for leg, x in zip(t["legs"], exits, strict=True):
+        leg["exit"] = x
+    return t
+
+
+def _auto_settle(t: dict, v: dict) -> bool:
+    """AI suggestions close by rule: the stop first if both are reached, then the target, else at expiry."""
+    if "expired" in v["flags"]:
+        spot = t.get("last_spot") or t["spot_at_entry"]
+        _settle(t, [_intrinsic(leg, spot) for leg in t["legs"]], spot, "expired")
+        return True
+    hit = "stop" if "stop" in v["flags"] else "target" if "target" in v["flags"] else None
+    if hit and v["pnl"] is not None:
+        _settle(t, [x["now"] for x in v["legs"]], v["spot"], f"{hit} reached")
+        return True
+    return False
 
 
 def close(trade_id: str, chain_fn=None) -> dict:
@@ -181,7 +227,7 @@ def close(trade_id: str, chain_fn=None) -> dict:
         if t["status"] != "open":
             raise TradeError("This trade is already closed.")
         if _expired(t):
-            spot = (t["alerts"][-1].get("spot") if t["alerts"] else None) or t["spot_at_entry"]
+            spot = t.get("last_spot") or t["spot_at_entry"]
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
             reason = "expired"
         else:
@@ -190,12 +236,7 @@ def close(trade_id: str, chain_fn=None) -> dict:
                 raise TradeError(v["error"] or "A leg has no live price; try again in a moment.")
             exits, spot = [x["now"] for x in v["legs"]], v["spot"]
             reason = " + ".join(f"{a['kind']} reached" for a in t["alerts"]) or "closed by you"
-        gross = _pnl(t, exits)
-        fee = _charges(t, exits)
-        t.update(status="closed", closed_at=_now(), spot_at_exit=spot, reason=reason, gross_pnl=gross, charges=fee,
-                 net_pnl=gross - fee)
-        for leg, x in zip(t["legs"], exits, strict=True):
-            leg["exit"] = x
+        _settle(t, exits, spot, reason)
         _save(trades)
         return t
 

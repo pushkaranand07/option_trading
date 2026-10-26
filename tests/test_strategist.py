@@ -35,8 +35,18 @@ def test_naked_or_malformed_structures_are_rejected():
     off_chain = plan("long_call", [("BUY", "CE", 23000)])
     assert "not on the option chain" in st.check_structure(off_chain, CHAIN)[0]
     condor = plan("iron_condor", [("BUY", "PE", 22400), ("SELL", "PE", 22500), ("SELL", "CE", 22700),
-                                  ("BUY", "CE", 22800)])
+                                  ("BUY", "CE", 22800)], bias="neutral")
     assert st.check_structure(condor, CHAIN) == [] and st.check_structure(plan("no_trade", []), CHAIN) == []
+
+
+@pytest.mark.unit
+def test_debit_spreads_are_defined_risk_and_the_bias_must_match_the_strategy():
+    # the bought option protects the sold one whichever side it is on (refused by mistake on 2026-10-26)
+    bear_put = plan("bear_put_spread", [("SELL", "PE", 22500), ("BUY", "PE", 22600)])
+    bull_call = plan("bull_call_spread", [("BUY", "CE", 22600), ("SELL", "CE", 22700)], bias="bullish")
+    assert st.check_structure(bear_put, CHAIN) == [] and st.check_structure(bull_call, CHAIN) == []
+    mixed = plan("bear_put_spread", [("SELL", "PE", 22500), ("BUY", "PE", 22600)], bias="bullish")
+    assert any("bias is bullish" in p for p in st.check_structure(mixed, CHAIN))
 
 
 @pytest.mark.unit
@@ -64,15 +74,25 @@ def test_charges_cover_every_leg_in_and_out():
 def test_recommend_prices_per_lot_flags_poor_reward_and_refuses_naked_sells(monkeypatch):
     monkeypatch.setattr(st, "build_context", lambda symbol, expiry=None: ({"instrument": symbol}, CHAIN))
 
-    def fake_llm(ctx):
+    def fake_llm(ctx, feedback=None):
         return plan("bear_call_spread", [("SELL", "CE", 22700), ("BUY", "CE", 22800)], underlying_entry_low=22620,
                     underlying_entry_high=22660, underlying_target=22450, underlying_stop=22720)
 
     out = st.recommend("NIFTY", llm=fake_llm)
     assert out["priced"]["max_loss_per_lot"] == pytest.approx(72 * 65) and out["charges_per_lot"] > 0
     assert any("break even" in w for w in out["warnings"])
-    bad = st.recommend("NIFTY", llm=lambda c: plan("bear_call_spread", [("SELL", "CE", 22700), ("SELL", "CE", 22800)]))
-    assert bad["rejected"] and bad["priced"] is None
+    asked = []
+
+    def stubborn(c, feedback=None):                    # wrong twice: refused after one retry with the reasons
+        asked.append(feedback)
+        return plan("bear_call_spread", [("SELL", "CE", 22700), ("SELL", "CE", 22800)])
+    bad = st.recommend("NIFTY", llm=stubborn)
+    assert bad["rejected"] and bad["priced"] is None and asked[0] is None and any("protective" in x for x in asked[1])
+
+    answers = iter([plan("bear_put_spread", [("SELL", "PE", 22500), ("BUY", "PE", 22600)], bias="bullish"),
+                    plan("bear_put_spread", [("SELL", "PE", 22500), ("BUY", "PE", 22600)])])
+    fixed = st.recommend("NIFTY", llm=lambda c, feedback=None: next(answers))
+    assert not fixed.get("rejected") and fixed["retried"] and fixed["priced"]["debit"]
 
 
 RAW = {"records": {"underlyingValue": 22610, "timestamp": "23-Oct-2026 15:30:00", "data": [
@@ -130,3 +150,22 @@ def test_contract_ticks_high_low_and_identifier_check():
     assert (c["high"], c["low"], c["last"], c["prev_close"]) == (241.05, 54.9, 88.8, 155.2) and c["points"][0] == (1, 210.0)
     with pytest.raises(oc.ChainError):
         oc.contract("../etc", client=_Client({}))
+
+
+@pytest.mark.unit
+def test_evidence_score_rewards_agreement_and_marks_each_check():
+    bear = plan("bear_call_spread", [("SELL", "CE", 22700), ("BUY", "CE", 22800)], underlying_target=22450,
+                underlying_stop=22750)
+    priced = st.price(bear, CHAIN)                                                # a credit spread
+    agree = {"spot": 22600, "days_to_expiry": 2, "trend": {"tone": "down", "label": "Downtrend"},
+             "intraday_rule": {"side": "SELL"}, "implied_vol_vs_forecast": {"minus_garch21": 0.03, "percentile_1y": 0.9},
+             "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": {"resistance": 23000, "support": 22000}},
+             "fii_index_futures_long_share": {"value": 0.1}}
+    e = st.evidence(bear, agree, priced)
+    assert e["score"] == 100 and e["label"] == "Strong" and {c["verdict"] for c in e["checks"]} == {"agree"}
+    against = agree | {"trend": {"tone": "up", "label": "Uptrend"}, "intraday_rule": {"side": "BUY"},
+                       "implied_vol_vs_forecast": {"minus_garch21": -0.03, "percentile_1y": 0.1},
+                       "fii_index_futures_long_share": {"value": 0.8}}
+    weak = st.evidence(bear, against, priced)
+    assert weak["label"] == "Weak" and weak["score"] < 45
+    assert st.evidence(plan("no_trade", []), agree, None) is None

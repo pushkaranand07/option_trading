@@ -85,3 +85,26 @@ def test_remove_a_trade_taken_by_mistake():
     assert tr.overview()["open"] == []
     with pytest.raises(tr.TradeError):
         tr.delete(t["id"])
+
+
+@pytest.mark.unit
+def test_ai_suggestions_settle_by_rule_and_are_scored_apart_from_your_trades():
+    scored = RESULT | {"evidence": {"score": 80, "label": "Strong"}}
+    tr.take(scored, source="ai")
+    mine = tr.take(RESULT)
+    # NIFTY at the target: the AI's suggestion settles itself; your trade is only flagged
+    o = tr.overview(chain(22470, _q(80, 79, 81), _q(58, 57, 59)))
+    assert o["ai"]["stats"]["closed"] == 1 and o["ai"]["closed"][0]["reason"] == "target reached"
+    assert o["ai"]["closed"][0]["net_pnl"] > 0 and o["ai"]["by_score"]["Strong"]["wins"] == 1
+    assert o["you"]["open"][0]["id"] == mine["id"] and o["stats"]["closed"] == 0           # page keys = your trades
+
+
+@pytest.mark.unit
+def test_ai_suggestion_settles_at_the_stop_and_at_expiry():
+    tr.take(RESULT, source="ai")
+    o = tr.overview(chain(22750, _q(210, 209, 211), _q(145, 144, 146)))         # above the 22,720 stop
+    lost = o["ai"]["closed"][0]
+    assert lost["reason"] == "stop reached" and lost["net_pnl"] < 0 and o["ai"]["stats"]["losses"] == 1
+    tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650}, source="ai")
+    o = tr.overview()
+    assert any(t["reason"] == "expired" for t in o["ai"]["closed"])

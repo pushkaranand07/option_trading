@@ -85,6 +85,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-36](PA_36-trade-ticket-and-premium-levels.md) | AI trade shown like a Dhan order: premium target / stop per leg, tap a leg for its ticket (premium chart, depth), marked on chart and chain | Done |
 | [PA-37](PA_37-candles-survive-a-dropped-connection.md) | Charts and the live call keep the last saved prices when Yahoo / the internet is unreachable | Done |
 | [PA-38](PA_38-trade-record.md) | Trade Record tab: take the AI's trade as a dummy 1-lot trade, live monitoring with target / stop flags, P&L history | Done |
+| [PA-39](PA_39-evidence-score-and-ai-track-record.md) | Pulse evidence score (0-100) for every AI suggestion, debit-spread check fixed, one retry, AI track record by score | Done |
 
 ---
 

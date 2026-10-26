@@ -998,12 +998,25 @@ function contractName(sym, expiry, l) {
 }
 const pnl = (x) => (x == null ? "—" : `<span class="${cls(x)}">${x > 0 ? "+" : x < 0 ? "−" : ""}₹${fmt0(Math.abs(x))}</span>`);
 
+// Pulse's own evidence score: which of the data agree with the trade's direction and structure.
+function evidenceHtml(e) {
+  if (!e) return "";
+  const mark = { agree: ["✓", "up"], neutral: ["•", "muted"], against: ["✗", "down"] };
+  return `<details class="evidence"><summary>Why the score is ${e.score}/100 — ${e.checks.filter((c) => c.verdict === "agree").length} of ${e.checks.length} checks agree</summary>
+    <ul class="plain">${e.checks.map((c) => `<li><b class="${mark[c.verdict][1]}">${mark[c.verdict][0]}</b> <b>${esc(c.name)}</b> <span class="muted small">(${c.weight} pts)</span> — ${esc(c.why)}</li>`).join("")}</ul>
+    <div class="small muted">Strong ≥ 70 · Moderate 45–69 · Weak &lt; 45. Agreement is not proof: no strategy here has passed the project's tests. The AI track record (Trade Record tab) shows how each band actually performs.</div></details>`;
+}
+
 function stratHtml(res, sym) {
   const a = res.plan, pr = res.priced, lv = res.levels;
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
   const head = `<div class="strat-head"><div><div class="ask">AI suggestion · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
-    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">confidence ${esc(a.confidence)}</span></div></div>`;
+    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span>
+      ${res.evidence ? `<span class="badge score-${res.evidence.label.toLowerCase()}">Pulse score ${res.evidence.score} · ${esc(res.evidence.label)}</span>` : ""}</div></div>
+    ${evidenceHtml(res.evidence)}
+    ${res.retried ? `<div class="small muted">The AI's first answer was refused (${esc(res.retried.join("; "))}); this is its corrected answer.</div>` : ""}
+    ${res.ai_record ? `<div class="small muted">Saved to the AI track record on the <a href="#record">Trade Record</a> tab, which settles it at its target, stop or expiry.</div>` : ""}`;
   const read = `<p>${esc(a.market_read)}</p>`;
   if (res.rejected) return `<div class="call stop">${head}<b>The proposal was refused by the safety checks:</b><ul>${res.rejected.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     <div class="small">Pulse only shows defined-risk trades (no naked option selling). Ask again, or skip.</div></div>${read}`;
@@ -1147,7 +1160,7 @@ async function loadRecord() {
   try { d = await api("/api/trades"); } catch (e) { el.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
   const s = d.stats;
   const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
-  const summary = `<section class="card"><div class="card-head"><h2>Summary</h2><span class="small muted">1 lot per trade · after charges</span></div>
+  const summary = `<section class="card"><div class="card-head"><h2>Your trades — summary</h2><span class="small muted">trades you took · 1 lot each · after charges</span></div>
     <div class="body"><div class="levels rec-stats">
       ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}
       ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
@@ -1162,8 +1175,8 @@ async function loadRecord() {
         <td class="num">${fmt0(t.spot_at_entry)} → ${fmt0(t.spot_at_exit)}</td><td class="small">${esc(t.reason)}</td>
         <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
         <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("")}</tbody></table></div>`;
-  el.innerHTML = summary + `<h3 class="sub-h rec-h">Open trades</h3>` + open +
-    `<section class="card"><div class="card-head"><h2>History</h2></div>${hist}</section>`;
+  el.innerHTML = summary + `<h3 class="sub-h rec-h">Your open trades</h3>` + open +
+    `<section class="card"><div class="card-head"><h2>Your history</h2></div>${hist}</section>` + aiRecordHtml(d.ai);
   el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
     if (!confirm("Close this dummy trade at the current prices?")) return;
     b.disabled = true;
@@ -1175,6 +1188,40 @@ async function loadRecord() {
     try { await api(`/api/trades/${b.dataset.id}`, { method: "DELETE" }); } catch (e) { alert(e.message); }
     loadRecord();
   }));
+}
+
+// Every AI suggestion, recorded automatically and settled by rule (target / stop / expiry): how good is the AI,
+// and does a higher Pulse score really do better?
+function aiRecordHtml(ai) {
+  if (!ai) return "";
+  const s = ai.stats, band = ai.by_score;
+  const row = (k, b) => `<tr><td><span class="badge score-${k.toLowerCase()}">${k}</span></td><td class="num">${b.closed}</td><td class="num">${b.wins} / ${b.losses}</td>
+    <td class="num">${b.win_rate != null ? b.win_rate.toFixed(0) + "%" : "—"}</td><td class="num ${cls(b.net)}">${money(b.net)}</td><td class="num ${cls(b.avg)}">${money(b.avg)}</td></tr>`;
+  const legsTxt = (t) => t.legs.map((l) => `${legShort(l)} ${fmt(l.entry)}${l.exit != null ? ` → ${fmt(l.exit)}` : ""}`).join("<br>");
+  const all = [...ai.open, ...ai.closed];
+  const rows = all.map((t) => {
+    const live = t.status === "open" ? t.live || {} : null;
+    return `<tr><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
+      <td>${t.score != null ? `<span class="badge score-${(t.score_label || "").toLowerCase()}">${t.score} ${esc(t.score_label)}</span>` : "—"}<br><span class="small muted">AI: ${esc(t.ai_confidence || "—")}</span></td>
+      <td class="small">${legsTxt(t)}</td><td class="num small">${fmt0(t.index_target)} / ${fmt0(t.index_stop)}</td>
+      <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
+      <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
+      <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
+  }).join("");
+  return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2><span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges</span></div>
+    <div class="body">
+      <div class="levels rec-stats">
+        <div class="lv"><span>Suggestions</span><b>${s.closed + s.open}</b><small>${s.open} still open</small></div>
+        <div class="lv"><span>Won / lost</span><b>${s.wins} / ${s.losses}</b><small>${s.win_rate != null ? s.win_rate.toFixed(0) + "% won" : "none settled yet"}</small></div>
+        <div class="lv"><span>Total P&L (settled)</span><b class="${cls(s.net)}">${money(s.net)}</b><small>average ${money(s.avg)}</small></div>
+        <div class="lv"><span>Open now</span><b class="${cls(s.open_pnl)}">${money(s.open_pnl)}</b><small>before charges</small></div></div>
+      <h4 class="mini-h">By Pulse score</h4>
+      <table class="t"><thead><tr><th>Score</th><th>Settled</th><th>Won / lost</th><th>Win rate</th><th>Total P&L</th><th>Average</th></tr></thead>
+        <tbody>${["Strong", "Moderate", "Weak"].map((k) => row(k, band[k])).join("")}</tbody></table>
+      <p class="small muted">A handful of trades proves nothing either way; judge a score band after dozens of settled suggestions.</p>
+    </div>
+    ${all.length ? `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Asked</th><th>Trade</th><th>Score</th><th>Legs: entry → exit</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<p class="muted pad">Every suggestion from the AI strategist will appear here.</p>`}</section>`;
 }
 
 function openTradeHtml(t) {

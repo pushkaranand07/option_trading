@@ -39,6 +39,11 @@ STRATEGIES = {
 }
 
 
+DIRECTION = {"long_call": "bullish", "bull_call_spread": "bullish", "bull_put_spread": "bullish",
+             "long_put": "bearish", "bear_put_spread": "bearish", "bear_call_spread": "bearish",
+             "iron_condor": "neutral"}
+
+
 class Leg(BaseModel):
     action: Literal["BUY", "SELL"]
     option_type: Literal["CE", "PE"]
@@ -82,6 +87,9 @@ Rules:
   break even after costs); widen the strikes, move them closer to the money, use a debit structure, or choose no_trade.
 - Entry range, target and stop are levels of the UNDERLYING (index or stock price), consistent with the expected move
   and key levels. Stop must be on the losing side of entry; target on the winning side.
+- Prefer the direction most of the evidence agrees on (daily trend, today's intraday rule, IV vs forecast for
+  buying vs selling, room to the target within the expected move, OI walls, FII positioning); the bias must match
+  the strategy's direction. Report confidence honestly: high only when most of these agree.
 - Prefer no_trade when signals conflict, the trend fights the setup, or the reward does not justify the risk.
   No strategy in this system has a proven edge; say so plainly where relevant.
 - Be specific to this instrument and these numbers. Plain English, no hype."""
@@ -106,7 +114,7 @@ def build_context(symbol: str, expiry: str | None = None) -> tuple[dict, dict]:
     try:
         p = planner.plan(symbol)
         m = p["mood"]
-        ctx["trend"] = {k: m.get(k) for k in ("label", "explain", "returns", "averages", "pos_52w", "low_52w", "high_52w",
+        ctx["trend"] = {k: m.get(k) for k in ("label", "tone", "explain", "returns", "averages", "pos_52w", "low_52w", "high_52w",
                                               "daily_move", "daily_move_pct")}
         ctx["recent_sessions"] = m.get("recent", [])[:5]
         s = p["signal"]
@@ -144,12 +152,16 @@ def build_context(symbol: str, expiry: str | None = None) -> tuple[dict, dict]:
     return ctx, ch
 
 
-def ask_llm(ctx: dict) -> StrategyPlan:
+def ask_llm(ctx: dict, feedback: list[str] | None = None) -> StrategyPlan:
     from tradingagents.default_config import build_default_config
     from tradingagents.llm_clients import create_tier_client
 
     llm = create_tier_client(build_default_config(), "deep").get_llm().with_structured_output(StrategyPlan)
     user = f"The app prices the legs and shows per-lot figures; do not size.\n\nDATA:\n{json.dumps(ctx, default=str)}"
+    if feedback:                                       # second attempt: the app's checks refused the first answer
+        user += ("\n\nYOUR PREVIOUS ANSWER WAS REFUSED BY THE APP'S CHECKS: " + "; ".join(feedback) +
+                 ". Answer again: the bias must match the strategy's direction and the legs must form the named "
+                 "strategy exactly. Choose no_trade if no consistent setup exists.")
     return llm.invoke([("system", SYSTEM), ("user", user)])
 
 
@@ -179,12 +191,16 @@ def check_structure(plan: StrategyPlan, chain: dict) -> list[str]:
             problems.append("an iron condor is buy put < sell put < sell call < buy call")
     elif [(x.action, x.option_type) for x in sorted(legs, key=lambda x: x.strike)] != shape:
         problems.append(f"the legs do not form a {plan.strategy.replace('_', ' ')}")
-    for leg in legs:                                              # no naked short
-        if leg.action == "SELL":
-            cover = [x for x in legs if x.action == "BUY" and x.option_type == leg.option_type and
-                     (x.strike > leg.strike if leg.option_type == "CE" else x.strike < leg.strike)]
-            if not cover:
-                problems.append(f"the sold {leg.strike:g} {leg.option_type} has no protective bought option")
+    # No naked short: every sold option is paired with a bought option of the same type and expiry. Any strike
+    # caps the risk — a bought put above a sold put (bear put spread) as much as one below (bull put spread).
+    for kind in ("CE", "PE"):
+        sold = [x for x in legs if x.option_type == kind and x.action == "SELL"]
+        bought = [x for x in legs if x.option_type == kind and x.action == "BUY"]
+        for leg in sold[len(bought):]:
+            problems.append(f"the sold {leg.strike:g} {leg.option_type} has no protective bought option")
+    direction = DIRECTION.get(plan.strategy)
+    if direction and plan.bias in ("bullish", "bearish", "neutral") and plan.bias != direction:
+        problems.append(f"the bias is {plan.bias} but a {plan.strategy.replace('_', ' ')} is a {direction} trade")
     return problems
 
 
@@ -309,14 +325,79 @@ def warnings(plan: StrategyPlan, priced: dict | None) -> list[str]:
     return out
 
 
+def evidence(plan: StrategyPlan, ctx: dict, priced: dict | None) -> dict | None:
+    """Pulse's own score (0-100) of how much of the data backs the trade's direction and structure, independent
+    of the AI's self-reported confidence. Each check agrees (full weight), is neutral (half) or disagrees (none)."""
+    direction = DIRECTION.get(plan.strategy)
+    if not direction or not priced:
+        return None
+    spot = ctx.get("spot")
+    checks = []
+
+    def add(name, weight, verdict, why):
+        checks.append({"name": name, "weight": weight, "verdict": verdict, "why": why})
+
+    tone = (ctx.get("trend") or {}).get("tone")
+    want = {"bullish": "up", "bearish": "down", "neutral": "flat"}[direction]
+    label = (ctx.get("trend") or {}).get("label") or "unknown"
+    add("Daily trend", 25, "agree" if tone == want else "neutral" if tone in (None, "flat") or want == "flat" else "against",
+        f"{label} (20/50/200-day averages)")
+    side = (ctx.get("intraday_rule") or {}).get("side")
+    rule = {"BUY": "bullish", "SELL": "bearish"}.get(side)
+    add("Today's intraday rule", 15, "neutral" if rule is None or direction == "neutral" else "agree" if rule == direction else "against",
+        {"BUY": "says buy", "SELL": "says sell"}.get(side, "no clean setup yet (wait)"))
+    iv = ctx.get("implied_vol_vs_forecast") or {}
+    gap, pct = iv.get("minus_garch21"), iv.get("percentile_1y")
+    rich = (gap is not None and gap > 0.01) or (pct is not None and pct > 0.7)
+    cheap = (gap is not None and gap < -0.01) or (pct is not None and pct < 0.3)
+    credit = not priced["debit"]
+    add("Option prices vs the trade", 20,
+        "agree" if (credit and rich) or (not credit and cheap) else "against" if (credit and cheap) or (not credit and rich) else "neutral",
+        f"options look {'expensive' if rich else 'cheap' if cheap else 'fairly priced'} vs the volatility forecast; "
+        f"this trade {'sells' if credit else 'buys'} premium")
+    em = ctx.get("expected_move") or {}
+    day = em.get("day_pct")
+    days = max(ctx.get("days_to_expiry") or 1, 1)
+    if day and spot and plan.underlying_target is not None:
+        reach = spot * day * math.sqrt(days)
+        dist = abs(plan.underlying_target - spot)
+        add("Room to the target", 20, "agree" if dist <= reach else "against" if dist > 2 * reach else "neutral",
+            f"target {dist:,.0f} points away; a typical move to expiry is about {reach:,.0f}")
+    else:
+        add("Room to the target", 20, "neutral", "no expected-move forecast for this instrument")
+    sm = (ctx.get("option_chain") or {}).get("summary") or {}
+    res, sup = sm.get("resistance"), sm.get("support")
+    if spot and res and sup:
+        ok = {"bearish": spot < res, "bullish": spot > sup, "neutral": sup < spot < res}[direction]
+        add("Option walls", 10, "agree" if ok else "against",
+            f"call wall {res:,.0f} above, put wall {sup:,.0f} below, price {spot:,.0f}")
+    fii = (ctx.get("fii_index_futures_long_share") or {}).get("value")
+    if fii is not None:
+        lean = "bearish" if fii < 0.35 else "bullish" if fii > 0.65 else "neutral"
+        add("Foreign investors (FII)", 10, "agree" if lean == direction else "neutral" if lean == "neutral" else "against",
+            f"{fii:.0%} of their index futures are long")
+    total = sum(c["weight"] for c in checks)
+    got = sum(c["weight"] * {"agree": 1, "neutral": 0.5, "against": 0}[c["verdict"]] for c in checks)
+    score = round(got / total * 100) if total else None
+    return {"score": score, "label": "Strong" if score >= 70 else "Moderate" if score >= 45 else "Weak",
+            "checks": checks}
+
+
 def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
     ctx, ch = build_context(symbol, expiry)
     started = datetime.now()
-    plan = (llm or ask_llm)(ctx)
+    ask = llm or ask_llm
+    plan = ask(ctx)
+    problems = check_structure(plan, ch)
+    retried = None
+    if problems:                                       # one more try, told exactly what was wrong
+        retried = problems
+        plan = ask(ctx, problems)
+        problems = check_structure(plan, ch)
     out = {"symbol": symbol, "expiry": ch["expiry"], "spot": ch["spot"], "lot": ch["lot"],
            "seconds": (datetime.now() - started).seconds, "plan": plan.model_dump(),
-           "strategy_text": STRATEGIES[plan.strategy][0], "chain_summary": ch["summary"]}
-    problems = check_structure(plan, ch)
+           "strategy_text": STRATEGIES[plan.strategy][0], "chain_summary": ch["summary"], "retried": retried,
+           "asked_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
     if problems:
         out.update(rejected=problems, priced=None, warnings=[])
         return out
@@ -325,6 +406,7 @@ def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
         out.update(priced=priced, charges_per_lot=charges(priced, 1),
                    levels=trade_levels(plan, priced, ch, ctx.get("days_to_expiry")))
     out["warnings"] = warnings(plan, out.get("priced"))
+    out["evidence"] = evidence(plan, ctx, out.get("priced"))
     return out
 
 
@@ -341,7 +423,14 @@ def start(symbol: str, expiry: str | None = None) -> str:
 
     def run():
         try:
-            result = {"status": "done", "result": recommend(symbol, expiry)}
+            res = recommend(symbol, expiry)
+            if res.get("priced"):                      # every valid suggestion goes into the AI track record
+                try:
+                    from webapp import trade_record
+                    res["ai_record"] = trade_record.take(res, source="ai")["id"]
+                except Exception:
+                    pass
+            result = {"status": "done", "result": res}
         except Exception as exc:
             result = {"status": "error", "error": f"{type(exc).__name__}: {str(exc)[:400]}"}
         with _jobs_lock:
