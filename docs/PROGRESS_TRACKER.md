@@ -19,7 +19,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-26 11:50_
+_Last updated: 2026-10-26 12:02_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -298,6 +298,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-26 — Risk / Options costs / Research tabs now say which NSE close their end-of-day data is from and when the next 7:30 PM update is due; a missed nightly run is flagged.
 - 2026-10-26 — Prices: NSE's free chain is 30-60 s old and updates every ~45 s (measured); Pulse's own extra delay cut to ~25 s, and every price now shows its age. Real time needs the Dhan token.
 - 2026-10-26 — Leg orders shown by their job in Dhan: Super order with target / stop only on single options and the SELL leg of credit spreads; protection legs show none; other spread legs show reference prices.
 - 2026-10-26 — Plan tab: Pulse trade ranking — concrete trades with strike, entry, target and stop per leg, ranked best first by the evidence score; AI iron butterflies no longer refused.

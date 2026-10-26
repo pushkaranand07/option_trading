@@ -484,6 +484,16 @@ const REGIME_TEXT = {
   stress: ["Stress", "down", "Rare, violent markets. Defined-risk trades only, and small size."],
 };
 
+// End-of-day data (NSE's daily files, downloaded by the 7:30 PM job) says which close it is from and when it
+// updates next, so a date that is not today reads as expected rather than out of date.
+function freshLine(f) {
+  if (!f) return "";
+  if (f.stale) return `<div class="fresh stale">⚠ End-of-day data from <b>${esc(f.as_of_label || "—")}</b>, but the latest close is ${esc(f.expected)}:
+    the nightly update (7:30 PM) seems to have missed it. Check the Research tab's nightly job, or run <code>scripts/quant_daily_update.py</code>.</div>`;
+  return `<div class="fresh">End-of-day data from <b>${esc(f.as_of_label)}</b> — the latest NSE close${f.today_is_session ? " (today's data comes after the market closes)" : ""}.
+    Next update <b>${esc(f.next_update)}</b>. Live prices are on the Plan and Today tabs.</div>`;
+}
+
 async function loadRisk() {
   const sym = S.sym;
   $("#riskBody").innerHTML = `<div class="loading"><span class="spinner"></span>Loading…</div>`;
@@ -491,7 +501,7 @@ async function loadRisk() {
   try { r = await api("/api/risk/" + encodeURIComponent(sym)); }
   catch (e) { $("#riskBody").innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
   if (sym !== S.sym) return;
-  let html = "";
+  let html = freshLine(r.freshness);
   const g = r.regime;
   if (g) {
     const [label, tone, meaning] = REGIME_TEXT[g.name] || [g.name, "flat", ""];
@@ -552,7 +562,7 @@ async function loadCosts() {
   if (sym !== S.sym) return;
   if (!r.available) { $("#costCard").innerHTML = `<div class="card-head"><h2>What it costs to trade</h2></div><div class="body"><p class="muted">${esc(r.message || "No quotes yet.")}</p></div>`; return; }
   const tabsHtml = r.expiries.map((e, i) => `<button data-i="${i}" class="${i ? "" : "active"}">${esc(e.expiry)}</button>`).join("");
-  $("#costCard").innerHTML = `<div class="card-head"><h2>What it costs to trade (bid–ask spread)</h2><div class="seg" id="costSeg">${tabsHtml}</div></div><div class="body" id="costBody"></div>`;
+  $("#costCard").innerHTML = `<div class="card-head"><h2>What it costs to trade (bid–ask spread)</h2><div class="seg" id="costSeg">${tabsHtml}</div></div><div class="pad">${freshLine(r.freshness)}</div><div class="body" id="costBody"></div>`;
   const show = (i) => {
     const e = r.expiries[i];
     const cell = (x) => (x ? `<td class="num">${fmt(x.bid)} / ${fmt(x.ask)}</td><td class="num ${x.spread_pct > 0.05 ? "down" : x.spread_pct > 0.02 ? "warn-c" : ""}">${pc(x.spread_pct)}</td>` : "<td>—</td><td>—</td>");
@@ -597,7 +607,7 @@ async function loadResearch() {
   const when = (s) => (s ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
   const daily = d ? `<p>Last run ${esc(when(d.finished || d.started))}: <b class="${d.ok ? "up" : "down"}">${d.ok ? "all steps OK" : "a step failed"}</b></p><div class="steps-row">${steps}</div>`
     : `<p class="muted">No run recorded yet.</p>`;
-  $("#researchBody").innerHTML =
+  $("#researchBody").innerHTML = freshLine(r.freshness) +
     card("What works — in use now", `<div class="tools">${inUse}</div>`) +
     card(r.approved.length ? `Approved signals: ${esc(r.approved.join(", "))}` : "Trading signals: none has passed yet",
       `<p>${r.approved.length ? "" : "No buy/sell idea has survived all the tests (unseen years, real costs, better than random entry). That is the system protecting you, not a failure."}</p>
