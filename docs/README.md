@@ -87,6 +87,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-38](PA_38-trade-record.md) | Trade Record tab: take the AI's trade as a dummy 1-lot trade, live monitoring with target / stop flags, P&L history | Done |
 | [PA-39](PA_39-evidence-score-and-ai-track-record.md) | Pulse evidence score (0-100) for every AI suggestion, debit-spread check fixed, one retry, AI track record by score | Done |
 | [PA-40](PA_40-pulse-trade-ranking.md) | Pulse trade ranking: concrete trades (strike, entry, target, stop per leg) best first, iron butterfly accepted | Done |
+| [PA-41](PA_41-dhan-ready-leg-orders.md) | Leg orders shown by their job in Dhan: Super order (target / stop) only where Dhan accepts it; protection legs have none | Done |
 
 ---
 

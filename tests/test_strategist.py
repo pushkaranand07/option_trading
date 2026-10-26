@@ -190,5 +190,10 @@ def test_rank_builds_tradable_defined_risk_trades_best_first():
         down = p["bias"] == "bearish"
         assert (p["underlying_target"] < 22600 < p["underlying_stop"]) if down else (p["underlying_stop"] < 22600 < p["underlying_target"])
         assert c["source"] == "pulse" and [x["rank"] for x in cands] == list(range(1, len(cands) + 1))
+        exit_text = p["exit_plan"]                       # how to manage it in Dhan, by structure
+        if p["strategy"] in ("bear_call_spread", "bull_put_spread"):
+            assert "Super order (target + stop loss) on the SELL leg only" in exit_text
+        elif len(p["legs"]) > 1:
+            assert "buy back the SELL leg first" in exit_text
     kinds = {c["plan"]["strategy"] for c in cands}                    # the 5-strike test chain fits these
     assert {"long_put", "bear_put_spread", "long_call", "bull_call_spread"} <= kinds

@@ -488,7 +488,11 @@ def rank(symbol: str, expiry: str | None = None, top: int = 8, built=None) -> di
                                               for a, t, k in legs) + "."
             plan.buy_or_sell_reasoning = next(c["why"] for c in ev["checks"] if c["name"] == "Option prices vs the trade") + "."
             plan.exit_plan = (f"Book profit if the index {word} to {plan.underlying_target:,.0f}; exit if it reaches "
-                              f"{plan.underlying_stop:,.0f}." + (" Close both legs together." if len(legs) > 1 else "") +
+                              f"{plan.underlying_stop:,.0f}." + (
+                                  "" if len(legs) == 1 else
+                                  " In Dhan: Super order (target + stop loss) on the SELL leg only; sell the BUY leg"
+                                  " right after it fills." if strategy in ("bear_call_spread", "bull_put_spread") else
+                                  " Close both legs together by hand (buy back the SELL leg first).") +
                               " On expiry day close by 15:15.")
             out.append({"symbol": symbol, "expiry": ch["expiry"], "spot": spot, "lot": ch["lot"],
                         "plan": plan.model_dump(), "strategy_text": STRATEGIES[strategy][0], "priced": priced,
