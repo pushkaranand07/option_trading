@@ -169,3 +169,26 @@ def test_evidence_score_rewards_agreement_and_marks_each_check():
     weak = st.evidence(bear, against, priced)
     assert weak["label"] == "Weak" and weak["score"] < 45
     assert st.evidence(plan("no_trade", []), agree, None) is None
+
+
+@pytest.mark.unit
+def test_rank_builds_tradable_defined_risk_trades_best_first():
+    chain = CHAIN | {"summary": {"atm_iv": 14.0, "resistance": 23000, "support": 22000}, "expiry": "27-Oct-2099"}
+    ctx = {"spot": 22600, "days_to_expiry": 2, "trend": {"tone": "down", "label": "Downtrend"},
+           "intraday_rule": {"side": "SELL"}, "implied_vol_vs_forecast": {"minus_garch21": 0.03},
+           "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": chain["summary"]},
+           "fii_index_futures_long_share": {"value": 0.1}}
+    r = st.rank("NIFTY", built=(ctx, chain), top=50)
+    cands = r["candidates"]
+    assert cands and r["considered"] == len(cands)
+    scores = [c["evidence"]["score"] for c in cands]
+    assert scores == sorted(scores, reverse=True) and cands[0]["plan"]["bias"] == "bearish"   # the data say down
+    for c in cands:
+        p = c["plan"]
+        assert not st.check_structure(st.StrategyPlan(**p), chain)                                 # defined risk
+        assert c["levels"]["pnl_target_per_lot"] > 0 > c["levels"]["pnl_stop_per_lot"]
+        down = p["bias"] == "bearish"
+        assert (p["underlying_target"] < 22600 < p["underlying_stop"]) if down else (p["underlying_stop"] < 22600 < p["underlying_target"])
+        assert c["source"] == "pulse" and [x["rank"] for x in cands] == list(range(1, len(cands) + 1))
+    kinds = {c["plan"]["strategy"] for c in cands}                    # the 5-strike test chain fits these
+    assert {"long_put", "bear_put_spread", "long_call", "bull_call_spread"} <= kinds

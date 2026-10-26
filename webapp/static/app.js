@@ -798,7 +798,7 @@ function renderPlanCards() {
         <h3 class="sub-h">Morning view</h3><div class="morning-slot"></div></div></section>`).join("");
     planCharts.clear();
     loadPlanCharts();
-    for (const [sym] of entries) { renderStrat(sym); loadNseChain(sym); }
+    for (const [sym] of entries) { renderStrat(sym); loadNseChain(sym).then(() => loadRank(sym)); }
   }
   for (const [sym, e] of entries) {
     const card = $(`.plan-card[data-sym="${sym}"]`);
@@ -854,11 +854,12 @@ function drawPlanChartLines(sym) {
   if (p?.verdict?.safe && p.signal?.side !== "WAIT") { mk(p.signal.entry, cssVar("--text"), "Entry"); mk(p.signal.stop_loss, cssVar("--down"), "Stop loss"); mk(p.signal.target, cssVar("--up"), "Target"); }
   const oc = S.nse[sym]?.summary;
   if (oc) { mk(oc.resistance, cssVar("--warn"), "Call wall", 1); mk(oc.support, cssVar("--warn"), "Put wall", 1); }
-  const a = S.strat[sym]?.result?.plan;
+  const a = curRes(sym)?.plan;
   if (a && a.strategy !== "no_trade") {
-    mk(a.underlying_entry_low, cssVar("--text"), "AI entry from"); mk(a.underlying_entry_high, cssVar("--text"), "AI entry to");
-    mk(a.underlying_target, cssVar("--up"), "AI target", 0); mk(a.underlying_stop, cssVar("--down"), "AI stop", 0);
-    const t = S.ticket[sym], leg = t && S.strat[sym].result.priced?.legs[t.i];
+    const who = curRes(sym)?.source === "pulse" ? `#${curRes(sym).rank}` : "AI";
+    mk(a.underlying_entry_low, cssVar("--text"), `${who} entry from`); mk(a.underlying_entry_high, cssVar("--text"), `${who} entry to`);
+    mk(a.underlying_target, cssVar("--up"), `${who} target`, 0); mk(a.underlying_stop, cssVar("--down"), `${who} stop`, 0);
+    const t = S.ticket[sym], leg = t && curRes(sym)?.priced?.legs[t.i];
     if (leg) mk(leg.strike, cssVar("--ema9"), `${leg.action} ${fmt0(leg.strike)} ${leg.type} strike`, 1);
   }
 }
@@ -901,13 +902,13 @@ async function loadNseChain(sym, expiry) {
 }
 
 function legsAt(sym) {          // strike|type -> "BUY" / "SELL" from the AI's proposal, to mark them in the chain
-  const r = S.strat[sym]?.result, out = {};
+  const r = curRes(sym), out = {};
   if (r && !r.rejected && r.expiry === S.nse[sym]?.expiry) (r.plan.legs || []).forEach((l) => (out[l.strike + l.option_type] = l.action));
   return out;
 }
 
 function focusLeg(sym) {         // the leg whose ticket is open, if it is on the chain shown
-  const t = S.ticket[sym], r = S.strat[sym]?.result;
+  const t = S.ticket[sym], r = curRes(sym);
   return t && r?.priced && r.expiry === S.nse[sym]?.expiry ? r.priced.legs[t.i] : null;
 }
 
@@ -946,7 +947,7 @@ function renderNseChain(sym) {
       <tbody>${rows}</tbody></table></div>
     <p class="small muted">Biggest call OI above the price acts as a ceiling (call wall), biggest put OI below as a floor (put wall). Shaded cells are in the money. ${c.fetched ? `Fetched ${esc(c.fetched)}.` : ""}
       <button class="btn small-btn chain-refresh">Refresh</button></p>`;
-  slot.querySelectorAll("[data-exp]").forEach((b) => (b.onclick = () => loadNseChain(sym, b.dataset.exp)));
+  slot.querySelectorAll("[data-exp]").forEach((b) => (b.onclick = () => loadNseChain(sym, b.dataset.exp).then(() => loadRank(sym))));
   slot.querySelectorAll("[data-view]").forEach((b) => (b.onclick = () => { S.nseView = b.dataset.view; store("nseView", S.nseView); renderNseChain(sym); }));
   $(".chain-refresh", slot).onclick = () => loadNseChain(sym);
   const sc = $(".plan-oc", slot), atm = $("tr.spot-row", sc) || $("tr.atm", sc);
@@ -959,7 +960,13 @@ function renderStrat(sym) {
   const ask = `<div class="strat-ask"><button class="btn primary strat-go" ${st.running ? "disabled" : ""}>${st.running ? "Analysing…" : st.result ? "Ask again" : `Analyse ${esc(NAMES[sym] || nameOf(sym))} with AI`}</button>
     <span class="small muted">${st.running ? `<span class="spinner"></span> Reading the chart, trend, volatility, option chain and news view (about a minute) — started ${esc(st.started || "")}`
       : `Uses expiry <b>${esc(S.nseExp[sym] || "nearest")}</b> (pick another in the chain below). Figures are per lot; you choose how many.`}</span></div>`;
-  slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result, sym) : "");
+  const v = S.view[sym], cand = typeof v === "number" ? S.rank[sym]?.data?.candidates?.[v] : null;
+  const detail = cand ? stratHtml(cand, sym) : st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result, sym) : "";
+  slot.innerHTML = rankHtml(sym) + `<h4 class="mini-h">Second opinion from the AI</h4>` + ask
+    + (cand && st.result ? `<div class="small"><a href="#" class="show-ai">Show the AI's suggestion instead</a></div>` : "") + detail;
+  slot.querySelectorAll("[data-rank]").forEach((r) => (r.onclick = () => { S.view[sym] = +r.dataset.rank; S.ticket[sym] = null; refreshStrat(sym); }));
+  if ($(".show-ai", slot)) $(".show-ai", slot).onclick = (e) => { e.preventDefault(); S.view[sym] = "ai"; S.ticket[sym] = null; refreshStrat(sym); };
+  if ($(".rank-refresh", slot)) $(".rank-refresh", slot).onclick = () => loadRank(sym);
   $(".strat-go", slot).onclick = () => startStrat(sym);
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
   if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
@@ -967,7 +974,7 @@ function renderStrat(sym) {
 }
 
 async function startStrat(sym) {
-  S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; renderStrat(sym);
+  S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; S.view[sym] = "ai"; renderStrat(sym);
   try {
     const { job } = await api("/api/strategy", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol: sym, expiry: S.nseExp[sym] || null }) });
@@ -981,7 +988,7 @@ async function pollStrat(sym, job) {
     const j = await api("/api/strategy/" + job);
     if (j.status === "running") { S.strat[sym] = { running: true, started: j.started }; renderStrat(sym); setTimeout(() => pollStrat(sym, job), 3000); return; }
     S.strat[sym] = j.status === "done" ? { result: j.result } : { error: j.error };
-    S.ticket[sym] = null;
+    S.ticket[sym] = null; S.view[sym] = "ai";
   } catch { delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs)); S.strat[sym] = {}; }   // server restarted
   renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym);
 }
@@ -1010,7 +1017,7 @@ function evidenceHtml(e) {
 function stratHtml(res, sym) {
   const a = res.plan, pr = res.priced, lv = res.levels;
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
-  const head = `<div class="strat-head"><div><div class="ask">AI suggestion · expiry ${esc(res.expiry)}</div>
+  const head = `<div class="strat-head"><div><div class="ask">${res.source === "pulse" ? `Pulse ranked trade #${res.rank}` : "AI suggestion"} · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
     <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span>
       ${res.evidence ? `<span class="badge score-${res.evidence.label.toLowerCase()}">Pulse score ${res.evidence.score} · ${esc(res.evidence.label)}</span>` : ""}</div></div>
@@ -1065,7 +1072,7 @@ function stratHtml(res, sym) {
       ${kl ? `<tr><th>Key levels</th><td><ul class="plain">${kl}</ul></td></tr>` : ""}
       ${a.risks?.length ? `<tr><th>Risks</th><td><ul class="plain">${a.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></td></tr>` : ""}
     </table>
-    <p class="small muted">GPT-5 analysis (${res.seconds}s) checked and priced by Pulse at the live bid / ask. Not a validated edge and not advice — no strategy here has passed the project's tests.</p>`;
+    <p class="small muted">${res.source === "pulse" ? "Built by Pulse's rules from the live option chain and" : `GPT-5 analysis (${res.seconds}s) checked and`} priced by Pulse at the live bid / ask. Not a validated edge and not advice — no strategy here has passed the project's tests.</p>`;
 }
 
 // NIFTY levels from low to high, so "target below, stop above" (or the reverse) is visible at a glance.
@@ -1083,7 +1090,7 @@ function ladder(a, spot, down) {
 }
 
 async function openTicket(sym, i) {
-  const res = S.strat[sym]?.result; if (!res) return;
+  const res = curRes(sym); if (!res) return;
   S.ticket[sym] = S.ticket[sym]?.i === i ? null : { i, data: null };          // a second tap closes it
   renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym);
   const leg = (res.levels?.legs || res.priced.legs)[i];
@@ -1095,7 +1102,7 @@ async function openTicket(sym, i) {
 
 let ticketChart = null;
 function renderTicket(sym) {
-  const slot = $(`.plan-card[data-sym="${sym}"] .ticket-slot`), t = S.ticket[sym], res = S.strat[sym]?.result;
+  const slot = $(`.plan-card[data-sym="${sym}"] .ticket-slot`), t = S.ticket[sym], res = curRes(sym);
   if (ticketChart) { ticketChart.remove(); ticketChart = null; }
   if (!slot) return;
   if (!t || !res) { slot.innerHTML = ""; return; }
@@ -1143,7 +1150,7 @@ function renderTicket(sym) {
 // One lot each. Marked live from the NSE chain at the price each leg could be closed at; when the index reaches the
 // AI's target or stop the trade is flagged (never closed for you). Stored on this computer (reports/trade_record).
 async function takeTrade(sym) {
-  const res = S.strat[sym]?.result; if (!res) return;
+  const res = curRes(sym); if (!res) return;
   const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
   try {
     const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(res) });
@@ -1255,6 +1262,57 @@ function openTradeHtml(t) {
     </div></section>`;
 }
 
+// ---------- Pulse trade ranking: concrete trades with strikes, entry, target and stop, best first ----------
+S.rank = {}; S.view = {};
+function curRes(sym) {          // the trade shown in the detail card: a ranked one, or the AI's suggestion
+  const v = S.view[sym];
+  if (typeof v === "number") return S.rank[sym]?.data?.candidates?.[v] || null;
+  return S.strat[sym]?.result || null;
+}
+function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym); }
+
+async function loadRank(sym) {
+  const r = S.rank[sym] = S.rank[sym] || {};
+  r.loading = true; renderStrat(sym);
+  try {
+    r.data = await api(`/api/rank/${encodeURIComponent(sym)}${S.nseExp[sym] ? "?expiry=" + encodeURIComponent(S.nseExp[sym]) : ""}`); r.error = null;
+    if (S.view[sym] === undefined && r.data.candidates.length && !S.strat[sym]?.result) S.view[sym] = 0;   // show #1 by default
+    if (typeof S.view[sym] === "number" && S.view[sym] >= r.data.candidates.length) S.view[sym] = 0;
+  } catch (e) { r.error = e.message; }
+  r.loading = false;
+  if (!S.ticket[sym]) refreshStrat(sym); else renderStrat(sym);
+}
+
+function rankHtml(sym) {
+  const r = S.rank[sym];
+  if (!r || (r.loading && !r.data)) return `<div class="loading"><span class="spinner"></span>Ranking trades from the live chain…</div>`;
+  if (r.error && !r.data) return `<div class="notice">Ranking unavailable: ${esc(r.error)}</div>`;
+  const d = r.data, name = NAMES[sym] || sym;
+  if (!d.candidates.length) return `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
+  const v = S.view[sym];
+  const rows = d.candidates.map((c, i) => {
+    const lv = c.levels, a = c.plan, e = c.evidence;
+    const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
+    const prem = (k) => lv.legs.map((l) => `<div>${fmt(l[k])}</div>`).join("");
+    return `<tr data-rank="${i}" class="${v === i ? "on" : ""}">
+      <td class="num"><b>#${c.rank}</b></td>
+      <td><span class="badge score-${e.label.toLowerCase()}">${e.score}</span><div class="small muted">${esc(e.label)}</div></td>
+      <td><b>${esc(STRAT_NAMES[a.strategy])}</b><div class="small ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</div></td>
+      <td class="rank-legs">${legs}</td>
+      <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
+      <td class="num"><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
+      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
+      <td class="num">${c.ratio.toFixed(1)} : 1</td></tr>`;
+  }).join("");
+  return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades — best first</h4>
+      <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
+      Ranked by the evidence score, then by profit-to-loss at the levels. Tap a row for its orders, ticket and the Take button.</div></div>
+      <button class="btn small-btn rank-refresh" ${r.loading ? "disabled" : ""}>${r.loading ? "Updating…" : "Refresh"}</button></div>
+    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Score</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="small muted">Premium targets and stops are estimates for ${esc(name)} reaching its target or stop today. One lot each; charges not included here (shown in the card). Not a validated edge.</div>`;
+}
+
 // ---------- start ----------
 (async function init() {
   applyChartTheme();
@@ -1267,6 +1325,7 @@ function openTradeHtml(t) {
   setInterval(loadPlan, 15000);
   setInterval(() => { if (S.tab === "options") loadChain(); }, 4000);
   setInterval(loadStatus, 60000);
+  setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => { if (!S.ticket[sym]) loadRank(sym); }); }, 60000);
   setInterval(() => { if (S.tab === "record") loadRecord(); }, 15000);
   setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
   setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym)); }, 30000);

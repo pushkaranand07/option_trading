@@ -186,9 +186,9 @@ def check_structure(plan: StrategyPlan, chain: dict) -> list[str]:
         puts = sorted((x for x in legs if x.option_type == "PE"), key=lambda x: x.strike)
         calls = sorted((x for x in legs if x.option_type == "CE"), key=lambda x: x.strike)
         ok = ([x.action for x in puts] == ["BUY", "SELL"] and [x.action for x in calls] == ["SELL", "BUY"]
-              and puts[-1].strike < calls[0].strike)
+              and puts[-1].strike <= calls[0].strike)             # equal: an iron butterfly
         if not ok:
-            problems.append("an iron condor is buy put < sell put < sell call < buy call")
+            problems.append("an iron condor is buy put < sell put <= sell call < buy call")
     elif [(x.action, x.option_type) for x in sorted(legs, key=lambda x: x.strike)] != shape:
         problems.append(f"the legs do not form a {plan.strategy.replace('_', ' ')}")
     # No naked short: every sold option is paired with a bought option of the same type and expiry. Any strike
@@ -408,6 +408,98 @@ def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
     out["warnings"] = warnings(plan, out.get("priced"))
     out["evidence"] = evidence(plan, ctx, out.get("priced"))
     return out
+
+
+# ---------------------------------------------------------------- Pulse trade ranking (rules, no LLM)
+
+def _index_levels(direction: str, spot: float, reach: float) -> dict:
+    """Index entry zone, target and stop for a directional trade: the target at 80% of a typical move to expiry,
+    the stop at 40% against (2 : 1 on the index), rounded to 5 points."""
+    r5 = lambda x: round(x / 5) * 5  # noqa: E731
+    sgn = 1 if direction == "bullish" else -1
+    return {"underlying_entry_low": r5(spot - 0.1 * reach), "underlying_entry_high": r5(spot + 0.1 * reach),
+            "underlying_target": r5(spot + sgn * 0.8 * reach), "underlying_stop": r5(spot - sgn * 0.4 * reach)}
+
+
+def _structures(direction: str, strikes: list[float], atm: float) -> list[tuple[str, list[tuple[str, str, float]]]]:
+    """Candidate structures from the chain's strikes: single options at the money and 1-2 steps out, debit spreads
+    2 and 4 steps wide, credit spreads 1-2 steps out of the money and 2 steps wide."""
+    i = strikes.index(atm)
+    at = lambda k: strikes[k] if 0 <= k < len(strikes) else None  # noqa: E731
+    out = []
+    if direction == "bullish":
+        for o in (0, 1, 2):
+            if at(i + o):
+                out.append(("long_call", [("BUY", "CE", at(i + o))]))
+        for lo, w in ((0, 2), (0, 4), (1, 2)):
+            if at(i + lo) and at(i + lo + w):
+                out.append(("bull_call_spread", [("BUY", "CE", at(i + lo)), ("SELL", "CE", at(i + lo + w))]))
+        for o in (1, 2):
+            if at(i - o) and at(i - o - 2):
+                out.append(("bull_put_spread", [("BUY", "PE", at(i - o - 2)), ("SELL", "PE", at(i - o))]))
+    else:
+        for o in (0, 1, 2):
+            if at(i - o):
+                out.append(("long_put", [("BUY", "PE", at(i - o))]))
+        for hi, w in ((0, 2), (0, 4), (1, 2)):
+            if at(i - hi) and at(i - hi - w):
+                out.append(("bear_put_spread", [("SELL", "PE", at(i - hi - w)), ("BUY", "PE", at(i - hi))]))
+        for o in (1, 2):
+            if at(i + o) and at(i + o + 2):
+                out.append(("bear_call_spread", [("SELL", "CE", at(i + o)), ("BUY", "CE", at(i + o + 2))]))
+    return out
+
+
+def rank(symbol: str, expiry: str | None = None, top: int = 8, built=None) -> dict:
+    """Every candidate trade for both directions, priced at the bid / ask with index and premium levels, scored by
+    the evidence and ranked best first. Ties go to the better profit-to-loss ratio at the levels."""
+    ctx, ch = built or build_context(symbol, expiry)
+    spot, days = ch["spot"], max(ctx.get("days_to_expiry") or 1, 1)
+    day = (ctx.get("expected_move") or {}).get("day_pct") or ((ctx.get("trend") or {}).get("daily_move_pct") or 1) / 100
+    reach = spot * day * math.sqrt(days)
+    strikes = [r["strike"] for r in ch["rows"]]
+    out = []
+    for direction in ("bullish", "bearish"):
+        lv_index = _index_levels(direction, spot, reach)
+        for strategy, legs in _structures(direction, strikes, ch["atm"]):
+            plan = StrategyPlan(
+                market_read="", bias=direction, strategy=strategy, legs=[Leg(action=a, option_type=t, strike=k) for a, t, k in legs],
+                buy_or_sell_reasoning="", strike_reasoning="", exit_plan="", confidence="medium", **lv_index)
+            if check_structure(plan, ch):
+                continue
+            try:
+                priced = price(plan, ch)
+            except (KeyError, TypeError):
+                continue
+            if any(not x["bid"] or not x["ask"] for x in priced["legs"]) or priced["max_loss_per_lot"] <= 0:
+                continue                                            # no live two-sided quote: not tradable now
+            lv = trade_levels(plan, priced, ch, ctx.get("days_to_expiry"))
+            if not lv or lv["pnl_target_per_lot"] <= 0 or lv["pnl_stop_per_lot"] >= 0:
+                continue
+            ev = evidence(plan, ctx, priced)
+            ratio = lv["pnl_target_per_lot"] / -lv["pnl_stop_per_lot"]
+            word = "rises" if direction == "bullish" else "falls"
+            plan.market_read = (f"Pulse rule: a {direction} trade, ranked by how much of the data agrees "
+                                f"(score {ev['score']}/100). Target at 80% of a typical move to expiry "
+                                f"(about {reach:,.0f} points), stop at 40% against.")
+            plan.strike_reasoning = ", ".join(f"{a.lower()} {k:,.0f} {t} ({abs(k - spot) / (strikes[1] - strikes[0]):.0f} "
+                                              f"strike{'s' if abs(k - spot) >= 2 * (strikes[1] - strikes[0]) else ''} "
+                                              f"{'out of' if (t == 'CE') == (k > spot) else 'in'} the money)"
+                                              for a, t, k in legs) + "."
+            plan.buy_or_sell_reasoning = next(c["why"] for c in ev["checks"] if c["name"] == "Option prices vs the trade") + "."
+            plan.exit_plan = (f"Book profit if the index {word} to {plan.underlying_target:,.0f}; exit if it reaches "
+                              f"{plan.underlying_stop:,.0f}." + (" Close both legs together." if len(legs) > 1 else "") +
+                              " On expiry day close by 15:15.")
+            out.append({"symbol": symbol, "expiry": ch["expiry"], "spot": spot, "lot": ch["lot"],
+                        "plan": plan.model_dump(), "strategy_text": STRATEGIES[strategy][0], "priced": priced,
+                        "levels": lv, "evidence": ev, "charges_per_lot": charges(priced, 1),
+                        "warnings": warnings(plan, priced), "ratio": ratio, "chain_summary": ch["summary"],
+                        "source": "pulse", "seconds": 0})
+    out.sort(key=lambda c: (c["evidence"]["score"], c["ratio"]), reverse=True)
+    for n, c in enumerate(out, 1):
+        c["rank"] = n
+    return {"symbol": symbol, "expiry": ch["expiry"], "spot": spot, "reach": reach, "candidates": out[:top],
+            "considered": len(out), "built_at": datetime.now().strftime("%H:%M:%S")}
 
 
 # ---------------------------------------------------------------- background jobs (the LLM takes a minute or two)

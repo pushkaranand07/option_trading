@@ -184,6 +184,17 @@ async def nse_contract(id: str):
         raise HTTPException(502, str(exc)) from exc
 
 
+@app.get("/api/rank/{symbol}")
+async def trade_rank(symbol: str, expiry: str | None = None):
+    """Pulse's ranked trades for the instrument: strikes, entry, target and stop for each, best first (no LLM)."""
+    try:
+        return await run_in_threadpool(strategist.rank, md.instrument(symbol)["symbol"], expiry)
+    except nse_oc.ChainError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
 class StrategyRequest(BaseModel):
     symbol: str
     expiry: str | None = None
