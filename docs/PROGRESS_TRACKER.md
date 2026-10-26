@@ -19,7 +19,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-26 10:21_
+_Last updated: 2026-10-26 10:33_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -298,6 +298,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-26 — Leg orders shown by their job in Dhan: Super order with target / stop only on single options and the SELL leg of credit spreads; protection legs show none; other spread legs show reference prices.
 - 2026-10-26 — Plan tab: Pulse trade ranking — concrete trades with strike, entry, target and stop per leg, ranked best first by the evidence score; AI iron butterflies no longer refused.
 - 2026-10-26 — AI strategist: Pulse evidence score (0-100, Strong / Moderate / Weak) on every suggestion; debit spreads no longer refused by mistake; one retry when the AI contradicts itself; every suggestion auto-recorded and settled, with results by score.
 - 2026-10-26 — Trade Record tab: take the AI strategist's trade as a dummy 1-lot trade; live P&L, target / stop flags (you close it), history with net P&L and win rate.

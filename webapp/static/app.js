@@ -994,6 +994,27 @@ async function pollStrat(sym, job) {
 }
 Object.entries(stratJobs).forEach(([sym, job]) => pollStrat(sym, job));   // a result survives a page reload
 
+// How each leg goes into Dhan, so every number labelled Target / Stop loss can be typed into a Super order
+// (Dhan: a BUY needs target > entry > stop, a SELL needs target < entry < stop).
+//  super    — single option, or the SELL leg of a credit spread: Super order with target + stop loss
+//  hedge    — the BUY leg of a credit spread: plain Limit, no target / stop; close it right after the SELL leg exits
+//  together — debit spread / iron condor legs: Limit orders, closed together by hand at the index levels
+//             (a stop on the bought leg alone could leave the sold leg naked)
+const CREDIT = ["bear_call_spread", "bull_put_spread"];
+function legRole(strategy, legs, l) {
+  if (legs.length === 1) return "super";
+  if (CREDIT.includes(strategy)) return l.action === "SELL" ? "super" : "hedge";
+  return "together";
+}
+function legLevelsOk(l, tgt, stop) {          // the Super-order rule; anything else is not enterable in Dhan
+  return tgt != null && stop != null && (l.action === "BUY" ? tgt > l.price && stop < l.price : tgt < l.price && stop > l.price);
+}
+const ROLE_NOTE = {
+  super: (l) => l.action === "BUY" ? "Super order: target above the entry, stop loss below." : "Super order on the sold leg: target below the entry, stop loss above (you gain when its price falls).",
+  hedge: () => "Protection only — a plain Limit order, no target or stop loss. Place it first; sell it right after the SELL leg's target or stop fills.",
+  together: () => "Limit order, no target / stop loss in Dhan. Close both legs by hand when NIFTY reaches its target or stop (grey = expected price then).",
+};
+
 // The AI's trade, explained the way a broker app shows an order: each leg is a contract with its own entry,
 // target and stop-loss premium (what to type into Dhan); clicking a leg opens its ticket (premium chart, depth,
 // how to place it) and marks it on the chain and the index chart.
@@ -1037,20 +1058,27 @@ function stratHtml(res, sym) {
         <li><b>Book profit</b> if ${esc(name)} ${down ? "falls" : "rises"} to <b class="up">${fmt0(a.underlying_target)}</b>${lv ? ` — about ${pnl(lv.pnl_target_per_lot)} a lot` : ""}.</li>
         <li><b>Exit with a small loss</b> if ${esc(name)} ${down ? "rises" : "falls"} to <b class="down">${fmt0(a.underlying_stop)}</b>${lv ? ` — about ${pnl(lv.pnl_stop_per_lot)} a lot` : ""}.</li>
       </ol></div>`;
-  const legs = !pr ? "" : `<h4 class="mini-h">The order${pr.legs.length > 1 ? "s" : ""} in Dhan — tap one for details</h4><div class="leg-cards">${(lv?.legs || pr.legs).map((l, i) => `
-      <button class="leg-card ${l.action === "BUY" ? "buy" : "sell"} ${S.ticket[sym]?.i === i ? "on" : ""}" data-leg="${i}">
-        <div class="leg-top"><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> <b>${esc(contractName(sym, res.expiry, l))}</b></div>
+  const allLegs = lv?.legs || pr?.legs || [];
+  const legs = !pr ? "" : `<h4 class="mini-h">The order${pr.legs.length > 1 ? "s" : ""} in Dhan — tap one for details</h4><div class="leg-cards">${allLegs.map((l, i) => {
+      const role = legRole(a.strategy, allLegs, l), dhan = role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop);
+      const box = (label, v, c) => dhan ? `<div><span>${label}</span><b class="${c}">${v != null ? rupee(v) : "—"}</b></div>`
+        : `<div><span>${label === "Target" ? `At ${esc(NAMES[sym] || sym)} target` : `At ${esc(NAMES[sym] || sym)} stop`}</span><b class="ref">${v != null ? rupee(v) : "—"}</b></div>`;
+      return `<button class="leg-card ${l.action === "BUY" ? "buy" : "sell"} ${S.ticket[sym]?.i === i ? "on" : ""}" data-leg="${i}">
+        <div class="leg-top"><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> <b>${esc(contractName(sym, res.expiry, l))}</b>
+          <span class="role-tag ${role}">${role === "super" ? "Super order" : role === "hedge" ? "Protection" : "Close together"}</span></div>
         <div class="leg-nums"><div><span>${l.action === "BUY" ? "Buy at" : "Sell at"}</span><b>${rupee(l.price)}</b></div>
-          <div><span>Target</span><b class="up">${l.premium_at_target != null ? rupee(l.premium_at_target) : "—"}</b></div>
-          <div><span>Stop loss</span><b class="down">${l.premium_at_stop != null ? rupee(l.premium_at_stop) : "—"}</b></div></div>
-        <div class="small muted">${l.action === "BUY" ? "Bought: you gain when its price rises." : "Sold: you gain when its price falls — so its target is below the entry and its stop above."}</div>
-      </button>`).join("")}</div>`;
+          ${role === "hedge" ? `<div><span>Target</span><b class="muted">none</b></div><div><span>Stop loss</span><b class="muted">none</b></div>`
+            : box("Target", l.premium_at_target, "up") + box("Stop loss", l.premium_at_stop, "down")}</div>
+        <div class="small muted">${ROLE_NOTE[role](l)}</div>
+      </button>`;
+    }).join("")}</div>`;
   const sp = lv?.spread;
   const together = !sp ? "" : `<div class="together small"><b>Manage the ${pr.legs.length} orders as one trade.</b>
       ${sp.debit ? `You pay <b>${rupee(sp.now)}</b> for the spread.` : `You receive <b>${rupee(sp.now)}</b> for the spread.`}
-      Close <b>both</b> legs when the spread is worth about <b class="up">${rupee(sp.at_target)}</b> (target) or <b class="down">${rupee(sp.at_stop)}</b> (stop) — or simply when ${esc(name)} reaches the levels above.
       Place the <b>BUY</b> leg first, then the SELL leg (Dhan gives a margin benefit for a hedged position).
-      Do not put separate stop losses on each leg: if only the bought leg's stop fires, the sold leg is left unprotected.</div>`;
+      ${CREDIT.includes(a.strategy)
+        ? `Put the <b>Super order</b> (target + stop loss) on the <b>SELL</b> leg only. When it fills at its target or stop, <b>sell the BUY leg</b> straight away. Never put a stop loss on the BUY leg: if it fired alone, the sold leg would be left unprotected.`
+        : `Dhan's Super order cannot manage this spread safely, so use plain Limit orders and close <b>both</b> legs by hand when ${esc(name)} reaches its target or stop (the spread is then worth about <b class="up">${rupee(sp.at_target)}</b> or <b class="down">${rupee(sp.at_stop)}</b>). Buy back the <b>SELL</b> leg first, then sell the BUY leg.`}</div>`;
   const econ = pr ? `<div class="levels">
       <div class="lv"><span>${pr.debit ? "You pay" : "You receive"}</span><b>${rupee(Math.abs(pr.net_per_unit))}</b><small>per unit · ${money(Math.abs(pr.net_per_unit) * pr.lot)} a lot</small></div>
       <div class="lv"><span>Worst case at expiry</span><b class="down">${money(pr.max_loss_per_lot)}</b><small>a lot, if you never exit</small></div>
@@ -1107,7 +1135,8 @@ function renderTicket(sym) {
   if (!slot) return;
   if (!t || !res) { slot.innerHTML = ""; return; }
   const l = (res.levels?.legs || res.priced.legs)[t.i], d = t.data, lot = res.lot, buy = l.action === "BUY";
-  const single = res.priced.legs.length === 1;
+  const role = legRole(res.plan.strategy, res.levels?.legs || res.priced.legs, l), dhan = role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop);
+  const nm = NAMES[sym] || sym;
   const chgPct = l.ltp && l.chg != null ? (l.chg / (l.ltp - l.chg)) * 100 : null;
   const totB = l.total_buy_qty || 0, totS = l.total_sell_qty || 0, bidPct = totB + totS ? (totB / (totB + totS)) * 100 : null;
   slot.innerHTML = `<div class="ticket">
@@ -1120,10 +1149,12 @@ function renderTicket(sym) {
         <table class="facts small-facts">
           <tr><th>Side</th><td><span class="leg-tag ${buy ? "buy" : "sell"}">${l.action}</span></td></tr>
           <tr><th>Lot</th><td>1 lot = <b>${lot}</b> qty (you choose how many lots)</td></tr>
-          <tr><th>Order type</th><td>${single ? "<b>Super</b> order (limit + target + stop loss in one)" : "<b>Limit</b> order — exit both legs together (see below)"}</td></tr>
+          <tr><th>Order type</th><td>${dhan ? "<b>Super</b> order (limit + target + stop loss in one)" : role === "hedge" ? "<b>Limit</b> order — protection, place it first" : "<b>Limit</b> order — close both legs together by hand"}</td></tr>
           <tr><th>Limit price</th><td><b>${rupee(l.price)}</b> <span class="muted small">(${buy ? "the best ask" : "the best bid"} now)</span></td></tr>
-          <tr><th>Target</th><td><b class="up">${l.premium_at_target != null ? rupee(l.premium_at_target) : "—"}</b> ${l.pnl_target_per_lot != null ? `<span class="small">(${pnl(l.pnl_target_per_lot)} a lot)</span>` : ""}</td></tr>
-          <tr><th>Stop loss</th><td><b class="down">${l.premium_at_stop != null ? rupee(l.premium_at_stop) : "—"}</b> ${l.pnl_stop_per_lot != null ? `<span class="small">(${pnl(l.pnl_stop_per_lot)} a lot)</span>` : ""}</td></tr>
+          ${dhan ? `<tr><th>Target</th><td><b class="up">${rupee(l.premium_at_target)}</b> ${l.pnl_target_per_lot != null ? `<span class="small">(${pnl(l.pnl_target_per_lot)} a lot)</span>` : ""}</td></tr>
+          <tr><th>Stop loss</th><td><b class="down">${rupee(l.premium_at_stop)}</b> ${l.pnl_stop_per_lot != null ? `<span class="small">(${pnl(l.pnl_stop_per_lot)} a lot)</span>` : ""}</td></tr>`
+          : `<tr><th>Target / stop</th><td>${role === "hedge" ? "<b>none</b> — sell it right after the SELL leg's target or stop fills" : `<b>none in Dhan</b> — close by hand when ${esc(nm)} reaches its target or stop`}</td></tr>
+          <tr><th>Expected price</th><td class="small">at ${esc(nm)} target <b class="ref">${rupee(l.premium_at_target)}</b> · at ${esc(nm)} stop <b class="ref">${rupee(l.premium_at_stop)}</b></td></tr>`}
           <tr><th>${buy ? "Money needed" : "Margin"}</th><td>${buy ? `<b>${money(l.price * lot)}</b> a lot (premium × qty)` : `set by Dhan; with the bought leg placed first it is close to the spread's worst case, <b>${money(res.priced.max_loss_per_lot)}</b> a lot`}</td></tr>
         </table></div>
       <div class="ticket-box"><h4 class="mini-h">Market depth (best price)</h4>
@@ -1142,7 +1173,9 @@ function renderTicket(sym) {
   const s = ticketChart.addAreaSeries({ lineColor: cssVar("--ema9"), topColor: "rgba(47,111,237,.18)", bottomColor: "rgba(47,111,237,0)", lineWidth: 2, priceLineVisible: false });
   let last = 0; s.setData(d.points.filter(([tm]) => (tm > last ? ((last = tm), true) : false)).map(([tm, p]) => ({ time: tm, value: p })));
   const mk = (price, color, title, style = 2) => price && s.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
-  mk(l.price, cssVar("--text"), buy ? "Buy at" : "Sell at", 0); mk(l.premium_at_target, cssVar("--up"), "Target"); mk(l.premium_at_stop, cssVar("--down"), "Stop loss");
+  mk(l.price, cssVar("--text"), buy ? "Buy at" : "Sell at", 0);
+  if (dhan) { mk(l.premium_at_target, cssVar("--up"), "Target"); mk(l.premium_at_stop, cssVar("--down"), "Stop loss"); }
+  else { mk(l.premium_at_target, cssVar("--muted"), `at ${nm} target`); mk(l.premium_at_stop, cssVar("--muted"), `at ${nm} stop`); }
   ticketChart.timeScale().fitContent();
 }
 
@@ -1231,6 +1264,13 @@ function aiRecordHtml(ai) {
       : `<p class="muted pad">Every suggestion from the AI strategist will appear here.</p>`}</section>`;
 }
 
+function recLevels(t, l) {        // target / stop cells of a recorded leg, by its role in Dhan
+  const role = legRole(t.strategy, t.legs, l), lg = { action: l.action, price: l.entry };
+  if (role === "hedge") return `<td class="num muted">none</td><td class="num muted">none</td>`;
+  if (role === "super" && legLevelsOk(lg, l.target, l.stop)) return `<td class="num up">${fmt(l.target)}</td><td class="num down">${fmt(l.stop)}</td>`;
+  return `<td class="num ref">(${fmt(l.target)})</td><td class="num ref">(${fmt(l.stop)})</td>`;
+}
+
 function openTradeHtml(t) {
   const v = t.live || {}, down = t.index_target < t.index_stop, name = NAMES[t.symbol] || t.symbol;
   const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])];
@@ -1252,7 +1292,7 @@ function openTradeHtml(t) {
         ${t.legs.map((l, i) => {
           const now = v.legs?.[i]?.now, p = now != null ? (now - l.entry) * (l.action === "BUY" ? 1 : -1) * t.lot : null;
           return `<tr><td><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(t.symbol, t.expiry, l))}</td>
-            <td class="num">${fmt(l.entry)}</td><td class="num"><b>${fmt(now)}</b></td><td class="num up">${fmt(l.target)}</td><td class="num down">${fmt(l.stop)}</td>
+            <td class="num">${fmt(l.entry)}</td><td class="num"><b>${fmt(now)}</b></td>${recLevels(t, l)}
             <td class="num ${cls(p)}">${p != null ? money(p) : "—"}</td></tr>`;
         }).join("")}</tbody></table>
       <div class="rec-actions"><span class="small muted">Book profit if ${esc(name)} reaches <b class="up">${fmt0(t.index_target)}</b> · exit if it reaches <b class="down">${fmt0(t.index_stop)}</b>.
@@ -1293,7 +1333,12 @@ function rankHtml(sym) {
   const rows = d.candidates.map((c, i) => {
     const lv = c.levels, a = c.plan, e = c.evidence;
     const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
-    const prem = (k) => lv.legs.map((l) => `<div>${fmt(l[k])}</div>`).join("");
+    const prem = (k) => lv.legs.map((l) => {
+      const role = legRole(a.strategy, lv.legs, l);
+      if (k === "price") return `<div>${fmt(l.price)}</div>`;
+      if (role === "hedge") return `<div class="muted">none</div>`;
+      return role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop) ? `<div>${fmt(l[k])}</div>` : `<div class="ref">(${fmt(l[k])})</div>`;
+    }).join("");
     return `<tr data-rank="${i}" class="${v === i ? "on" : ""}">
       <td class="num"><b>#${c.rank}</b></td>
       <td><span class="badge score-${e.label.toLowerCase()}">${e.score}</span><div class="small muted">${esc(e.label)}</div></td>
@@ -1306,7 +1351,8 @@ function rankHtml(sym) {
   }).join("");
   return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades — best first</h4>
       <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
-      Ranked by the evidence score, then by profit-to-loss at the levels. Tap a row for its orders, ticket and the Take button.</div></div>
+      Ranked by the evidence score, then by profit-to-loss at the levels. Tap a row for its orders, ticket and the Take button.
+      Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.</div></div>
       <button class="btn small-btn rank-refresh" ${r.loading ? "disabled" : ""}>${r.loading ? "Updating…" : "Refresh"}</button></div>
     <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Score</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
