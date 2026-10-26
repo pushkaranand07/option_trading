@@ -121,7 +121,7 @@ def mark(trade: dict, chain_fn=None) -> dict:
     (flags are remembered with the time they first happened)."""
     from webapp import option_chain as oc
 
-    view = {"spot": None, "legs": [], "pnl": None, "flags": [], "error": None}
+    view = {"spot": None, "legs": [], "pnl": None, "flags": [], "error": None, "as_of": None}
     if _expired(trade):
         view["flags"].append("expired")
         return view
@@ -137,7 +137,7 @@ def mark(trade: dict, chain_fn=None) -> dict:
         x = _exit_price(leg, q)
         exits.append(x)
         view["legs"].append({"now": x, "ltp": q["ltp"] if q else None})
-    view["spot"] = ch["spot"]
+    view["spot"], view["as_of"] = ch["spot"], ch.get("timestamp")
     if None not in exits:
         view["pnl"] = _pnl(trade, exits)
     view["flags"] = _flags(trade, ch["spot"])

@@ -108,3 +108,10 @@ def test_ai_suggestion_settles_at_the_stop_and_at_expiry():
     tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650}, source="ai")
     o = tr.overview()
     assert any(t["reason"] == "expired" for t in o["ai"]["closed"])
+
+
+@pytest.mark.unit
+def test_live_marks_carry_the_time_of_nses_snapshot():
+    tr.take(RESULT)
+    stamped = lambda s, e: chain(22600, _q(130, 129, 131), _q(88, 87, 89))(s, e) | {"timestamp": "26-Oct-2026 11:44:29"}  # noqa: E731
+    assert tr.overview(stamped)["open"][0]["live"]["as_of"] == "26-Oct-2026 11:44:29"

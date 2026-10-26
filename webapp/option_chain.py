@@ -16,7 +16,7 @@ CONTRACT_INFO = "/api/option-chain-contract-info"
 CHAIN = "/api/option-chain-v3"
 CHART = "/api/chart-databyindex"
 NSE_INDICES = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50")
-CACHE_SECONDS = 30
+CACHE_SECONDS = 10            # NSE itself updates about every 45 s; don't add much on top
 
 _cache: dict[tuple, tuple[float, dict]] = {}
 _lock = threading.Lock()

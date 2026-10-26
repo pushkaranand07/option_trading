@@ -912,6 +912,13 @@ function focusLeg(sym) {         // the leg whose ticket is open, if it is on th
   return t && r?.priced && r.expiry === S.nse[sym]?.expiry ? r.priced.legs[t.i] : null;
 }
 
+// How old NSE's snapshot is, e.g. " (52 s ago)"; NSE stamps "26-Oct-2026 11:44:29" in IST.
+function nseAge(ts) {
+  const m = /(\d{2}):(\d{2}):(\d{2})$/.exec(ts || ""); if (!m || PREVIEW_AT) return "";
+  const now = istNow(), secs = now.mins * 60 + new Date().getSeconds() - (+m[1] * 3600 + +m[2] * 60 + +m[3]);
+  return secs >= 0 && secs < 3600 ? ` (${secs < 90 ? secs + " s" : Math.round(secs / 60) + " min"} ago)` : "";
+}
+
 function renderNseChain(sym) {
   const c = S.nse[sym], slot = $(`.plan-card[data-sym="${sym}"] .chain-slot`); if (!c || !slot) return;
   const v = S.nseView, mark = legsAt(sym), sm = c.summary, focus = focusLeg(sym);
@@ -937,7 +944,7 @@ function renderNseChain(sym) {
       <td class="${pi} ${topPe.has(r.strike) ? "hot" : ""}"><div class="bar pe-bar" style="width:${(metric[1](r.pe) || 0) / maxV * 100}%"></div><span class="v">${val(r.pe)}${chg(metric[2](r.pe))}</span></td></tr>`;
   }).join("");
   const note = $(`.plan-card[data-sym="${sym}"] .chain-note`);
-  if (note) note.textContent = `NSE · ${c.timestamp || c.fetched} · lot ${c.lot}`;
+  if (note) note.textContent = `NSE data as of ${c.timestamp || c.fetched}${nseAge(c.timestamp)} · NSE updates about every 45 s · lot ${c.lot}`;
   slot.innerHTML = `<div class="seg-row">${c.expiries.slice(0, 6).map((x) => `<button class="seg ${x === c.expiry ? "on" : ""}" data-exp="${esc(x)}">${esc(x.slice(0, 6))}</button>`).join("")}</div>
     <div class="oc-stats">${[["PCR", sm.pcr?.toFixed(2)], ["Call wall", fmt0(sm.resistance)], ["Put wall", fmt0(sm.support)], ["Max pain", fmt0(sm.max_pain)], ["ATM IV", sm.atm_iv ? sm.atm_iv.toFixed(1) + "%" : "—"]]
       .map(([k, x]) => `<div class="stat"><span>${k}</span><b class="num">${x ?? "—"}</b></div>`).join("")}</div>
@@ -1285,10 +1292,11 @@ function openTradeHtml(t) {
   return `<section class="card rec-open"><div class="card-head"><h2>${esc(name)} · ${esc(STRAT_NAMES[t.strategy] || t.strategy)}</h2>
       <div class="rec-pnl ${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}<small>P&L now, before charges</small></div></div>
     <div class="body">
-      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}</div>
+      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
+        ${v.as_of ? ` · prices from NSE as of ${esc(v.as_of.slice(-8))}${nseAge(v.as_of)}` : ""}</div>
       ${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
       ${lad}
-      <table class="t legs"><thead><tr><th>Leg</th><th>Entry</th><th>Now (to close)</th><th>Target</th><th>Stop loss</th><th>P&L</th></tr></thead><tbody>
+      <table class="t legs"><thead><tr><th>Leg</th><th>Entry</th><th title="What you could close it at now: a bought option at the bid, a sold one at the ask — not the last traded price">Now (to close)</th><th>Target</th><th>Stop loss</th><th>P&L</th></tr></thead><tbody>
         ${t.legs.map((l, i) => {
           const now = v.legs?.[i]?.now, p = now != null ? (now - l.entry) * (l.action === "BUY" ? 1 : -1) * t.lot : null;
           return `<tr><td><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(t.symbol, t.expiry, l))}</td>
@@ -1374,5 +1382,5 @@ function rankHtml(sym) {
   setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => { if (!S.ticket[sym]) loadRank(sym); }); }, 60000);
   setInterval(() => { if (S.tab === "record") loadRecord(); }, 15000);
   setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
-  setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym)); }, 30000);
+  setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym)); }, 15000);
 })();
