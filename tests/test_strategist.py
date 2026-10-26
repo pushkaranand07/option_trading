@@ -91,3 +91,42 @@ def test_chain_shape_units_pcr_walls_and_max_pain():
     near = oc.shape(RAW, lot=65, strikes_each_side=1)          # walls are taken from the strikes shown
     assert near["summary"]["resistance"] == 22700 and near["summary"]["support"] == 22500
     assert oc.max_pain(c["rows"]) == 22600
+
+
+@pytest.mark.unit
+def test_trade_levels_give_each_leg_a_target_and_stop_premium_on_the_right_side():
+    p = plan("bear_call_spread", [("SELL", "CE", 22700), ("BUY", "CE", 22800)], underlying_entry_low=22580,
+             underlying_entry_high=22640, underlying_target=22480, underlying_stop=22720)
+    chain = CHAIN | {"summary": {"atm_iv": 14.0}}
+    lv = st.trade_levels(p, st.price(p, chain), chain, days_to_expiry=2)
+    sold, bought = lv["legs"]
+    # NIFTY falling to the target makes both calls cheaper; rising to the stop makes them dearer
+    assert sold["premium_at_target"] < sold["price"] < sold["premium_at_stop"]
+    assert bought["premium_at_target"] < bought["price"] < bought["premium_at_stop"]
+    assert lv["pnl_target_per_lot"] > 0 > lv["pnl_stop_per_lot"]                      # the sold leg dominates
+    sp = lv["spread"]
+    assert sp["at_target"] < sp["now"] < sp["at_stop"] and not sp["debit"]           # buy back cheaper at target
+    assert lv["pnl_target_per_lot"] == pytest.approx((sp["now"] - sp["at_target"]) * 65, abs=1)
+    one = st.trade_levels(plan("long_put", [("BUY", "PE", 22600)], underlying_target=22400, underlying_stop=22700),
+                          st.price(plan("long_put", [("BUY", "PE", 22600)]), chain), chain, 2)
+    leg = one["legs"][0]
+    assert leg["premium_at_stop"] < leg["price"] < leg["premium_at_target"] and one["spread"] is None
+    assert st.trade_levels(plan("long_put", [("BUY", "PE", 22600)]), st.price(plan("long_put", [("BUY", "PE", 22600)]), chain),
+                           chain, 2) is None                                          # no levels from the AI
+
+
+class _Client:
+    def __init__(self, data):
+        self.data = data
+
+    def get_json(self, path, params, ttl=0):
+        return type("R", (), {"data": self.data})()
+
+
+@pytest.mark.unit
+def test_contract_ticks_high_low_and_identifier_check():
+    c = oc.contract("OPTIDXNIFTY27-10-2099CE22700.00", client=_Client(
+        {"closePrice": 155.2, "grapthData": [[1000, 210], [2000, 241.05], [3000, 54.9], [4000, 88.8]]}))
+    assert (c["high"], c["low"], c["last"], c["prev_close"]) == (241.05, 54.9, 88.8, 155.2) and c["points"][0] == (1, 210.0)
+    with pytest.raises(oc.ChainError):
+        oc.contract("../etc", client=_Client({}))
