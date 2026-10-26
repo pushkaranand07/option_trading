@@ -346,3 +346,9 @@ table.depth { width: 100%; border-collapse: collapse; font-variant-numeric: tabu
 .rec-actions { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
 .rec-hist td { vertical-align: top; }
 @media (max-width: 720px) { .rec-stats { grid-template-columns: 1fr 1fr; } }
+
+/* Pulse evidence score */
+.badge.score-strong { background: var(--up-soft); color: var(--up); } .badge.score-moderate { background: var(--warn-soft); color: var(--warn); }
+.badge.score-weak { background: var(--down-soft); color: var(--down); }
+.evidence summary { cursor: pointer; font-size: 13px; color: var(--brand); }
+.evidence ul { margin: 6px 0; }
