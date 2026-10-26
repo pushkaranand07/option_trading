@@ -31,6 +31,8 @@ const fmtInt = (x) => {
   if (a >= 1e3) return s + (a / 1e3).toFixed(1) + "K";
   return String(x);
 };
+// Where prices came from; "saved (…)" means the live source was unreachable and the last saved bars are shown.
+const srcLabel = (x) => (x === "dhan" ? "Dhan live data" : x === "yahoo" ? "Yahoo data (can be delayed)" : `No connection to the data source — showing ${x || "saved data"}`);
 const cls = (x) => (x > 0 ? "up" : x < 0 ? "down" : "muted");
 const sign = (x) => (x > 0 ? "+" : "");
 const pct = (x) => (x == null ? "—" : `${sign(x)}${x.toFixed(2)}%`);
@@ -218,7 +220,7 @@ function renderHero(p) {
     if (live) below += `<div class="ghost">For learning only, the setup's levels were: entry ${fmt(s.entry)}, stop loss ${fmt(s.stop_loss)}, target ${fmt(s.target)}.</div>`;
   }
 
-  const src = p.source === "dhan" ? "Dhan live data" : "Yahoo data (can be delayed)";
+  const src = srcLabel(p.source);
   $("#hero").innerHTML = `<div class="hero-top">
       <div><div class="ask">What should I do with ${esc(name)}?</div>
         <div class="action ${actionCls}">${esc(v.action)}</div>
@@ -836,7 +838,7 @@ async function loadPlanCharts() {
       c.e9.setData(r.bars.map((b, i) => ({ time: t(b), value: e9[i] })));
       c.e21.setData(r.bars.map((b, i) => ({ time: t(b), value: e21[i] })));
       if (!c.fitted) { const n = r.bars.length; c.ch.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 3 }); c.fitted = true; }
-      const note = $(`.plan-card[data-sym="${sym}"] .chart-note`); if (note) note.textContent = `5-minute candles · ${r.source === "dhan" ? "Dhan live" : "Yahoo (can be delayed)"}`;
+      const note = $(`.plan-card[data-sym="${sym}"] .chart-note`); if (note) note.textContent = `5-minute candles · ${srcLabel(r.source)}`;
       drawPlanChartLines(sym);
     } catch (e) { console.warn(e); }
   }

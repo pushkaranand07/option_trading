@@ -299,12 +299,53 @@ def _candles(inst: dict, tf: str) -> tuple[pd.DataFrame, str]:
                 return df.astype(float), "dhan"
         except DataError:
             pass
-    df = yf.Ticker(inst["yahoo"]).history(period=y_period, interval=y_interval, auto_adjust=False)
+    try:
+        df = yf.Ticker(inst["yahoo"]).history(period=y_period, interval=y_interval, auto_adjust=False)
+    except Exception:                                  # no internet / DNS, Yahoo throttling
+        df = pd.DataFrame()
     if df.empty:
-        raise DataError(f"No price data for {inst['symbol']}")
+        saved = _last_good(inst["symbol"], tf)
+        if saved is None:
+            raise DataError(f"No price data for {inst['symbol']} (Yahoo unreachable and nothing saved yet)")
+        return saved
     df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].dropna(subset=["close"])
     df.index = df.index.tz_convert(IST) if df.index.tz else df.index.tz_localize(IST)
-    return df.astype(float), "yahoo"
+    df = df.astype(float)
+    _remember(inst["symbol"], tf, df)
+    return df, "yahoo"
+
+
+# Last good candles per symbol and timeframe, in memory and on disk, so a dropped connection or a Yahoo hiccup
+# shows the latest saved prices (labelled as such) instead of an error.
+LAST_GOOD_DIR = CACHE_DIR / "webapp_candles"
+_good: dict[tuple[str, str], pd.DataFrame] = {}
+_good_saved: dict[tuple[str, str], float] = {}
+
+
+def _remember(symbol: str, tf: str, df: pd.DataFrame) -> None:
+    key = (symbol, tf)
+    _good[key] = df
+    if _time.monotonic() - _good_saved.get(key, -1e9) < 60:          # disk at most once a minute per chart
+        return
+    _good_saved[key] = _time.monotonic()
+    try:
+        LAST_GOOD_DIR.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(LAST_GOOD_DIR / f"{symbol}_{tf}.pkl")
+    except OSError:
+        pass
+
+
+def _last_good(symbol: str, tf: str) -> tuple[pd.DataFrame, str] | None:
+    df = _good.get((symbol, tf))
+    if df is None:
+        f = LAST_GOOD_DIR / f"{symbol}_{tf}.pkl"
+        try:
+            df = pd.read_pickle(f) if f.exists() else None
+        except Exception:
+            df = None
+    if df is None or df.empty:
+        return None
+    return df, f"saved (last bar {df.index[-1]:%d-%b %H:%M})"
 
 
 # ---------- option chain (Dhan only) ----------

@@ -19,7 +19,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-25 10:32_
+_Last updated: 2026-10-26 09:21_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -298,6 +298,7 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 4. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
+- 2026-10-26 — Web app: when Yahoo or the internet is unreachable, charts and the live call use the last saved prices (labelled) instead of failing with 502.
 - 2026-10-25 — AI trade shown like a Dhan order: per-leg target / stop-loss premiums and P&L per lot, a ticket per leg (premium chart, depth, how to place it), marked on the chain and the chart.
 - 2026-10-25 — Plan tab: the risk-limit card (capital, max loss %, money for this trade) removed at the user's request; today's call and the AI strategist show per-lot figures.
 - 2026-10-24 — Plan tab: AI options strategist (structure checked, priced and sized by the code; capital never sent to the LLM) and an NSE option chain like the trading apps'.
