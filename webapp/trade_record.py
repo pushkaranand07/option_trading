@@ -60,6 +60,7 @@ def take(result: dict, source: str = "you") -> dict:
         m = lv.get((x["strike"], x["type"], x["action"]), {})
         legs.append({"action": x["action"], "type": x["type"], "strike": x["strike"], "id": x.get("id"),
                      "entry": x["price"], "target": m.get("premium_at_target"), "stop": m.get("premium_at_stop")})
+    rng = result.get("levels") if (result.get("levels") or {}).get("kind") == "range" else None
     trade = {
         "id": uuid.uuid4().hex[:10], "taken_at": _now(), "status": "open", "lots": 1,
         "symbol": result["symbol"], "expiry": result["expiry"], "lot": priced["lot"],
@@ -71,6 +72,8 @@ def take(result: dict, source: str = "you") -> dict:
         "charges": result.get("charges_per_lot"), "legs": legs, "alerts": [], "source": source,
         "score": (result.get("evidence") or {}).get("score"), "score_label": (result.get("evidence") or {}).get("label"),
         "ai_confidence": plan.get("confidence"), "last_spot": result.get("spot"),
+        # a range trade: stop if the index leaves [low, high], target once the position buys back for buy_back_at
+        "index_range": [rng["low"], rng["high"]] if rng else None, "buy_back_at": rng["buy_back_at"] if rng else None,
     }
     with _lock:
         trades = _load()
@@ -103,8 +106,18 @@ def _pnl(trade: dict, exits: list[float]) -> float:
                for leg, x in zip(trade["legs"], exits, strict=True)) * trade["lot"] * trade["lots"]
 
 
-def _flags(trade: dict, spot: float | None) -> list[str]:
-    """Which of target / stop the index has reached now (bearish: target below, stop above)."""
+def _flags(trade: dict, spot: float | None, exits: list | None = None) -> list[str]:
+    """Which of target / stop the trade has reached now (bearish: target below, stop above). A range trade stops when
+    the index leaves its range, and reaches its target when the position can be bought back for ``buy_back_at``."""
+    if trade.get("index_range"):
+        out, (low, high) = [], trade["index_range"]
+        if exits and None not in exits and trade.get("buy_back_at") is not None:
+            cost = sum((x if leg["action"] == "SELL" else -x) for leg, x in zip(trade["legs"], exits, strict=True))
+            if cost <= trade["buy_back_at"]:
+                out.append("target")
+        if spot is not None and (spot <= low or spot >= high):
+            out.append("stop")
+        return out
     out, tgt, stop = [], trade.get("index_target"), trade.get("index_stop")
     if spot is None or tgt is None or stop is None:
         return out
@@ -140,7 +153,7 @@ def mark(trade: dict, chain_fn=None) -> dict:
     view["spot"], view["as_of"] = ch["spot"], ch.get("timestamp")
     if None not in exits:
         view["pnl"] = _pnl(trade, exits)
-    view["flags"] = _flags(trade, ch["spot"])
+    view["flags"] = _flags(trade, ch["spot"], exits)
     return view
 
 

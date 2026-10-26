@@ -197,3 +197,25 @@ def test_rank_builds_tradable_defined_risk_trades_best_first():
             assert "buy back the SELL leg first" in exit_text
     kinds = {c["plan"]["strategy"] for c in cands}                    # the 5-strike test chain fits these
     assert {"long_put", "bear_put_spread", "long_call", "bull_call_spread"} <= kinds
+
+
+@pytest.mark.unit
+def test_an_iron_butterfly_gets_range_exits_not_a_one_sided_target(monkeypatch):
+    monkeypatch.setattr(st, "build_context", lambda symbol, expiry=None, analysis=None: ({"instrument": symbol, "spot": 22600}, CHAIN))
+
+    def fake_llm(ctx, feedback=None):     # the AI's single "target" at the centre of the range is meaningless here
+        return plan("iron_condor", [("BUY", "PE", 22400), ("SELL", "PE", 22600), ("SELL", "CE", 22600), ("BUY", "CE", 22800)],
+                    bias="neutral", underlying_entry_low=22550, underlying_entry_high=22650, underlying_target=22600)
+
+    res = st.recommend("NIFTY", llm=fake_llm)
+    lv, pr = res["levels"], res["priced"]
+    credit = 94 + 99 - 31 - 26                                    # sold at the bid, bought at the ask
+    assert pr["net_per_unit"] == credit and res["plan"]["underlying_target"] is None and res["plan"]["underlying_stop"] is None
+    assert lv["kind"] == "range" and (lv["low"], lv["high"]) == (22600 - credit, 22600 + credit)
+    assert lv["buy_back_at"] == credit / 2 and lv["take_profit_per_lot"] == credit / 2 * 65
+    assert all(x["premium_at_low"] is not None and x["premium_at_high"] is not None for x in lv["legs"])
+    assert lv["pnl_low_per_lot"] < 0 and lv["pnl_high_per_lot"] < 0          # a stop is a loss, on either side
+    butterfly = st.StrategyPlan(**res["plan"])
+    ev = st.evidence(butterfly, {"spot": 22600, "expected_move": {"day_pct": 0.005}, "days_to_expiry": 1}, pr)
+    room = next(c for c in ev["checks"] if c["name"] == "Room inside the range")
+    assert room["verdict"] == "agree" and "136 points of room" in room["why"]        # 136 > a typical 113-point move

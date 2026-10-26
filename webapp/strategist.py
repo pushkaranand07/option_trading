@@ -321,6 +321,41 @@ def trade_levels(plan: StrategyPlan, priced: dict, chain: dict, days_to_expiry: 
                                                    "debit": priced["debit"]}}
 
 
+RANGE = ("iron_condor",)    # earns while the index stays between two levels (an iron butterfly is a condor at one strike)
+TAKE_PROFIT_SHARE = 0.5     # a range trade is booked once half its credit is kept
+
+
+def range_levels(priced: dict, chain: dict, days_to_expiry: float | None) -> dict | None:
+    """Exits of a range trade, which makes money while the index stays between its break-evens: a loss exit at either
+    break-even, and a profit exit when the whole position can be bought back for half the credit received. Each leg's
+    premium at the two exits is estimated like ``trade_levels`` (Black-Scholes move from its live price, today)."""
+    be = sorted(priced.get("breakevens") or [])
+    if len(be) != 2 or priced["debit"]:
+        return None
+    low, high = round(be[0]), round(be[1])
+    spot, lot, credit = chain["spot"], priced["lot"], priced["net_per_unit"]
+    years = max(days_to_expiry or 1, 0.5) / 365
+    atm_iv = (chain["summary"].get("atm_iv") or 15) / 100
+    legs, pnl = [], {"low": 0.0, "high": 0.0}
+    for leg in priced["legs"]:
+        iv = (leg["iv"] or 0) / 100 or atm_iv
+        now = _bs(spot, leg["strike"], years, iv, leg["type"])
+        at = {k: _tick(leg["price"] + _bs(lvl, leg["strike"], years, iv, leg["type"]) - now) for k, lvl in (("low", low), ("high", high))}
+        sgn = 1 if leg["action"] == "BUY" else -1
+        row = {**leg, "premium_at_target": None, "premium_at_stop": None,
+               "premium_at_low": at["low"], "premium_at_high": at["high"]}
+        for k in pnl:
+            row[f"pnl_{k}_per_lot"] = sgn * (at[k] - leg["price"]) * lot
+            pnl[k] += row[f"pnl_{k}_per_lot"]
+        legs.append(row)
+    close = {k: sum((-1 if x["action"] == "BUY" else 1) * x[f"premium_at_{k}"] for x in legs) for k in pnl}
+    buy_back = _tick(credit * (1 - TAKE_PROFIT_SHARE))
+    return {"kind": "range", "low": low, "high": high, "credit": credit, "buy_back_at": buy_back,
+            "take_profit_per_lot": (credit - buy_back) * lot, "pnl_low_per_lot": pnl["low"], "pnl_high_per_lot": pnl["high"],
+            "legs": legs, "assumed_days": years * 365,
+            "spread": {"now": credit, "at_low": close["low"], "at_high": close["high"], "debit": False}}
+
+
 def warnings(plan: StrategyPlan, priced: dict | None) -> list[str]:
     """Things the trader should see before acting; the proposal stands but is flagged."""
     out = []
@@ -373,7 +408,14 @@ def evidence(plan: StrategyPlan, ctx: dict, priced: dict | None) -> dict | None:
     em = ctx.get("expected_move") or {}
     day = em.get("day_pct")
     days = max(ctx.get("days_to_expiry") or 1, 1)
-    if day and spot and plan.underlying_target is not None:
+    be = sorted((priced or {}).get("breakevens") or [])
+    if plan.strategy in RANGE and day and spot and len(be) == 2:
+        reach = spot * day * math.sqrt(days)
+        room = min(spot - be[0], be[1] - spot)
+        add("Room inside the range", 20, "agree" if room >= reach else "against" if room < 0.5 * reach else "neutral",
+            f"profit range {be[0]:,.0f}–{be[1]:,.0f}: {max(room, 0):,.0f} points of room on the nearer side; "
+            f"a typical move to expiry is about {reach:,.0f}")
+    elif day and spot and plan.underlying_target is not None:
         reach = spot * day * math.sqrt(days)
         dist = abs(plan.underlying_target - spot)
         add("Room to the target", 20, "agree" if dist <= reach else "against" if dist > 2 * reach else "neutral",
@@ -409,6 +451,8 @@ def recommend(symbol: str, expiry: str | None = None, llm=None, analysis: dict |
         retried = problems
         plan = ask(ctx, problems)
         problems = check_structure(plan, ch)
+    if plan.strategy in RANGE and not problems:         # its exits are the range's two sides, set from the strikes below
+        plan.underlying_target = plan.underlying_stop = None
     out = {"symbol": symbol, "expiry": ch["expiry"], "spot": ch["spot"], "lot": ch["lot"],
            "seconds": (datetime.now() - started).seconds, "plan": plan.model_dump(),
            "strategy_text": STRATEGIES[plan.strategy][0], "chain_summary": ch["summary"], "retried": retried,
@@ -420,7 +464,8 @@ def recommend(symbol: str, expiry: str | None = None, llm=None, analysis: dict |
     if plan.strategy != "no_trade":
         priced = price(plan, ch)
         out.update(priced=priced, charges_per_lot=charges(priced, 1),
-                   levels=trade_levels(plan, priced, ch, ctx.get("days_to_expiry")))
+                   levels=(range_levels(priced, ch, ctx.get("days_to_expiry")) if plan.strategy in RANGE
+                           else trade_levels(plan, priced, ch, ctx.get("days_to_expiry"))))
     out["warnings"] = warnings(plan, out.get("priced"))
     out["evidence"] = evidence(plan, ctx, out.get("priced"))
     return out
