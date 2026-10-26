@@ -2,7 +2,7 @@
   --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f3f4f6; --border: #e5e7eb; --text: #111827; --muted: #6b7280;
   --brand: #0e9f6e; --up: #0e9f6e; --down: #dc3545; --warn: #b26a00;
   --up-soft: rgba(14,159,110,.09); --down-soft: rgba(220,53,69,.08); --warn-soft: rgba(178,106,0,.09);
-  --ema9: #2f6fed; --ema21: #f08c00; --grid: #f0f1f3; --itm: #fffbea; --atm: #e8f1ff;
+  --ema9: #2f6fed; --ema21: #f08c00; --day: #7c5cd6; --draw: #0b7fab; --grid: #f0f1f3; --itm: #fffbea; --atm: #e8f1ff;
   --shadow: 0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
 }
 @media (prefers-color-scheme: dark) {
@@ -10,14 +10,14 @@
     --bg: #0c1015; --panel: #141920; --panel-2: #1b212a; --border: #262d37; --text: #e8ebf0; --muted: #8c95a3;
     --brand: #2bc48a; --up: #2bc48a; --down: #ff6370; --warn: #f0a640;
     --up-soft: rgba(43,196,138,.12); --down-soft: rgba(255,99,112,.11); --warn-soft: rgba(240,166,64,.11);
-    --grid: #1a2028; --itm: #1e1c12; --atm: #13233d; --shadow: none;
+    --grid: #1a2028; --itm: #1e1c12; --atm: #13233d; --shadow: none; --day: #a78bfa; --draw: #38bdf8;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0c1015; --panel: #141920; --panel-2: #1b212a; --border: #262d37; --text: #e8ebf0; --muted: #8c95a3;
   --brand: #2bc48a; --up: #2bc48a; --down: #ff6370; --warn: #f0a640;
   --up-soft: rgba(43,196,138,.12); --down-soft: rgba(255,99,112,.11); --warn-soft: rgba(240,166,64,.11);
-  --grid: #1a2028; --itm: #1e1c12; --atm: #13233d; --shadow: none;
+  --grid: #1a2028; --itm: #1e1c12; --atm: #13233d; --shadow: none; --day: #a78bfa; --draw: #38bdf8;
 }
 
 * { box-sizing: border-box; }
@@ -258,8 +258,23 @@ table.oc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .ai-more summary { cursor: pointer; font-size: 13px; color: var(--brand); margin-bottom: 8px; }
 .small-btn { padding: 4px 10px; font-size: 12.5px; margin-left: 6px; }
 @media (max-width: 720px) { .facts th { width: auto; white-space: normal; } }
-.plan-chart { height: 300px; margin-bottom: 6px; }
-.plan-card .legend { margin-bottom: 4px; }
+.plan-chart { height: 460px; }
+.pc-wrap { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.pc-wrap.drawing .plan-chart { cursor: crosshair; }
+.pc-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 2px 0 8px; }
+.pc-group { display: flex; flex-wrap: wrap; gap: 4px; }
+.pc-chip, .pc-btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 7px;
+  padding: 3px 9px; font: 600 12px/1.4 Inter, system-ui, sans-serif; cursor: pointer; }
+.pc-chip i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.pc-chip:not(.on) { color: var(--muted); background: var(--panel-2); }
+.pc-chip:not(.on) i { opacity: .3; }
+.pc-btn.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.pc-chip:hover, .pc-btn:hover { border-color: var(--muted); }
+.pc-info { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; min-height: 20px; margin-bottom: 4px;
+  color: var(--muted); font-variant-numeric: tabular-nums; }
+.pc-info b { color: var(--text); font-weight: 600; }
+.pc-hint { color: var(--draw); font-weight: 600; }
+@media (max-width: 720px) { .plan-chart { height: 360px; } .pc-bar { justify-content: flex-start; } }
 .chart-note { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
 
 /* plan tab: option chain and AI strategist */
