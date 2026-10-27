@@ -38,6 +38,17 @@ CREATE TABLE IF NOT EXISTS trials (
 )
 """
 
+# Things that are not trials but must sit beside them: a split frozen, a holdout unlocked. Kept in their own
+# table so they never change trial_count (the deflated Sharpe's N).
+_EVENTS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS events (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_at  TEXT NOT NULL,
+    kind    TEXT NOT NULL,
+    detail  TEXT NOT NULL
+)
+"""
+
 
 @dataclass
 class Trial:
@@ -67,6 +78,7 @@ def default_path() -> Path:
 def _connect(path: Path | None) -> sqlite3.Connection:
     conn = sqlite3.connect(path or default_path())
     conn.execute(_SCHEMA)
+    conn.execute(_EVENTS_SCHEMA)
     return conn
 
 
@@ -103,3 +115,20 @@ def trial_count(idea: str | None = None, path: Path | None = None) -> int:
     Each run counts its own ``n_trials`` (grid size), or 1 if it didn't say.
     """
     return sum(t.n_trials or 1 for t in load(idea, path))
+
+
+def log_event(kind: str, detail: dict, path: Path | None = None) -> int:
+    run_at = datetime.now(UTC).isoformat(timespec="seconds")
+    with closing(_connect(path)) as conn, conn:
+        cur = conn.execute("INSERT INTO events (run_at, kind, detail) VALUES (?, ?, ?)",
+                           (run_at, kind, json.dumps(detail, sort_keys=True, default=str)))
+        return int(cur.lastrowid)
+
+
+def load_events(kind: str | None = None, path: Path | None = None) -> list[dict]:
+    query, args = "SELECT id, run_at, kind, detail FROM events", ()
+    if kind is not None:
+        query, args = query + " WHERE kind = ?", (kind,)
+    with closing(_connect(path)) as conn:
+        rows = conn.execute(query + " ORDER BY id", args).fetchall()
+    return [{"id": i, "run_at": r, "kind": k, "detail": json.loads(d)} for i, r, k, d in rows]

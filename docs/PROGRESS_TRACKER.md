@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `████████████████████████░` 94% (94/100 tasks)
+**Overall:** `██████████████████████░░░` 89% (96/108 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `█████████████████████████` 100% (9,200/9,200 files)
+**NSE history download:** `█████████████████████████` 100% (9,204/9,204 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-26 12:12_
+_Last updated: 2026-10-27 12:58_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -237,6 +237,26 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
   (typical day 0.5%); when BANKNIFTY weeklies ended (Nov-2024) NIFTY options value +33–43%, BANKNIFTY −52–70%
 - [x] Rebuilt with the recovered weekend sessions (Sunday 1-Feb-2026 Budget measured on its own session: −1.96%)
 - [x] Rebuilt every weekday by the 19:30 job
+
+## Data foundation for a prediction model (requested 2026-10-27)
+<!-- progress:phase -->
+`██████░░░░░░░░░░░░░░░░░░░` 25% (2/8)
+<!-- /progress:phase -->
+One step per pull request; each stops for your approval. Details: [PA-31](PA_31-research-splits-and-locked-loader.md).
+- [x] Missing weekday files checked against NSE's holiday lists: **FAIL**, 10 NSE archive holes (fo 2021-03-30;
+  indices 9 days in 2015–16), documented as unrecoverable
+- [x] Step 1: frozen splits (2025+ locked, labelled contaminated; forward holdout from 2026-10-27), locked research
+  loader, point-in-time audit (**FAIL in `prices`**: 29 Yahoo bars on the 2026-01-15 holiday), enforcement tests
+- [ ] Step 2: F&O 2010–2014, all underlyings (count and size reported first; calendar from NSE's yearly circulars)
+- [ ] Step 3: participant, index / VIX history, macro (with release times), events table
+- [ ] Step 4: Dhan intraday spot and futures (**needs your renewed Dhan token and Data API status**)
+- [ ] Step 5: forward option-chain capture, several times a day (forward-only)
+- [ ] Step 6: cost table and measured spread table (**needs your contract note**)
+- [ ] Step 7: data catalog and quality report with every PASS / FAIL
+
+**Backlog (optional, after steps 1–3):** mto and participant files 2015-07 to 2017 (never downloaded; the backward
+holdout does not use them). **Waiting for your decision:** fix the `prices` holiday bars (live pipeline); rebuild
+2021-03-30 partially from NSE's market activity report.
 
 ---
 

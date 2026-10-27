@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "frozen_on": "2026-10-27",
+  "basis": "A row belongs to the period that contains its known_from (the first session it was public), not its trade_date.",
+  "periods": {
+    "development": {
+      "start": null,
+      "end": "2022-12-31",
+      "access": "open"
+    },
+    "validation": {
+      "start": "2023-01-01",
+      "end": "2024-12-31",
+      "access": "open"
+    },
+    "final_holdout": {
+      "start": "2025-01-01",
+      "end": "2026-10-26",
+      "access": "locked",
+      "label": "contaminated for ideas tested before 2026-10-27",
+      "unlock_rule": "explicit Unlock('final_holdout', reason); the unlock is written to the trial log before any row is returned"
+    },
+    "forward_holdout": {
+      "start": "2026-10-27",
+      "end": null,
+      "access": "locked_preregistered",
+      "label": "clean: no experiment had read it when this file was frozen",
+      "unlock_rule": "explicit Unlock('forward_holdout', reason, preregistration) where preregistration is a spec file committed to git and unmodified; only the final pre-registered test may unlock it"
+    }
+  },
+  "regime_checks": {
+    "backward_2015_2021": {
+      "start": "2015-08-25",
+      "end": "2021-04-04",
+      "note": "Lies inside development. Already used once to judge the frozen VRP condor (trial vrp_condor_pooled_holdout); a check of regime robustness, not an unseen test."
+    }
+  },
+  "seen_2025_plus": {
+    "source": "trial_log.sqlite (data_start/data_end per idea) and the output files' own date ranges, measured 2026-10-27",
+    "experiments": [
+      {"idea": "random", "data": "2021-02-23 to 2026-10-01"},
+      {"idea": "ma_trend", "data": "2021-02-23 to 2026-10-01"},
+      {"idea": "lgbm_h10_k1.0", "data": "2021-03-18 to 2026-04-24"},
+      {"idea": "lgbm_h10_k1.0_store", "data": "2021-03-16 to 2026-04-22"},
+      {"idea": "relative_strength", "data": "2021-02-12 to 2026-09-22"},
+      {"idea": "relative_strength_keep10", "data": "2021-02-12 to 2026-09-22"},
+      {"idea": "move_size_h10_k1", "data": "2021-03-31 to 2026-05-07"},
+      {"idea": "vrp_condor_NIFTY", "data": "2021-04-05 to 2026-05-22"},
+      {"idea": "vrp_condor_BANKNIFTY", "data": "2021-04-05 to 2026-05-13"},
+      {"idea": "vrp_condor_NIFTY_books4", "data": "2021-04-05 to 2026-05-25"},
+      {"idea": "vrp_condor_BANKNIFTY_books4", "data": "2021-04-05 to 2026-05-21"},
+      {"idea": "pooled: vrp_condor_NIFTY_books4 + vrp_condor_BANKNIFTY_books4", "data": "2021-04-05 to 2026-05-25"},
+      {"idea": "quiet_stock_condor_garch", "data": "2021-01-22 to 2026-10-23"},
+      {"idea": "results_iron_fly", "data": "2018-01-10 to 2026-10-21"},
+      {"idea": "results_iron_fly_overpriced", "data": "2018-10-30 to 2026-10-19"},
+      {"idea": "chronos_bolt_vol_chronos / _cal", "data": "2021-01-20 to 2026-10-23", "note": "trial log has no dates; range from store/chronos/*.parquet"},
+      {"idea": "GARCH / GJR / EGARCH volatility model choice", "data": "2018-01-30 to 2026-10-26", "note": "not a trial-log idea; range from store/vol_forecasts"},
+      {"idea": "regime HMM design (3 states, p > 0.7 for 2 days)", "data": "2021-04-01 to 2026-10-26", "note": "not a trial-log idea; range from store/regime"},
+      {"idea": "Market Map", "data": "2020-09-01 to 2026-10-26", "note": "descriptive research page, not a trial; scripts/market_map.py"}
+    ],
+    "not_seen": [
+      {"idea": "vrp_condor_pooled_holdout", "data": "2015-08-25 to 2021-04-04"}
+    ]
+  },
+  "known_data_issues": [
+    {
+      "trade_date": "2021-03-30",
+      "issue": "NSE archive hole, unrecoverable (F&O bhavcopy 404 in both formats). The store defines sessions from F&O files, so the day is absent from every store dataset, including participant, delivery and index_close whose raw files exist.",
+      "effect": "Rows for 2021-03-26 carry known_from 2021-03-31 instead of 2021-03-30 (one session late: conservative, no look-ahead). prices and vol_forecasts do have 2021-03-30 (Yahoo; NIFTY close 14845.10 equals NSE's own index file). No VRP condor or results-day fly trade was open across the day."
+    },
+    {
+      "trade_date": "2015-02-02, 2015-03-12, 2015-03-13, 2015-05-19, 2015-07-08, 2015-09-04, 2015-10-16, 2015-12-01, 2016-06-20",
+      "issue": "NSE archive hole, unrecoverable (index-close file 404). Raw backward-holdout files only; the store's index_close starts 2018."
+    },
+    {
+      "trade_date": "2026-01-15",
+      "issue": "Exchange holiday (Maharashtra municipal election). prices holds 29 Yahoo bars dated that day (copies of the previous close, e.g. RELIANCE 1458.80 both days) and stamps the 32 rows of 2026-01-14 known_from 2026-01-15 instead of 2026-01-16. Found by scripts/research_check_pit.py; inside final_holdout; not fixed (prices belongs to the live pipeline)."
+    }
+  ]
+}
