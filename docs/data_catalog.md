@@ -36,6 +36,12 @@ in locked periods are not inspected.
 |---|---|---|---|---|---|---|
 | 2026-10-27 | prices | Bars dated on days with no NSE session removed (not replaced); `known_from` re-stamped from the same sessions | 29 removed (all 2026-01-15); 32 `known_from` corrected (all 2026-01-14) | final_holdout | 2 | [PA-32](PA_32-prices-holiday-bars.md) |
 
+### Stale derived outputs (known, not rebuilt)
+
+| Output | Stale from | Why it is not rebuilt |
+|---|---|---|
+| `chronos/<symbol>.parquet` for the 29 stocks that had a 2026-01-15 bar (5,537 rows) | 2026-01-15 | Built from the uncorrected prices. Chronos is rejected (QLIKE 0.382 vs GARCH 0.336) and is not in the nightly job, so its outputs are kept as they were and must not be used |
+
 ## 3. Forward-only fields
 
 Collected from the day capture starts; no history exists or will be bought (user, 2026-10-27).

@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `██████████████████████░░░` 89% (96/108 tasks)
+**Overall:** `██████████████████████░░░` 89% (97/109 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,204/9,204 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-27 13:09_
+_Last updated: 2026-10-27 13:28_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -240,14 +240,15 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Data foundation for a prediction model (requested 2026-10-27)
 <!-- progress:phase -->
-`██████░░░░░░░░░░░░░░░░░░░` 25% (2/8)
+`████████░░░░░░░░░░░░░░░░░` 33% (3/9)
 <!-- /progress:phase -->
 One step per pull request; each stops for your approval. Details: [PA-31](PA_31-research-splits-and-locked-loader.md).
 - [x] Missing weekday files checked against NSE's holiday lists: **FAIL**, 10 NSE archive holes (fo 2021-03-30;
   indices 9 days in 2015–16), documented as unrecoverable
 - [x] Step 1: frozen splits (2025+ locked, labelled contaminated; forward holdout from 2026-10-27), locked research
   loader, point-in-time audit (**FAIL in `prices`**: 29 Yahoo bars on the 2026-01-15 holiday), enforcement tests
-- [ ] Step 2: F&O 2010–2014, all underlyings (count and size reported first; calendar from NSE's yearly circulars)
+- [x] Step 2a: count of every F&O underlying since 2010, rows and disk per filter option ([PA-33](PA_33-fo-universe-count.md))
+- [ ] Step 2b: ingest with your chosen filter (calendar 2010–2014 from NSE's yearly circulars)
 - [ ] Step 3: participant, index / VIX history, macro (with release times), events table
 - [ ] Step 4: Dhan intraday spot and futures (**needs your renewed Dhan token and Data API status**)
 - [ ] Step 5: forward option-chain capture, several times a day (forward-only)
