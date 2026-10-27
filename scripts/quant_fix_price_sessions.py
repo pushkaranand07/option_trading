@@ -11,8 +11,10 @@ rows is written to the trial log as a data correction; a run that changes nothin
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -39,8 +41,8 @@ def main() -> int:
     new = add_known_from(kept.drop(columns="known_from"), next_sessions(sessions))
     changed = new[pd.to_datetime(new["known_from"]) != pd.to_datetime(kept["known_from"])]
 
-    by_day = dropped.groupby("trade_date").size().to_dict()
-    restamped = changed.groupby("trade_date").size().to_dict()
+    by_day = {str(d): int(n) for d, n in dropped.groupby("trade_date").size().items()}
+    restamped = {str(d): int(n) for d, n in changed.groupby("trade_date").size().items()}
     print(f"prices: {len(old):,} rows -> {len(new):,}")
     print(f"  bars removed (no NSE session): {len(dropped)} {by_day}")
     print(f"  known_from corrected: {len(changed)} rows, by trade_date {restamped}")
@@ -51,11 +53,10 @@ def main() -> int:
         print("Dry run: nothing written.")
         return 0
 
-    write_parquet(new, path)
-    days = sorted(set(by_day) | set(restamped))
+    days = sorted({date.fromisoformat(d) for d in set(by_day) | set(restamped)})
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
                             cwd=Path(__file__).resolve().parents[1]).stdout.strip()
-    event = trial_log.log_event("data_correction", {
+    detail = {
         "dataset": "prices",
         "rule": "bars only on NSE sessions; known_from = next session (prices.price_sessions)",
         "rows_before": len(old), "rows_after": len(new),
@@ -63,7 +64,10 @@ def main() -> int:
         "known_from_corrected": len(changed), "known_from_corrected_by_trade_date": restamped,
         "periods": sorted({splits.period_of(d).name for d in days}),
         "values_inspected": False, "code": commit,
-    })
+    }
+    json.dumps(detail)          # a log entry that cannot be written must stop the run before the file changes
+    write_parquet(new, path)
+    event = trial_log.log_event("data_correction", detail)
     print(f"Written {path}; trial-log data_correction event {event}.")
     return 0
 
