@@ -19,7 +19,7 @@
 **NSE history download:** `█████████████████████████` 100% (9,204/9,204 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-27 12:58_
+_Last updated: 2026-10-27 13:09_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -255,8 +255,8 @@ One step per pull request; each stops for your approval. Details: [PA-31](PA_31-
 - [ ] Step 7: data catalog and quality report with every PASS / FAIL
 
 **Backlog (optional, after steps 1–3):** mto and participant files 2015-07 to 2017 (never downloaded; the backward
-holdout does not use them). **Waiting for your decision:** fix the `prices` holiday bars (live pipeline); rebuild
-2021-03-30 partially from NSE's market activity report.
+holdout does not use them). **Decided 2026-10-27:** `prices` holiday bars fixed ([PA-32](PA_32-prices-holiday-bars.md));
+2021-03-30 stays a hole (no partial rebuild; recorded in the [data catalog](data_catalog.md)).
 
 ---
 

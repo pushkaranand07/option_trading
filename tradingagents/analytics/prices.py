@@ -170,10 +170,33 @@ def prices_path(root: Path | None = None) -> Path:
     return (root or store_root()) / "prices" / "prices.parquet"
 
 
-def save_prices(prices: pd.DataFrame, trading_days: Iterable[date], root: Path | None = None) -> Path:
-    """Stamp ``known_from`` from NSE's trading calendar and write the Parquet file."""
-    days = set(trading_days) | set(prices["trade_date"])
-    df = add_known_from(prices, next_sessions(days))
+def price_sessions(trading_days: Iterable[date], bar_days: Iterable[date], calendar=None) -> set[date]:
+    """The NSE sessions a price bar may carry: the days NSE published F&O files, the sessions whose file is
+    an archive hole, and after the last published day the days NSE's calendar counts as sessions (today's
+    bar before tonight's files). A Yahoo bar on any other day (e.g. the 2026-01-15 holiday) is not a session.
+    """
+    from tradingagents.dataflows.vendors.nse.calendar import ARCHIVE_HOLES, NSECalendar
+
+    days = set(trading_days) | {d for d, kinds in ARCHIVE_HOLES.items() if "fo" in kinds}
+    later = {d for d in bar_days if d > max(days)}
+    if later:
+        calendar = calendar or NSECalendar.from_nse()
+        days |= {d for d in later if calendar.is_trading_day(d)}
+    return days
+
+
+def drop_non_sessions(prices: pd.DataFrame, sessions: set[date]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(bars on sessions, bars on other days). The dropped bars are removed, never replaced."""
+    on = prices["trade_date"].isin(sessions)
+    return prices[on].reset_index(drop=True), prices[~on].reset_index(drop=True)
+
+
+def save_prices(prices: pd.DataFrame, trading_days: Iterable[date], root: Path | None = None,
+                calendar=None) -> Path:
+    """Keep the bars on NSE sessions, stamp ``known_from`` as the next session, write the Parquet file."""
+    sessions = price_sessions(trading_days, prices["trade_date"], calendar)
+    kept, _ = drop_non_sessions(prices, sessions)
+    df = add_known_from(kept, next_sessions(sessions))
     return write_parquet(df, prices_path(root))
 
 

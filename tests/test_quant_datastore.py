@@ -154,6 +154,61 @@ def test_prices_are_normalised_stamped_and_quality_checked(tmp_path):
     assert list(loaded["known_from"]) == [date(2026, 10, 16), date(2026, 10, 20)]
 
 
+def _bars(days):
+    return pd.DataFrame({"trade_date": days, "symbol": "RELIANCE", "open": 1.0, "high": 1.0, "low": 1.0,
+                         "close": 1.0, "adj_close": 1.0, "volume": 1.0, "dividend": 0.0, "split": 0.0,
+                         "source": "yahoo"})
+
+
+def _assert_on_sessions(df, sessions):
+    """The regression rule: no bar dated on a non-session, no known_from on a non-session."""
+    assert set(df["trade_date"]) <= sessions
+    last = max(sessions)
+    assert all(k in sessions or k > last for k in df["known_from"])
+
+
+@pytest.mark.unit
+def test_a_yahoo_bar_on_an_nse_holiday_is_dropped_and_known_from_skips_it(tmp_path):
+    from tradingagents.analytics import prices as px
+
+    # 2026-01-15: exchange holiday (Maharashtra municipal election); Yahoo still had a bar
+    nse_days = [date(2026, 1, 14), date(2026, 1, 16), date(2026, 1, 19)]
+    bars = _bars([date(2026, 1, 14), date(2026, 1, 15), date(2026, 1, 16), date(2026, 1, 19)])
+    kept, dropped = px.drop_non_sessions(bars, px.price_sessions(nse_days, bars["trade_date"]))
+    assert list(dropped["trade_date"]) == [date(2026, 1, 15)]
+    px.save_prices(bars, nse_days, root=tmp_path)
+    loaded = px.load_prices(root=tmp_path)
+    assert list(loaded["trade_date"]) == [date(2026, 1, 14), date(2026, 1, 16), date(2026, 1, 19)]
+    assert list(loaded["known_from"]) == [date(2026, 1, 16), date(2026, 1, 19), date(2026, 1, 20)]
+    _assert_on_sessions(loaded, set(nse_days))
+
+
+@pytest.mark.unit
+def test_an_archive_hole_stays_a_session(tmp_path):
+    from tradingagents.analytics import prices as px
+
+    # 2021-03-30 traded, but NSE's F&O file for it is gone: Yahoo's bar is real
+    nse_days = [date(2021, 3, 26), date(2021, 3, 31)]
+    px.save_prices(_bars([date(2021, 3, 26), date(2021, 3, 30), date(2021, 3, 31)]), nse_days, root=tmp_path)
+    loaded = px.load_prices(root=tmp_path)
+    assert list(loaded["trade_date"]) == [date(2021, 3, 26), date(2021, 3, 30), date(2021, 3, 31)]
+    assert list(loaded["known_from"])[:2] == [date(2021, 3, 30), date(2021, 3, 31)]
+
+
+@pytest.mark.unit
+def test_todays_bar_before_nse_files_is_kept_only_on_a_calendar_session(tmp_path):
+    from tradingagents.analytics import prices as px
+    from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
+
+    cal = NSECalendar({date(2026, 10, 28): "a holiday"})
+    nse_days = [date(2026, 10, 26)]
+    bars = _bars([date(2026, 10, 26), date(2026, 10, 27), date(2026, 10, 28)])
+    px.save_prices(bars, nse_days, root=tmp_path, calendar=cal)
+    loaded = px.load_prices(root=tmp_path)
+    assert list(loaded["trade_date"]) == [date(2026, 10, 26), date(2026, 10, 27)]
+    assert list(loaded["known_from"])[0] == date(2026, 10, 27)
+
+
 INDEX_CLOSE = (
     b"Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value,"
     b"Points Change,Change(%),Volume,Turnover (Rs. Cr.),P/E,P/B,Div Yield\n"

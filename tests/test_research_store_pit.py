@@ -25,3 +25,20 @@ def test_every_row_has_a_known_from_after_its_session(dataset):
              else [ROOT.joinpath(*loader.DERIVED[dataset])])
     df = pd.concat((pd.read_parquet(f, columns=["trade_date", "known_from"]) for f in files), ignore_index=True)
     loader.check_point_in_time(df, dataset)
+
+
+def test_no_price_bar_or_known_from_on_a_day_without_an_nse_session():
+    """Sessions: the days the store holds F&O data for, plus the sessions whose F&O file is an archive hole.
+    Bars after the last F&O day (today's, before tonight's files) are left to the calendar check in the builder."""
+    from tradingagents.dataflows.vendors.nse.calendar import ARCHIVE_HOLES
+
+    fo = pd.concat(pd.read_parquet(f, columns=["trade_date"]) for f in sorted((ROOT / "fo_summary").glob("*.parquet")))
+    sessions = set(pd.to_datetime(fo["trade_date"]).dt.date) | {d for d, k in ARCHIVE_HOLES.items() if "fo" in k}
+    first, last = min(sessions), max(sessions)
+    p = pd.read_parquet(ROOT.joinpath(*loader.DERIVED["prices"]), columns=["trade_date", "known_from"])
+    traded, known = pd.to_datetime(p["trade_date"]).dt.date, pd.to_datetime(p["known_from"]).dt.date
+    window = (traded >= first) & (traded <= last)
+    off = sorted(set(traded[window & ~traded.isin(sessions)]))
+    assert not off, f"price bars on days with no NSE session: {off}"
+    bad = sorted(set(known[window & (known <= last) & ~known.isin(sessions)]))
+    assert not bad, f"known_from on days with no NSE session: {bad}"

@@ -25,9 +25,11 @@ from tradingagents.analytics import datastore as ds  # noqa: E402
 from tradingagents.analytics.backfill import load_manifest, raw_root  # noqa: E402
 from tradingagents.analytics.implied_vol import atm_iv_table  # noqa: E402
 from tradingagents.analytics.prices import (  # noqa: E402
+    drop_non_sessions,
     fetch_prices,
     fill_stock_gaps,
     merge_nse_indices,
+    price_sessions,
     quality_report,
     save_prices,
 )
@@ -74,13 +76,19 @@ def main() -> int:
         prices = fetch_prices()
         prices = merge_nse_indices(prices, ds.load("index_close"))
         prices = fill_stock_gaps(prices, trading_days)
+        prices, off_session = drop_non_sessions(prices, price_sessions(trading_days, prices["trade_date"]))
+        if len(off_session):
+            print(f"  dropped {len(off_session)} bars dated on days with no NSE session: "
+                  f"{off_session.groupby('trade_date').size().to_dict()}")
         path = save_prices(prices, trading_days)
         print("  price bars by source:", prices.groupby("source").size().to_dict())
         issues = quality_report(prices, trading_days)
         holes = pd.DataFrame([{"symbol": "ALL", "trade_date": d, "issue": "nse_archive_hole",
                                "value": f"{'+'.join(kinds)}: {ARCHIVE_HOLE_REASON}"}
                               for d, kinds in sorted(ARCHIVE_HOLES.items())])
-        issues = pd.concat([issues, holes], ignore_index=True)
+        dropped = pd.DataFrame({"symbol": off_session["symbol"], "trade_date": off_session["trade_date"],
+                                "issue": "dropped_non_session", "value": off_session["source"]})
+        issues = pd.concat([issues, holes, dropped], ignore_index=True)
         issues.to_csv(ds.store_root() / "quality_report.csv", index=False)
         print(f"  prices: {prices['symbol'].nunique()} symbols, {len(prices):,} rows -> {path}")
         if len(issues):

@@ -22,6 +22,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | Analyse your own trades | [Exporting your Dhan tradebook](guides/exporting-your-dhan-tradebook.md) |
 | Set up the code on a new machine | [Local setup](development/local-setup.md) |
 | Understand the system | [System overview](architecture/01-system-overview.md) → [Quant layer overview](architecture/10-quant-layer-overview.md) |
+| Know what data exists, its holes and its corrections | [Data catalog](data_catalog.md) |
 | See what changed and why | The PA change records (§3) |
 
 ---
@@ -77,6 +78,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-28](PA_28-backend-latency.md) | Backend latency: one fetch per key, refresh-ahead, stale-feed blockers, p50/p95/p99 at `/api/latency` (p99 1.3 s → 0.14 s) | Done |
 | [PA-29](PA_29-plan-chart-tools.md) | Plan chart: decluttered and larger, layer toggles, automatic day levels / swings / crossovers, drawing tools, O/H/L/C readout | Done |
 | [PA-31](PA_31-research-splits-and-locked-loader.md) | Data foundation step 1: frozen splits (2025+ locked and labelled contaminated, clean forward holdout), locked research loader, point-in-time audit, NSE archive holes | Done |
+| [PA-32](PA_32-prices-holiday-bars.md) | Prices: bars only on NSE sessions; 29 Yahoo bars on the 2026-01-15 holiday removed, 32 `known_from` corrected; data catalog started | Done |
 
 **Renumbered on 2026-10-26.** Sixteen small records were folded into the ones they belong to and the rest numbered 01–27. Pull requests and commits before that date use the old numbers:
 
