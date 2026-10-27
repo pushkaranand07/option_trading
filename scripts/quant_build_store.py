@@ -32,6 +32,7 @@ from tradingagents.analytics.prices import (  # noqa: E402
     save_prices,
 )
 from tradingagents.analytics.universe import SURVIVORSHIP_NOTE, SYMBOLS  # noqa: E402
+from tradingagents.dataflows.vendors.nse.calendar import ARCHIVE_HOLE_REASON, ARCHIVE_HOLES  # noqa: E402
 
 
 def main() -> int:
@@ -76,6 +77,10 @@ def main() -> int:
         path = save_prices(prices, trading_days)
         print("  price bars by source:", prices.groupby("source").size().to_dict())
         issues = quality_report(prices, trading_days)
+        holes = pd.DataFrame([{"symbol": "ALL", "trade_date": d, "issue": "nse_archive_hole",
+                               "value": f"{'+'.join(kinds)}: {ARCHIVE_HOLE_REASON}"}
+                              for d, kinds in sorted(ARCHIVE_HOLES.items())])
+        issues = pd.concat([issues, holes], ignore_index=True)
         issues.to_csv(ds.store_root() / "quality_report.csv", index=False)
         print(f"  prices: {prices['symbol'].nunique()} symbols, {len(prices):,} rows -> {path}")
         if len(issues):
