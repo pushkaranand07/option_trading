@@ -32,6 +32,7 @@ ALLOWED = {
     "scripts/quant_backfill.py": INGEST,
     "scripts/quant_build_store.py": INGEST,
     "scripts/quant_fix_price_sessions.py": INGEST,
+    "scripts/quant_count_fo_universe.py": "counts the raw F&O files before any ingest (no store writes)",
     "scripts/quant_daily_update.py": LIVE,
     "scripts/update_progress.py": LIVE,
     "scripts/market_map.py": LIVE,
