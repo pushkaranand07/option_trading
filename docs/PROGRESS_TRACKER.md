@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `██████████████████████░░░` 89% (100/112 tasks)
+**Overall:** `███████████████████████░░` 90% (101/112 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
 **NSE history download:** `█████████████████████████` 100% (9,208/9,208 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-28 13:27_
+_Last updated: 2026-10-28 15:18_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -240,7 +240,7 @@ drift monitor, monthly re-check with the same gates, scale-up rules. Needs your 
 
 ## Data foundation for a prediction model (requested 2026-10-27)
 <!-- progress:phase -->
-`████████████░░░░░░░░░░░░░` 50% (6/12)
+`███████████████░░░░░░░░░░` 58% (7/12)
 <!-- /progress:phase -->
 One step per pull request; each stops for your approval. Details: [PA-31](PA_31-research-splits-and-locked-loader.md).
 - [x] Missing weekday files checked against NSE's holiday lists: **FAIL**, 10 NSE archive holes (fo 2021-03-30;
@@ -251,7 +251,7 @@ One step per pull request; each stops for your approval. Details: [PA-31](PA_31-
 - [x] Step 2b-a: stored base 2015–2017, every underlying, filter A ([PA-34](PA_34-base-2015-2017.md))
 - [x] Step 2b-b: stored base 2018–2026, reconciled with the live store ([PA-35](PA_35-base-2018-2026.md))
 - [x] Step 2b-c: stored base 2010–2014, calendar from NSE's circulars ([PA-36](PA_36-base-2010-2014.md))
-- [ ] Step 2b-d: symbol continuity map and universe views, with a no-look-ahead test
+- [x] Step 2b-d: symbol continuity map and universe views, no-look-ahead tests ([PA-37](PA_37-symbol-map-and-universes.md))
 - [ ] Step 3: participant, index / VIX history, macro (with release times), events table
 - [ ] Step 4: Dhan intraday spot and futures (**needs your renewed Dhan token and Data API status**)
 - [ ] Step 5: forward option-chain capture, several times a day (forward-only)

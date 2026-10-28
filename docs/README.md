@@ -83,6 +83,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-34](PA_34-base-2015-2017.md) | Data foundation batch a: stored base 2015–2017, every F&O underlying (14.5M chain rows, 136 MB), quality checks PASS, pre-2018 lots UNVERIFIED and masked | Done |
 | [PA-35](PA_35-base-2018-2026.md) | Data foundation batch b: stored base 2018–2026 (65.7M chain rows, 919 MB), reconciled with the live store (identical after a lot-despiking fix), corporate actions and parity breakdown | Done |
 | [PA-36](PA_36-base-2010-2014.md) | Data foundation batch c: stored base 2010–2014 (15.5M chain rows, 126 MB), F&O calendar from NSE circulars, American options marked, research loader base-only | Done |
+| [PA-37](PA_37-symbol-map-and-universes.md) | Data foundation batch d: NSE symbol map (41 of 57 renames mapped), point-in-time universes U1 (indices + top 100 stocks by prior-year turnover) and U2, sealed 2026 ranking | Done |
 
 **Renumbered on 2026-10-26.** Sixteen small records were folded into the ones they belong to and the rest numbered 01–27. Pull requests and commits before that date use the old numbers:
 
