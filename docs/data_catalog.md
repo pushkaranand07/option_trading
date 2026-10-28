@@ -148,6 +148,19 @@ and the data in every existing column are identical (re-checked against each sna
 (`loader.european_only`; `loader.require_european` raises otherwise, tested). American rows are never parity- or
 intrinsic-tested in the base.
 
+### Symbol map and universes
+
+| File | What | Rows |
+|---|---|---|
+| `docs/data/symbol_map_v1.csv` | NSE symbol-change links for the 57 renamed stocks that left F&O: 41 mapped, 16 unmapped (separate series), flags at each change date | 57 |
+| `docs/data/universes_v1.json` | Universe rules (U1, U2), written before ranking; references the split file's and the map's hashes | — |
+| `<store>/universes/U1_membership_v1.parquet` | U1 membership per session, 2011 to 2026-10-26 | see PA-37 |
+| `<store>/universes/U2_membership_v1.parquet` | U2 membership per session, 2010 to 2026-10-26 | see PA-37 |
+
+U1: all indices plus the top 100 stocks by the previous calendar year's F&O turnover, one rebalance a year, no
+mid-year replacement. 2026 was ranked in the sealed function (no turnover, rank or gap reported). Details and member
+counts: [PA-37](PA_37-symbol-map-and-universes.md).
+
 ## 4. Open items (no decision yet)
 
 | Item | Finding | Rule until decided |
