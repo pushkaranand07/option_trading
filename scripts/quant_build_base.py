@@ -29,6 +29,11 @@ def main() -> int:
     counts = base_store.build_years(args.years, workers=args.workers)
     for y, c in counts.items():
         print(f"{y}: " + ", ".join(f"{k} {v:,}" for k, v in c.items()))
+    # a batch is despiked on its own; despike every stored year as one series per symbol so batches join cleanly
+    stored = sorted(int(f.stem) for f in (base_store.ds.store_root() / base_store.SUMMARY).glob("*.parquet"))
+    changed = base_store.restabilize(stored)
+    print(f"lots re-despiked across {stored[0]}-{stored[-1]}: {sum(changed.values())} rows changed "
+          f"{ {y: n for y, n in changed.items() if n} }")
     print(f"done in {(time.monotonic() - started) / 60:.1f} min")
     return 0
 

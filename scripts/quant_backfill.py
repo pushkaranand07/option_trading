@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tradingagents.analytics.backfill import KINDS, backfill, raw_root  # noqa: E402
+from tradingagents.analytics.backfill import KINDS, WEEKEND_PROBE, backfill, raw_root  # noqa: E402
 from tradingagents.analytics.universe import HISTORY_START  # noqa: E402
 from tradingagents.dataflows.vendors.nse.client import NSEClient  # noqa: E402
 
@@ -31,6 +31,8 @@ def main() -> int:
     parser.add_argument("--kinds", nargs="+", choices=KINDS, default=list(KINDS))
     parser.add_argument("--interval", type=float, default=1.5, help="seconds between requests")
     parser.add_argument("--retry-missing", action="store_true")
+    parser.add_argument("--weekend-probe", choices=KINDS, default=WEEKEND_PROBE,
+                        help="file kind that decides whether a weekend was a session (fo before 2015)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
@@ -49,7 +51,8 @@ def main() -> int:
                   f"already had {stats.skipped} ({minutes:.0f} min)", flush=True)
 
     client = NSEClient(min_interval=args.interval)
-    stats = backfill(client, args.start, args.end, args.kinds, root, args.retry_missing, progress)
+    stats = backfill(client, args.start, args.end, args.kinds, root, args.retry_missing, progress,
+                     weekend_probe=args.weekend_probe)
     print(f"Done: fetched {stats.fetched}, missing {stats.missing}, already had {stats.skipped}.")
     if stats.stopped_early:
         print(f"Stopped early, NSE unavailable at {stats.stopped_early}. Run again later to resume.")

@@ -108,3 +108,51 @@ def test_alternating_lot_blips_settle_the_way_repeated_nightly_despiking_does():
     assert (fixed["lot_size"] == 1000.0).all() and changed == 3
     s["lot_source"] = "stated"                         # stated lots are never touched
     assert bs.stable_lots(s)[1] == 0
+
+
+@pytest.mark.unit
+def test_lot_despiking_that_oscillates_or_never_settles_raises_and_returns_nothing(monkeypatch):
+    a, b = pd.Series([100.0, 200.0, 100.0]), pd.Series([100.0, 100.0, 100.0])
+    flip = {a.to_numpy().tobytes(): b, b.to_numpy().tobytes(): a}
+    monkeypatch.setattr(ds, "despike_lots", lambda s: flip[s.to_numpy(dtype=float).tobytes()].copy())
+    with pytest.raises(bs.LotsDidNotSettle, match="oscillates"):
+        bs.despike_until_stable(a)
+    counter = iter(range(10_000))
+    monkeypatch.setattr(ds, "despike_lots", lambda s: s + next(counter) + 1)    # always a new state
+    with pytest.raises(bs.LotsDidNotSettle, match="after 5 passes"):
+        bs.despike_until_stable(pd.Series([1.0, 2.0]), max_passes=5)
+    s = pd.DataFrame({"symbol": "X", "trade_date": [date(2016, 1, 4), date(2016, 1, 5), date(2016, 1, 6)],
+                      "lot_size": [100.0, 200.0, 100.0], "lot_source": "derived_oi"})
+    monkeypatch.setattr(ds, "despike_lots", lambda x: flip.get(x.to_numpy(dtype=float).tobytes(), b).copy())
+    with pytest.raises(bs.LotsDidNotSettle):
+        bs.stable_lots(s)
+
+
+@pytest.mark.unit
+def test_american_ca_pa_options_are_kept_as_calls_and_puts_and_never_parity_tested(tmp_path):
+    exp = "28-JAN-2010"
+    rows = [_row("FUTSTK", "OLDCO", exp, 0, "XX", 200.0, oi=1500, chg=500),
+            _row("OPTSTK", "OLDCO", exp, 200, "CA", 8.0), _row("OPTSTK", "OLDCO", exp, 200, "PA", 30.0),
+            _row("FUTIDX", "NIFTY", exp, 0, "XX", 1000.0),
+            _row("OPTIDX", "NIFTY", exp, 1000, "CE", 20.0), _row("OPTIDX", "NIFTY", exp, 1000, "PE", 20.0)]
+    f = _legacy_zip(tmp_path, date(2010, 1, 13), rows)
+    _, chain = bs.build_day((str(f), f.name))
+    old = chain[chain["symbol"] == "OLDCO"].set_index("option_type")
+    assert set(old.index) == {"CE", "PE"} and set(old["exercise_style"]) == {"american"}
+    assert not old["parity_tested"].any() and not old["intrinsic_tested"].any()
+    nifty = chain[chain["symbol"] == "NIFTY"]
+    assert set(nifty["exercise_style"]) == {"european"} and nifty["parity_tested"].all()
+    # a 2015+ legacy file and the live parser are unchanged: every row European, CE / PE only
+    assert bs.parse_fo_with_style(f.read_bytes(), f.name)["option_type"].dropna().isin(["CE", "PE"]).all()
+
+
+@pytest.mark.unit
+def test_a_reissued_file_with_two_digit_years_and_a_footer_row_parses(tmp_path):
+    rows = [_row("FUTIDX", "NIFTY", "31-May-12", 0, "XX", 5000.0), _row("OPTIDX", "NIFTY", "31-May-12", 5000, "CE", 90.0)]
+    df = pd.DataFrame(rows).assign(TIMESTAMP="14-May-12")
+    df = pd.concat([df, pd.DataFrame([{"INSTRUMENT": "*Updated"}])], ignore_index=True)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("fo14MAY2012bhav.csv", df.to_csv(index=False))
+    fo = bs.parse_fo_with_style(buf.getvalue(), "fo14MAY2012bhav.csv.zip")
+    assert len(fo) == 2 and set(fo["trade_date"]) == {date(2012, 5, 14)} and set(fo["expiry"]) == {date(2012, 5, 31)}
