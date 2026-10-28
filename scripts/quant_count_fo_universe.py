@@ -23,7 +23,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tradingagents.analytics import datastore as ds  # noqa: E402
+from tradingagents.analytics import base_store, datastore as ds  # noqa: E402
 from tradingagents.analytics.backfill import raw_root  # noqa: E402
 
 MONEYNESS = (0.10, 0.15, 0.25, None)        # None: no moneyness filter
@@ -39,7 +39,7 @@ def grid_name(m: float | None, d: int | None) -> str:
 def count_file(args: tuple[str, bool]) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
     path, sample = args
     p = Path(path)
-    fo = ds.parse_fo(p.read_bytes(), p.name)
+    fo = base_store.parse_fo_with_style(p.read_bytes(), p.name)   # the parser the base is built with
     day = fo["trade_date"].iloc[0]
     fo["instrument"] = fo["instrument"].astype(str).str.strip()
     for col in ("close", "underlying_price", "open_interest", "turnover", "lot_size"):

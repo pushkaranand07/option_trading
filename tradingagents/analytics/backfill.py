@@ -138,9 +138,11 @@ def backfill(
     root: Path | None = None,
     retry_missing: bool = False,
     progress: Callable[[date, BackfillStats], None] | None = None,
+    weekend_probe: str = WEEKEND_PROBE,
 ) -> BackfillStats:
     """Fetch every (day, kind) not yet in the manifest, oldest first. Weekdays get every
-    kind; weekends only the ``WEEKEND_PROBE`` file, plus the rest if NSE traded that day.
+    kind; weekends only the ``weekend_probe`` file, plus the rest if NSE traded that day.
+    Years without index files (before 2015) need another probe, e.g. ``"fo"``.
 
     Stops cleanly (``stopped_early`` set) if NSE becomes unreachable, so a
     later run resumes where this one stopped rather than marking days missing.
@@ -153,10 +155,10 @@ def backfill(
     for day in calendar_days(start, end):
         day_kinds = kinds
         if day.weekday() >= 5:
-            day_kinds = (WEEKEND_PROBE,) + tuple(k for k in kinds if k != WEEKEND_PROBE)
+            day_kinds = (weekend_probe,) + tuple(k for k in kinds if k != weekend_probe)
         for kind in day_kinds:
-            if day.weekday() >= 5 and kind != WEEKEND_PROBE:
-                probe = manifest.get((day, WEEKEND_PROBE))
+            if day.weekday() >= 5 and kind != weekend_probe:
+                probe = manifest.get((day, weekend_probe))
                 if not probe or probe.status != "ok":
                     break                                # no weekend session
             done = manifest.get((day, kind))

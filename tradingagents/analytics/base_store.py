@@ -78,10 +78,34 @@ def _flags(chain: pd.DataFrame, fo: pd.DataFrame, r: float = DEFAULT_RISK_FREE) 
     return c.drop(columns="forward")
 
 
+# Legacy files before 2011 code American-style stock options CA / PA (call / put); from 2011 every option is
+# European (CE / PE). The live parser keeps CE / PE only, so the base maps CA / PA to CE / PE and records the style.
+AMERICAN_CODES = {"CA": "CE", "PA": "PE"}
+
+
+def parse_fo_with_style(raw: bytes, name: str) -> pd.DataFrame:
+    """:func:`datastore.parse_fo` plus ``exercise_style`` ("american" for CA / PA, "european" otherwise)."""
+    if name.startswith("BhavCopy_"):
+        return ds.parse_fo(raw, name).assign(exercise_style="european")
+    from tradingagents.dataflows.vendors.nse.derivatives import _unzip_csv, normalize_legacy
+
+    table = _unzip_csv(raw).rename(columns=lambda c: str(c).strip())
+    # one re-issued file (fo14MAY2012) ends with a "*Updated" footer row and writes dates as 14-May-12
+    table = table[table["SYMBOL"].notna()].copy()
+    for col in ("TIMESTAMP", "EXPIRY_DT"):
+        two_digit = table[col].astype(str).str.strip().str.fullmatch(r"\d{2}-[A-Za-z]{3}-\d{2}")
+        if two_digit.any():
+            table.loc[two_digit, col] = pd.to_datetime(table.loc[two_digit, col].astype(str).str.strip(),
+                                                       format="%d-%b-%y").dt.strftime("%d-%b-%Y").str.upper()
+    code = table["OPTION_TYP"].astype(str).str.strip()
+    table["OPTION_TYP"] = code.replace(AMERICAN_CODES)
+    return normalize_legacy(table).assign(exercise_style=np.where(code.isin(AMERICAN_CODES), "american", "european"))
+
+
 def build_day(args: tuple[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(summary, chain) for one raw F&O file, every underlying."""
     path, name = args
-    fo = ds.parse_fo(Path(path).read_bytes(), name)
+    fo = parse_fo_with_style(Path(path).read_bytes(), name)
     fo["instrument"] = fo["instrument"].astype(str).str.strip()
     symbols = sorted(set(fo["symbol"]))
     summary = ds.fo_summary(fo, symbols)
@@ -91,20 +115,41 @@ def build_day(args: tuple[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
         summary["lot_size"] = summary["lot_size"].fillna(summary["symbol"].map(lots))
     summary["lot_source"] = np.where(stated, "stated", np.where(summary["lot_size"].notna(), "derived_oi", "none"))
     summary["kind"] = summary["symbol"].map(_kind(fo))
-    chain = _flags(ds.option_chain(fo, summary, symbols), fo)
+    chain = ds.option_chain(fo, summary, symbols)
+    style = fo[fo["instrument"].isin(ds.OPTIONS)].drop_duplicates(["symbol", "expiry", "strike", "option_type"])
+    chain = chain.merge(style[["symbol", "expiry", "strike", "option_type", "exercise_style"]],
+                        on=["symbol", "expiry", "strike", "option_type"], how="left")
+    chain = _flags(chain, fo)
+    # European put-call parity and the discounted-intrinsic bound do not hold for American options: never tested
+    american = chain["exercise_style"] == "american"
+    chain.loc[american, ["parity_tested", "flag_parity", "intrinsic_tested", "flag_below_intrinsic"]] = False
     return summary, chain
+
+
+class LotsDidNotSettle(RuntimeError):
+    """Despiking oscillates or does not settle: no lot series is returned."""
 
 
 def despike_until_stable(lots: pd.Series, max_passes: int = 50) -> pd.Series:
     """:func:`datastore.despike_lots` repeated until nothing changes. One pass over alternating blips around a lot
     change (e.g. 200, 100, 200, 100) can flip them the wrong way; the live store converges because every nightly
-    build despikes again, so the base must converge too (PA-35)."""
-    for _ in range(max_passes):
+    build despikes again, so the base must converge too (PA-35).
+
+    Raises :class:`LotsDidNotSettle`, returning nothing, if a series repeats an earlier state (an oscillation that
+    can never settle) or is still changing after ``max_passes``.
+    """
+    seen = {hashlib.sha256(lots.to_numpy(dtype=float).tobytes()).hexdigest()}
+    for k in range(1, max_passes + 1):
         nxt = ds.despike_lots(lots)
         if nxt.equals(lots):
             return nxt
+        h = hashlib.sha256(nxt.to_numpy(dtype=float).tobytes()).hexdigest()
+        if h in seen:
+            raise LotsDidNotSettle(f"lot despiking oscillates (state repeated after pass {k}), symbol "
+                                   f"{getattr(lots, 'name', None)!r}")
+        seen.add(h)
         lots = nxt
-    raise RuntimeError(f"lot despiking did not settle in {max_passes} passes")
+    raise LotsDidNotSettle(f"lot despiking still changing after {max_passes} passes")
 
 
 def stable_lots(summary: pd.DataFrame) -> tuple[pd.DataFrame, int]:

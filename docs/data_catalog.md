@@ -58,6 +58,23 @@ counted, never studied.
 Quality results: [PA-34](PA_34-base-2015-2017.md) (2015–2017), [PA-35](PA_35-base-2018-2026.md) (2018–2026 and the
 reconciliation with the live store).
 
+### Which `known_from` is canonical for research
+
+**The stored base.** 2021-03-30 was a real session (NSE published the participant, MTO and index files; only the
+F&O bhavcopy is gone), so data from 2021-03-26 was public on 2021-03-30. The base stamps it so; the live
+`fo_summary` / `option_chain` / `participant` / `delivery` / `index_close` / `iv30` stamp it 2021-03-31, one session
+late (conservative, no look-ahead). Affected in the live store: the 2021-03-26 rows (31 summary rows, 7,696 chain rows
+for the 31 symbols). The live store is **not changed** (user, 2026-10-28). Research code reads `base_fo_summary` /
+`base_option_chain` through the research loader; the loader also still serves the live datasets, which carry the
+late stamp on that one day.
+
+### What "reconciled with the live store" means for lots
+
+The base's lots equal the live store's for the 31 shared symbols because both apply the **same derived method**
+(open-interest GCD, then despiking until stable). That is consistency between two copies of one method, not
+verification: every derived lot stays **UNVERIFIED** until checked against NSE circulars, and the research loader
+returns them empty. Despiking raises an error, returning nothing, if it oscillates or does not settle in 50 passes.
+
 ### Bytes per row (`base_option_chain`, Parquet, measured)
 
 | Year | 2015 | 2016 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 |

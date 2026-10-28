@@ -52,14 +52,15 @@ KNOWN_SPECIAL_SESSIONS = frozenset({
 })
 
 # Sessions NSE held (other files for the day exist; not on NSE's holiday list) whose archive file is gone:
-# every URL form returned 404 when re-requested on 2026-10-27. They stay sessions; the file kinds listed are
+# every URL form returned 404 when re-requested (2026-10-27; 2013-10-09 on 2026-10-28, whose market activity report
+# and MTO file exist). They stay sessions; the file kinds listed are
 # simply absent. Never fill them from another vendor and label it NSE data (docs/PA_31).
 ARCHIVE_HOLE_REASON = "NSE archive hole, unrecoverable"
 ARCHIVE_HOLES: dict[date, tuple[str, ...]] = {
     date(2015, 2, 2): ("indices",), date(2015, 3, 12): ("indices",), date(2015, 3, 13): ("indices",),
     date(2015, 5, 19): ("indices",), date(2015, 7, 8): ("indices",), date(2015, 9, 4): ("indices",),
     date(2015, 10, 16): ("indices",), date(2015, 12, 1): ("indices",), date(2016, 6, 20): ("indices",),
-    date(2021, 3, 30): ("fo",),
+    date(2013, 10, 9): ("fo",), date(2021, 3, 30): ("fo",),
 }
 
 

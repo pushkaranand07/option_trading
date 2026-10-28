@@ -1,0 +1,27 @@
+{
+  "segment": "NSE Futures & Options",
+  "built": "2026-10-28",
+  "source": "NSE F&O circulars, fetched from /api/circulars and nsearchives.nseindia.com/content/circulars/; raw PDFs with SHA-256 in <raw>/circulars/manifest.csv",
+  "rule": "A weekday is a session unless listed in weekday_holidays. A listed holiday with muhurat=true, and every date in special_sessions, is a session too (files are published). Weekend holidays need no listing.",
+  "weekday_holidays": {
+    "2010": {"source": "NSE/faop/13715 (2009-12-17)", "dates": {"2010-01-01": "New Year", "2010-01-26": "Republic Day", "2010-02-12": "Mahashivratri", "2010-03-01": "Holi", "2010-03-24": "Ram Navmi", "2010-04-02": "Good Friday", "2010-04-14": "Dr. Ambedkar Jayanti", "2010-09-10": "Ramzan ID", "2010-11-05": "Laxmi Puja (muhurat)", "2010-11-17": "Bakri Id", "2010-12-17": "Moharram"}},
+    "2011": {"source": "NSE/faop/16361 (2010-11-22)", "dates": {"2011-01-26": "Republic Day", "2011-03-02": "Mahashivratri", "2011-04-12": "Ram Navmi", "2011-04-14": "Dr. Ambedkar Jayanti", "2011-04-22": "Good Friday", "2011-08-15": "Independence Day", "2011-08-31": "Ramzan ID", "2011-09-01": "Ganesh Chaturthi", "2011-10-06": "Dasara", "2011-10-26": "Laxmi Puja (muhurat)", "2011-10-27": "Diwali - Balipratipada", "2011-11-07": "Bakri Id", "2011-11-10": "Gurunanak Jayanti", "2011-12-06": "Moharram"}},
+    "2012": {"source": "NSE/FAOP/19544 (2011-12-09)", "dates": {"2012-01-26": "Republic Day", "2012-02-20": "Mahashivratri", "2012-03-08": "Holi", "2012-04-05": "Mahavir Jayanti", "2012-04-06": "Good Friday", "2012-05-01": "May Day", "2012-08-15": "Independence Day", "2012-08-20": "Ramzan ID", "2012-09-19": "Ganesh Chaturthi", "2012-10-02": "Gandhi Jayanti", "2012-10-24": "Dasera", "2012-11-13": "Diwali - Laxmi Puja (muhurat)", "2012-11-14": "Diwali - Balipratipada", "2012-11-28": "Gurunanak Jayanti", "2012-12-25": "Christmas"}},
+    "2013": {"source": "NSE/FAOP/22316 (2012-12-17); NSE/FAOP/24979 (2013-11-13) revoked 2013-11-14 and declared 2013-11-15", "dates": {"2013-03-27": "Holi", "2013-03-29": "Good Friday", "2013-04-19": "Ram Navmi", "2013-04-24": "Mahavir Jayanti", "2013-05-01": "May Day", "2013-08-09": "Ramzan ID", "2013-08-15": "Independence Day", "2013-09-09": "Ganesh Chaturthi", "2013-10-02": "Gandhi Jayanti", "2013-10-16": "Bakri ID", "2013-11-04": "Diwali - Balipratipada", "2013-11-15": "Moharram (moved from 2013-11-14, NSE/FAOP/24979)", "2013-12-25": "Christmas"}},
+    "2014": {"source": "NSE/FAOP/25325 (2013-12-20); NSE/FAOP/26362 (2014-04-03); NSE/FAOP/27802 (2014-10-13)", "dates": {"2014-02-27": "Mahashivratri", "2014-03-17": "Holi", "2014-04-08": "Ram Navami", "2014-04-14": "Dr. Babasaheb Ambedkar Jayanti", "2014-04-18": "Good Friday", "2014-04-24": "Parliamentary Elections (NSE/FAOP/26362)", "2014-05-01": "May Day", "2014-07-29": "Ramzan ID", "2014-08-15": "Independence Day", "2014-08-29": "Ganesh Chaturthi", "2014-10-02": "Mahatma Gandhi Jayanti", "2014-10-03": "Dasera", "2014-10-06": "Bakri ID", "2014-10-15": "General Assembly Elections (NSE/FAOP/27802)", "2014-10-23": "Diwali-Laxmi Pujan (muhurat)", "2014-10-24": "Diwali-Balipratipada", "2014-11-04": "Moharram", "2014-11-06": "Gurunanak Jayanti", "2014-12-25": "Christmas"}}
+  },
+  "muhurat": {
+    "2010-11-05": "NSE/faop/16061", "2011-10-26": "NSE/FAOP/19189", "2012-11-13": "NSE/FAOP/19544, NSE/FAOP/22019",
+    "2013-11-03": "NSE/FAOP/22316 (Sunday), NSE/FAOP/24774", "2014-10-23": "NSE/FAOP/25325, NSE/FAOP/27783"
+  },
+  "special_sessions": {
+    "2010-02-06": "Saturday live session (NSE/faop/14047)",
+    "2012-01-07": "Saturday live session (NSE/FAOP/19733)",
+    "2012-03-03": "Saturday live session (NSE/FAOP/20065)",
+    "2012-04-28": "Saturday live session (NSE/FAOP/20562)",
+    "2012-09-08": "Saturday live session (NSE/FAOP/21546)",
+    "2013-05-11": "Saturday live session (NSE/FAOP/23300)",
+    "2014-03-22": "Saturday live session from the BCP site (NSE/FAOP/26042)"
+  },
+  "not_sessions": "Mock trading, contingency drills and simulated sessions on weekends (dozens of circulars, e.g. NSE/FAOP/20831) are not sessions: a bhavcopy on such a day would be flagged."
+}
