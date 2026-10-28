@@ -35,6 +35,8 @@ ALLOWED = {
     "tradingagents/analytics/base_store.py": INGEST,
     "scripts/quant_build_base.py": INGEST,
     "scripts/quant_check_base.py": INGEST,
+    "scripts/quant_reconcile_base.py": "compares the stored base with the live store (counts only, no writes)",
+    "scripts/quant_match_corporate_actions.py": "saves raw NSE corporate actions and flags large moves (no price changes)",
     "scripts/quant_count_fo_universe.py": "counts the raw F&O files before any ingest (no store writes)",
     "scripts/quant_daily_update.py": LIVE,
     "scripts/update_progress.py": LIVE,

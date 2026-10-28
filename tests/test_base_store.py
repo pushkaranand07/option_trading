@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tradingagents.analytics import base_store as bs
+from tradingagents.analytics import base_store as bs, datastore as ds
 from tradingagents.research import loader
 
 
@@ -71,10 +71,10 @@ def test_quality_flags_mark_rows_and_never_drop_them(day_file):
 
 
 @pytest.mark.unit
-def test_every_lot_before_2018_is_unverified():
-    s = pd.DataFrame({"trade_date": [date(2017, 12, 29), date(2018, 1, 1), date(2024, 8, 1)],
-                      "lot_source": ["derived_oi", "derived_oi", "stated"]})
-    assert list(bs._lot_status(s)) == [bs.UNVERIFIED, "derived", "stated"]
+def test_only_lots_stated_in_the_file_are_verified():
+    s = pd.DataFrame({"trade_date": [date(2017, 12, 29), date(2018, 1, 1), date(2024, 8, 1), date(2016, 1, 4)],
+                      "lot_source": ["derived_oi", "derived_oi", "stated", "none"]})
+    assert list(bs._lot_status(s)) == [bs.UNVERIFIED, bs.UNVERIFIED, "stated", bs.UNVERIFIED]
 
 
 @pytest.mark.unit
@@ -83,12 +83,28 @@ def test_loader_masks_unverified_lots_unless_asked(tmp_path):
     (root / "base_fo_summary").mkdir(parents=True)
     pd.DataFrame({"trade_date": [date(2016, 1, 13), date(2018, 1, 2)], "known_from": [date(2016, 1, 14), date(2018, 1, 3)],
                   "symbol": ["OLDCO", "OLDCO"], "lot_size": [500.0, 250.0],
-                  "lot_status": [bs.UNVERIFIED, "derived"]}).to_parquet(root / "base_fo_summary" / "2016.parquet")
+                  "lot_status": [bs.UNVERIFIED, "stated"]}).to_parquet(root / "base_fo_summary" / "2016.parquet")
     df = loader.load("base_fo_summary", start=date(2016, 1, 1), end=date(2016, 12, 31), root=root,
                      log_path=tmp_path / "t.sqlite")
     assert np.isnan(df["lot_size"].iloc[0]) and df["lot_size_unverified"].iloc[0] == 500.0
     raw = loader.load("base_fo_summary", start=date(2016, 1, 1), end=date(2016, 12, 31), root=root,
                       log_path=tmp_path / "t.sqlite", allow_unverified_lots=True)
     assert raw["lot_size"].iloc[0] == 500.0
-    assert list(loader.mask_unverified_lots(pd.DataFrame({"lot_size": [250.0], "lot_status": ["derived"]}))
+    assert list(loader.mask_unverified_lots(pd.DataFrame({"lot_size": [250.0], "lot_status": ["stated"]}))
                 ["lot_size"]) == [250.0]
+
+
+@pytest.mark.unit
+def test_alternating_lot_blips_settle_the_way_repeated_nightly_despiking_does():
+    # around a lot change, open-interest GCDs can alternate day to day (DIVISLAB 2022-06, WIPRO 2022-12)
+    lots = pd.Series([1000.0] * 6 + [2000, 1000, 2000, 1000, 2000] + [1000.0] * 6)
+    once = ds.despike_lots(lots)
+    stable = bs.despike_until_stable(lots)
+    assert (stable == 1000.0).all()
+    assert not once.equals(stable)                     # a single pass is not enough
+    s = pd.DataFrame({"symbol": "WIPRO", "trade_date": pd.bdate_range("2022-11-21", periods=len(lots)).date,
+                      "lot_size": lots, "lot_source": "derived_oi"})
+    fixed, changed = bs.stable_lots(s)
+    assert (fixed["lot_size"] == 1000.0).all() and changed == 3
+    s["lot_source"] = "stated"                         # stated lots are never touched
+    assert bs.stable_lots(s)[1] == 0

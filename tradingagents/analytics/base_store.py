@@ -4,7 +4,8 @@ Two datasets beside the live store, one Parquet file per year under ``<store>/<d
 
 - ``base_fo_summary``: one row per (day, underlying), from :func:`datastore.fo_summary` over every symbol in the
   file, plus ``kind`` (index / stock / other), ``lot_source`` (stated in the file, or derived from open interest)
-  and ``lot_status``. Every lot before 2018 is ``UNVERIFIED``: derived and not checked against NSE circulars.
+  and ``lot_status``. A lot stated in the file (UDiFF, from 2024-07-08) is ``stated``; every lot derived from open
+  interest (all legacy files, to mid-2024) is ``UNVERIFIED`` until checked against NSE circulars.
 - ``base_option_chain``: :func:`datastore.option_chain` (+/-25% moneyness, <= 70 days) over every symbol, with
   two quality flags that never drop a row: ``flag_parity`` (put-call parity off by more than 1% of the forward)
   and ``flag_below_intrinsic`` (a traded close below the discounted intrinsic value by more than
@@ -21,7 +22,7 @@ import json
 import shutil
 from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -34,7 +35,6 @@ from tradingagents.dataflows.vendors.nse.calendar import ARCHIVE_HOLES
 
 SUMMARY, CHAIN = "base_fo_summary", "base_option_chain"
 DATASETS = (SUMMARY, CHAIN)
-LOTS_VERIFIED_FROM = date(2018, 1, 1)
 UNVERIFIED = "UNVERIFIED"
 PARITY_TOLERANCE = 0.01             # of the forward
 INTRINSIC_TOLERANCE = (0.05, 0.0025)  # rupees, share of the forward: the larger applies
@@ -95,10 +95,52 @@ def build_day(args: tuple[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
     return summary, chain
 
 
+def despike_until_stable(lots: pd.Series, max_passes: int = 50) -> pd.Series:
+    """:func:`datastore.despike_lots` repeated until nothing changes. One pass over alternating blips around a lot
+    change (e.g. 200, 100, 200, 100) can flip them the wrong way; the live store converges because every nightly
+    build despikes again, so the base must converge too (PA-35)."""
+    for _ in range(max_passes):
+        nxt = ds.despike_lots(lots)
+        if nxt.equals(lots):
+            return nxt
+        lots = nxt
+    raise RuntimeError(f"lot despiking did not settle in {max_passes} passes")
+
+
+def stable_lots(summary: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Derived lots despiked per symbol until stable; returns the frame and the rows changed. Stated lots untouched."""
+    summary = summary.sort_values(["symbol", "trade_date"]).copy()
+    derived = summary["lot_source"] == "derived_oi"
+    before = summary["lot_size"].copy()
+    fixed = summary[derived].groupby("symbol", group_keys=False)["lot_size"].apply(despike_until_stable)
+    summary.loc[fixed.index, "lot_size"] = fixed.to_numpy()
+    return summary, int((before.fillna(-1) != summary["lot_size"].fillna(-1)).sum())
+
+
+def restabilize(years: Iterable[int], root: Path | None = None) -> dict[int, int]:
+    """Apply :func:`stable_lots` to stored summary files of one batch; rewrites (after a snapshot) only years that
+    change. Returns rows changed per year."""
+    root = root or ds.store_root()
+    years = sorted(set(years))
+    stored = load(SUMMARY, years, root=root)
+    fixed, _ = stable_lots(stored)
+    year = pd.to_datetime(fixed["trade_date"]).dt.year
+    changed = {}
+    for y in years:
+        old = stored[pd.to_datetime(stored["trade_date"]).dt.year == y].sort_values(["trade_date", "symbol"])
+        new = fixed[year == y].sort_values(["trade_date", "symbol"])
+        n = int((old["lot_size"].fillna(-1).to_numpy() != new["lot_size"].fillna(-1).to_numpy()).sum())
+        changed[y] = n
+        if n:
+            path = root / SUMMARY / f"{y}.parquet"
+            _snapshot(path)
+            ds.write_parquet(new.reset_index(drop=True), path)
+    return changed
+
+
 def _lot_status(summary: pd.DataFrame) -> pd.Series:
-    early = pd.to_datetime(summary["trade_date"]) < pd.Timestamp(LOTS_VERIFIED_FROM)
-    return pd.Series(np.where(early, UNVERIFIED, np.where(summary["lot_source"] == "stated", "stated", "derived")),
-                     index=summary.index)
+    """``stated`` where the file states the lot; ``UNVERIFIED`` everywhere else (derived, or no lot at all)."""
+    return pd.Series(np.where(summary["lot_source"] == "stated", "stated", UNVERIFIED), index=summary.index)
 
 
 def _snapshot(path: Path) -> Path | None:
@@ -132,30 +174,28 @@ def build_years(years: Iterable[int], raw: Path | None = None, root: Path | None
     years = sorted(set(years))
     jobs = {y: [(str(raw_path(raw, "fo", d, ok[(d, "fo")].url)), ok[(d, "fo")].url.rsplit("/", 1)[-1])
                 for d in trading_days if d.year == y] for y in years}
-    built: dict[int, tuple[pd.DataFrame, pd.DataFrame]] = {}
+    def write(name: str, y: int, df: pd.DataFrame) -> int:
+        df = ds.add_known_from(df.reset_index(drop=True), sessions)
+        path = root / name / f"{y}.parquet"
+        _snapshot(path)
+        ds.write_parquet(df, path)
+        return len(df)
+
+    # each year's chain is written as soon as it is built (a year can be ~10M rows); summaries stay in memory
+    summaries, counts = [], {}
     with ProcessPoolExecutor(workers) as pool:
         for y in years:
             parts = list(pool.map(build_day, jobs[y], chunksize=4))
-            built[y] = (pd.concat([p[0] for p in parts], ignore_index=True),
-                        pd.concat([p[1] for p in parts], ignore_index=True))
+            summaries.append(pd.concat([p[0] for p in parts], ignore_index=True))
+            counts[y] = {CHAIN: write(CHAIN, y, pd.concat([p[1] for p in parts], ignore_index=True))}
+            del parts
     # despike the derived lots across the whole batch, per symbol (as the live store does)
-    summary = pd.concat([built[y][0] for y in years], ignore_index=True).sort_values(["symbol", "trade_date"])
-    derived = summary["lot_source"] == "derived_oi"
-    despiked = summary[derived].groupby("symbol", group_keys=False)["lot_size"].apply(ds.despike_lots)
-    summary.loc[despiked.index, "lot_size"] = despiked.to_numpy()
+    summary = pd.concat(summaries, ignore_index=True).sort_values(["symbol", "trade_date"])
+    summary, _ = stable_lots(summary)
     summary["lot_status"] = _lot_status(summary)
-    counts = {}
     for y in years:
         s = summary[pd.to_datetime(summary["trade_date"]).dt.year == y].sort_values(["trade_date", "symbol"])
-        c = built[y][1]
-        out = {}
-        for name, df in ((SUMMARY, s), (CHAIN, c)):
-            df = ds.add_known_from(df.reset_index(drop=True), sessions)
-            path = root / name / f"{y}.parquet"
-            _snapshot(path)
-            ds.write_parquet(df, path)
-            out[name] = len(df)
-        counts[y] = out
+        counts[y] = {SUMMARY: write(SUMMARY, y, s), **counts[y]}
     write_manifest(root, raw, ok)
     return counts
 

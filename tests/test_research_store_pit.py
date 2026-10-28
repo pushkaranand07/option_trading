@@ -44,3 +44,20 @@ def test_no_price_bar_or_known_from_on_a_day_without_an_nse_session():
     assert not off, f"price bars on days with no NSE session: {off}"
     bad = sorted(set(known[window & (known <= last) & ~known.isin(sessions)]))
     assert not bad, f"known_from on days with no NSE session: {bad}"
+
+
+def test_the_loader_never_returns_an_unverified_lot_size(tmp_path):
+    """Every UNVERIFIED lot in the stored base comes back empty in lot_size (value in lot_size_unverified)."""
+    if not (ROOT / "base_fo_summary").is_dir():
+        pytest.skip("base_fo_summary not built on this machine")
+    from datetime import date
+
+    files = sorted((ROOT / "base_fo_summary").glob("*.parquet"))
+    stored = pd.concat(pd.read_parquet(f, columns=["trade_date", "lot_status", "known_from"]) for f in files)
+    open_end = pd.Timestamp(date(2024, 12, 31))
+    unverified = stored[(stored["lot_status"] == "UNVERIFIED")]
+    assert (pd.to_datetime(unverified["known_from"]) <= open_end).all(), "an UNVERIFIED lot inside a holdout"
+    got = loader.load("base_fo_summary", start=date(2010, 1, 1), root=ROOT, log_path=tmp_path / "trials.sqlite")
+    got_unverified = got[got["lot_status"] == "UNVERIFIED"]
+    assert len(got_unverified) == len(unverified)
+    assert got_unverified["lot_size"].isna().all()
