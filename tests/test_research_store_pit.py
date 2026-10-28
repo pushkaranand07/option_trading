@@ -21,7 +21,9 @@ pytestmark = pytest.mark.skipif(not (ROOT / "fo_summary").is_dir(), reason="set 
 
 @pytest.mark.parametrize("dataset", loader.DATASETS)
 def test_every_row_has_a_known_from_after_its_session(dataset):
-    files = (sorted((ROOT / dataset).glob("*.parquet")) if dataset in ds.DATASETS
+    if dataset in loader.BASE and not (ROOT / dataset).is_dir():
+        pytest.skip(f"{dataset} not built on this machine")
+    files = (sorted((ROOT / dataset).glob("*.parquet")) if dataset in ds.DATASETS + loader.BASE
              else [ROOT.joinpath(*loader.DERIVED[dataset])])
     df = pd.concat((pd.read_parquet(f, columns=["trade_date", "known_from"]) for f in files), ignore_index=True)
     loader.check_point_in_time(df, dataset)

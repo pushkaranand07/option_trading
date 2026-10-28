@@ -42,7 +42,18 @@ in locked periods are not inspected.
 |---|---|---|
 | `chronos/<symbol>.parquet` for the 29 stocks that had a 2026-01-15 bar (5,537 rows) | 2026-01-15 | Built from the uncorrected prices. Chronos is rejected (QLIKE 0.382 vs GARCH 0.336) and is not in the nightly job, so its outputs are kept as they were and must not be used |
 
-## 3. Forward-only fields
+## 3. Stored base (every F&O underlying)
+
+Built by `scripts/quant_build_base.py`; per-year rows, range, checksum and download dates in `<store>/base_manifest.json`.
+
+| Table | Years | Rows | Disk | Filter | Notes |
+|---|---|---|---|---|---|
+| `base_fo_summary` | 2015–2017 | 137,928 | 8.9 MB | every underlying | `lot_status` UNVERIFIED on every pre-2018 row; the research loader masks those lots |
+| `base_option_chain` | 2015–2017 | 14,526,511 | 135.9 MB | ±25% moneyness, ≤70 days | `flag_parity`, `flag_below_intrinsic` (kept, never dropped) |
+
+Quality results: [PA-34](PA_34-base-2015-2017.md).
+
+## 4. Forward-only fields
 
 Collected from the day capture starts; no history exists or will be bought (user, 2026-10-27).
 
