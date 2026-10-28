@@ -80,6 +80,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-31](PA_31-research-splits-and-locked-loader.md) | Data foundation step 1: frozen splits (2025+ locked and labelled contaminated, clean forward holdout), locked research loader, point-in-time audit, NSE archive holes | Done |
 | [PA-32](PA_32-prices-holiday-bars.md) | Prices: bars only on NSE sessions; 29 Yahoo bars on the 2026-01-15 holiday removed, 32 `known_from` corrected; data catalog started | Done |
 | [PA-33](PA_33-fo-universe-count.md) | Data foundation step 2, count only: 19 index + 473 stock symbols since 2010, 274 left F&O; option rows and disk for 5 filter options; nothing ingested | Done |
+| [PA-34](PA_34-base-2015-2017.md) | Data foundation batch a: stored base 2015–2017, every F&O underlying (14.5M chain rows, 136 MB), quality checks PASS, pre-2018 lots UNVERIFIED and masked | Done |
 
 **Renumbered on 2026-10-26.** Sixteen small records were folded into the ones they belong to and the rest numbered 01–27. Pull requests and commits before that date use the old numbers:
 

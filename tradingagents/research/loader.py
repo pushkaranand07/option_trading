@@ -29,7 +29,9 @@ from tradingagents.research import splits
 
 # Derived tables that carry known_from, beside the store's own datasets.
 DERIVED = {"prices": ("prices", "prices.parquet"), "iv30": ("iv", "iv30.parquet"), "regime": ("regime", "regime.parquet")}
-DATASETS = ds.DATASETS + tuple(DERIVED)
+# The stored base (every F&O underlying), one file per year: tradingagents/analytics/base_store.py
+BASE = ("base_fo_summary", "base_option_chain")
+DATASETS = ds.DATASETS + tuple(DERIVED) + BASE
 REFUSED = {
     "vol_forecasts": "has no known_from column; stamp it before research code may read it",
     "chronos": "has no known_from column; stamp it before research code may read it",
@@ -100,6 +102,20 @@ def _read(dataset: str, start: date | None, end: date | None, symbols: Iterable[
           root: Path | None) -> pd.DataFrame:
     if dataset in ds.DATASETS:
         return ds.load(dataset, start, end, symbols, root)
+    if dataset in BASE:
+        files = sorted(((root or ds.store_root()) / dataset).glob("*.parquet"))
+        files = [f for f in files if (not start or int(f.stem) >= start.year) and (not end or int(f.stem) <= end.year)]
+        if not files:
+            return pd.DataFrame()
+        filters = [("symbol", "in", sorted(set(symbols)))] if symbols is not None else None
+        df = pd.concat((pd.read_parquet(f, filters=filters) for f in files), ignore_index=True)
+        traded = pd.to_datetime(df["trade_date"])
+        keep = pd.Series(True, index=df.index)
+        if start:
+            keep &= traded >= pd.Timestamp(start)
+        if end:
+            keep &= traded <= pd.Timestamp(end)
+        return df[keep].reset_index(drop=True)
     folder, name = DERIVED[dataset]
     df = pd.read_parquet((root or ds.store_root()) / folder / name)
     traded = pd.to_datetime(df["trade_date"])
@@ -113,12 +129,27 @@ def _read(dataset: str, start: date | None, end: date | None, symbols: Iterable[
     return df[keep].reset_index(drop=True)
 
 
+def mask_unverified_lots(df: pd.DataFrame) -> pd.DataFrame:
+    """Lot sizes marked UNVERIFIED (every one before 2018) move to ``lot_size_unverified``; ``lot_size`` is left
+    empty on those rows, so sizing or cost code reading ``lot_size`` cannot use them by accident."""
+    if "lot_status" not in df or not len(df):
+        return df
+    df = df.copy()
+    bad = df["lot_status"] == "UNVERIFIED"
+    df["lot_size_unverified"] = df["lot_size"].where(bad)
+    df.loc[bad, "lot_size"] = float("nan")
+    return df
+
+
 def load(dataset: str, start: date | None = None, end: date | None = None, symbols: Iterable[str] | None = None,
-         unlocks: Sequence[Unlock] = (), root: Path | None = None, log_path: Path | None = None) -> pd.DataFrame:
+         unlocks: Sequence[Unlock] = (), root: Path | None = None, log_path: Path | None = None,
+         allow_unverified_lots: bool = False) -> pd.DataFrame:
     """Rows of ``dataset`` first public between ``start`` and ``end`` (by ``known_from``, both inclusive).
 
     ``end`` defaults to the last open day (the validation set's end), so a call without unlocks never
-    reaches a holdout.
+    reaches a holdout. UNVERIFIED lot sizes are masked (:func:`mask_unverified_lots`) unless
+    ``allow_unverified_lots``; nothing may use them for position sizing or costs until they are checked
+    against NSE circulars.
     """
     if dataset in REFUSED:
         raise PointInTimeError(f"{dataset}: {REFUSED[dataset]}")
@@ -142,7 +173,8 @@ def load(dataset: str, start: date | None = None, end: date | None = None, symbo
     keep = known <= pd.Timestamp(end)
     if start:
         keep &= known >= pd.Timestamp(start)
-    return df[keep].reset_index(drop=True)
+    df = df[keep].reset_index(drop=True)
+    return df if allow_unverified_lots else mask_unverified_lots(df)
 
 
 def holdout_counts(dataset: str, symbols: Iterable[str] | None = None, root: Path | None = None) -> pd.DataFrame:

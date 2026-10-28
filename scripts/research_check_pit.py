@@ -27,7 +27,7 @@ from tradingagents.dataflows.vendors.nse.calendar import (  # noqa: E402
     parse_holiday_master,
 )
 from tradingagents.dataflows.vendors.nse.client import default_client  # noqa: E402
-from tradingagents.research.loader import DERIVED  # noqa: E402
+from tradingagents.research.loader import BASE, DERIVED  # noqa: E402
 
 
 def official_calendar(years: range) -> tuple[NSECalendar, set[date]]:
@@ -51,13 +51,13 @@ def next_session(cal: NSECalendar, day: date) -> date:
 
 def dates_of(dataset: str) -> pd.DataFrame:
     root = ds.store_root()
-    files = (sorted((root / dataset).glob("*.parquet")) if dataset in ds.DATASETS
+    files = (sorted((root / dataset).glob("*.parquet")) if dataset in ds.DATASETS + BASE
              else [root.joinpath(*DERIVED[dataset])])
     return pd.concat((pd.read_parquet(f, columns=["trade_date", "known_from"]) for f in files), ignore_index=True)
 
 
 def main() -> int:
-    datasets = ds.DATASETS + tuple(DERIVED)
+    datasets = ds.DATASETS + tuple(DERIVED) + tuple(d for d in BASE if (ds.store_root() / d).is_dir())
     frames = {name: dates_of(name) for name in datasets}
     first = min(pd.to_datetime(f["trade_date"]).min() for f in frames.values()).year
     cal, muhurat = official_calendar(range(first, date.today().year + 1))
