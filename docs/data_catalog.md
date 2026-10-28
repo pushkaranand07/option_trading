@@ -146,6 +146,18 @@ snapshot, with row counts and every existing column identical (trial-log event 7
 (`loader.european_only`; `loader.require_european` raises otherwise, tested). American rows are never parity- or
 intrinsic-tested in the base.
 
+### Dataset B (intraday)
+
+**Status: free sources only (user, 2026-10-28); depth = none usable.** Probe results in
+[PA-38](PA_38-intraday-free-source-probe.md): Yahoo Finance (60m back to 2024-10-30, 5m/15m 60 days, 1m ~30 days; spot
+only) and NSE's public pages (current session only) are **NOT USABLE**, because their terms forbid automated
+collection; free broker APIs are not probed (they need an account). Nothing is ingested and no forward logger runs.
+
+Rules for any intraday data: `known_from` is the bar's **end** (capped at 15:30), every row carries its source, and two
+sources are never spliced (`tradingagents/research/intraday.py`, tested). Rows from 2025-01-01 sit in the locked range
+under the research loader's lock; the forward holdout is not read. **Any intraday-dependent test is "sample size limited
+by data depth".**
+
 ## 4. Open items (no decision yet)
 
 | Item | Finding | Rule until decided |
