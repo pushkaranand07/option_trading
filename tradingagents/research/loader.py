@@ -31,11 +31,38 @@ from tradingagents.research import splits
 DERIVED = {"prices": ("prices", "prices.parquet"), "iv30": ("iv", "iv30.parquet"), "regime": ("regime", "regime.parquet")}
 # The stored base (every F&O underlying), one file per year: tradingagents/analytics/base_store.py
 BASE = ("base_fo_summary", "base_option_chain")
-DATASETS = ds.DATASETS + tuple(DERIVED) + BASE
+# The live pipeline's tables: 31 symbols from 2018, and their known_from is one session late on 2021-03-26 (they skip
+# the 2021-03-30 archive hole). Research reads the base only (user, 2026-10-28); the live pipeline keeps its own access.
+LIVE = ds.DATASETS + tuple(DERIVED)
+DATASETS = BASE
 REFUSED = {
     "vol_forecasts": "has no known_from column; stamp it before research code may read it",
     "chronos": "has no known_from column; stamp it before research code may read it",
 }
+
+
+class LiveTableRefused(PermissionError):
+    """Research code asked for a live-pipeline table; it reads the stored base only."""
+
+
+class AmericanOptionsError(ValueError):
+    """American-style options reached code that assumes European exercise (implied vol, put-call parity)."""
+
+
+def european_only(chain: pd.DataFrame) -> pd.DataFrame:
+    """The European-style rows of an option chain: what implied-vol and parity code may use. Every stock option
+    before the 2011-01-27 expiry was American (NSE/faop/16165)."""
+    if "exercise_style" not in chain:
+        raise AmericanOptionsError("chain has no exercise_style column; cannot prove it is European")
+    return chain[chain["exercise_style"] == "european"].reset_index(drop=True)
+
+
+def require_european(chain: pd.DataFrame) -> pd.DataFrame:
+    """Raise unless every row is European; for implied-vol and parity code to call on its input."""
+    if "exercise_style" not in chain or (chain["exercise_style"] != "european").any():
+        n = int((chain.get("exercise_style", pd.Series("missing", index=chain.index)) != "european").sum())
+        raise AmericanOptionsError(f"{n} rows are not European-style; filter with european_only first")
+    return chain
 
 # known_from can trail trade_date by a long holiday weekend (e.g. 2021-03-26 -> 2021-03-31 over an archive
 # hole); read this much earlier by trade_date so no row known inside the range is missed.
@@ -153,6 +180,8 @@ def load(dataset: str, start: date | None = None, end: date | None = None, symbo
     """
     if dataset in REFUSED:
         raise PointInTimeError(f"{dataset}: {REFUSED[dataset]}")
+    if dataset in LIVE:
+        raise LiveTableRefused(f"{dataset} is a live-pipeline table; research code reads {BASE} only")
     if dataset not in DATASETS:
         raise ValueError(f"unknown dataset {dataset!r}; one of {DATASETS}")
     end = end or splits.last_open_day()
@@ -179,6 +208,8 @@ def load(dataset: str, start: date | None = None, end: date | None = None, symbo
 
 def holdout_counts(dataset: str, symbols: Iterable[str] | None = None, root: Path | None = None) -> pd.DataFrame:
     """Rows per ``known_from`` day in each locked period: counts only, for data-quality checks."""
+    if dataset in LIVE:
+        raise LiveTableRefused(f"{dataset} is a live-pipeline table; research code reads {BASE} only")
     if dataset not in DATASETS:
         raise ValueError(f"unknown dataset {dataset!r}; one of {DATASETS}")
     locked = [p for p in splits.periods().values() if p.locked]

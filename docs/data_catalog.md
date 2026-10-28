@@ -16,6 +16,7 @@ label the result NSE data.**
 | Session | Missing | Checked | Effect |
 |---|---|---|---|
 | 2021-03-30 | F&O bhavcopy | 404 in the legacy and UDiFF forms, 2026-10-27 | The store takes its sessions from F&O files, so the day is absent from every store dataset; 2021-03-26 rows carry `known_from` 2021-03-31 (one session late). `prices` and GARCH keep the day (Yahoo; NIFTY 14,845.10 = NSE's index file). No backtest trade was open across it. |
+| 2013-10-09 | F&O bhavcopy | 404 in the legacy and UDiFF forms, 2026-10-28; NSE's market activity report and MTO file for the day exist, so it was a session (not on any holiday circular) | Absent from the stored base; 2013-10-08 rows carry `known_from` 2013-10-09 (the hole counts as the session it was). Calendar check kept **FAIL** |
 | 2015-02-02, 2015-03-12, 2015-03-13, 2015-05-19, 2015-07-08, 2015-09-04, 2015-10-16, 2015-12-01, 2016-06-20 | Index closes | 404, 2026-10-27 | Raw backward-holdout files only; the store's `index_close` starts 2018 |
 
 ### Second sources already checked (do not search again)
@@ -27,6 +28,21 @@ matches all 5,905 traded option contracts exactly (close, open interest, contrac
 the 2,109 untraded contracts with open interest and every option settle price, so a day rebuilt from it would look
 complete without being complete. The hole stays.
 
+**2013-10-09, NSE's own market activity report** (`/archives/fo/mkt/fo09102013.zip`, 83,310 bytes) exists, as does
+the MTO file; the participant file does not. **Not used (user, 2026-10-28)**, for the same reason as 2021-03-30: a
+traded-contracts-only day looks complete when it is not. The hole stays.
+
+### Re-issued files
+
+**2012-05-14** (`fo14MAY2012bhav.csv.zip`): the only one of 2010–2014's 1,243 files with two-digit years (`14-May-12`)
+and a `*Updated` footer row; its CSV is dated 2012-05-22 09:29 inside the zip. A fresh download on 2026-10-28 is
+byte-identical to the stored file, and no other URL form exists (`.csv`, `_old`, `/archives/fo/bhav/`: 404), so NSE
+serves only this version; whether an earlier original existed is UNVERIFIED. **Used** (the only bhavcopy for the
+day). Against NSE's market activity report for 2012-05-14: all 1,539 traded options match on close and open interest;
+contracts differ on 75 index-option rows (NIFTY 60, BANKNIFTY 10, MINIFTY 5), the bhavcopy equal or higher (median
++0.3%, at most 2×). The raw file is kept as downloaded; the parser drops the footer row and reads the two-digit years.
+No other file dropped a row.
+
 ## 2. Corrections
 
 Each correction is logged in the trial log's `events` table (`kind = data_correction`) with the rows changed; values
@@ -36,6 +52,14 @@ in locked periods are not inspected.
 |---|---|---|---|---|---|---|
 | 2026-10-27 | prices | Bars dated on days with no NSE session removed (not replaced); `known_from` re-stamped from the same sessions | 29 removed (all 2026-01-15); 32 `known_from` corrected (all 2026-01-14) | final_holdout | 2 | [PA-32](PA_32-prices-holiday-bars.md) |
 | 2026-10-28 | base_fo_summary | Derived lots despiked until stable (one pass could flip alternating blips around a lot change; the live store converges by despiking every night) | 877 `lot_size` values (2015: 449, 2016: 128, 2017: 62, 2018: 54, 2019: 48, 2020: 61, 2022: 65, 2023: 10), all UNVERIFIED | development, validation | 4 | [PA-35](PA_35-base-2018-2026.md) |
+| 2026-10-28 | base_fo_summary | Lots despiked across the 2017/2018 batch boundary as one series | 6 (MRF, PAGEIND, SHREECEM), UNVERIFIED | development | 6 | [PA-36](PA_36-base-2010-2014.md) |
+| 2026-10-28 | base_option_chain | Schema: `exercise_style = european` added to 2015–2026; row counts and every existing column identical | 0 values changed; 80,232,394 rows gained the column | all | 7 | [PA-36](PA_36-base-2010-2014.md) |
+| 2026-10-28 | base_fo_summary | Lots despiked across the 2014/2015 boundary after the 2010–2014 ingest | 4 (2015), UNVERIFIED | development | 9 | [PA-36](PA_36-base-2010-2014.md) |
+
+**2026-10-27 nightly run, `prices`:** 69,920 rows, 7 more than 69,881 + one new session (32). The 7 are Yahoo bars
+that filled sessions missing before; every symbol now has one bar per session. **Their fill dates are UNVERIFIED**: no
+copy of the file was kept before that run. From 2026-10-28 every rebuild or correction of the stored base snapshots
+the file first (`<store>/_snapshots/`), so such changes can be traced to exact rows.
 
 ### Stale derived outputs (known, not rebuilt)
 
@@ -52,8 +76,8 @@ counted, never studied.
 
 | Table | Years | Rows | Disk | Filter | Notes |
 |---|---|---|---|---|---|
-| `base_fo_summary` | 2015–2026 | 553,723 | 43.3 MB | every underlying | lots: 121,764 stated, 431,959 UNVERIFIED (427,619 derived from open interest, 4,340 none) |
-| `base_option_chain` | 2015–2026 | 80,232,394 | 1,054.7 MB | ±25% moneyness, ≤70 days | `flag_parity`, `flag_below_intrinsic` (kept, never dropped). 2021-03-30 is a documented hole |
+| `base_fo_summary` | 2010–2026 | 787,731 | 55.7 MB | every underlying | lots: 121,764 stated, 665,967 UNVERIFIED (659,839 derived from open interest, 6,128 none) |
+| `base_option_chain` | 2010–2026 | 95,700,442 | 1,181.3 MB | ±25% moneyness, ≤70 days | `exercise_style`; `flag_parity`, `flag_below_intrinsic` (kept, never dropped). 2013-10-09 and 2021-03-30 are documented holes |
 
 Quality results: [PA-34](PA_34-base-2015-2017.md) (2015–2017), [PA-35](PA_35-base-2018-2026.md) (2018–2026 and the
 reconciliation with the live store).
@@ -64,9 +88,8 @@ reconciliation with the live store).
 F&O bhavcopy is gone), so data from 2021-03-26 was public on 2021-03-30. The base stamps it so; the live
 `fo_summary` / `option_chain` / `participant` / `delivery` / `index_close` / `iv30` stamp it 2021-03-31, one session
 late (conservative, no look-ahead). Affected in the live store: the 2021-03-26 rows (31 summary rows, 7,696 chain rows
-for the 31 symbols). The live store is **not changed** (user, 2026-10-28). Research code reads `base_fo_summary` /
-`base_option_chain` through the research loader; the loader also still serves the live datasets, which carry the
-late stamp on that one day.
+for the 31 symbols). The live store is **not changed** (user, 2026-10-28). **The research loader serves the base
+tables only** and refuses every live table (`LiveTableRefused`, tested); live-pipeline code keeps its own access.
 
 ### What "reconciled with the live store" means for lots
 
@@ -100,6 +123,28 @@ All 2010–2014 files are in the legacy format, like 2015–2017, so the 2015–
 
 **Stop rule for batch c (user):** stop and report if measured rows exceed the estimate by more than 25% (over 16.5M),
 or measured disk exceeds it by more than 25% (over 154 MB). Both gaps are reported either way.
+
+### 2010–2014: estimate vs measured
+
+| | Estimate | Measured | Gap | Stop limit |
+|---|---|---|---|---|
+| Option-chain rows (filter A) | 13.2M | 15,468,048 | +17.2% | 16.5M: within |
+| Option-chain disk | ~123 MB | 126.3 MB | +2.7% | 154 MB: within |
+| Summary disk | — | 12.4 MB | — | — |
+| Raw F&O files | ~348 MB | 361.2 MB (1,243 files) | +3.8% | — |
+
+### Exercise style
+
+Stock options were **American** until the 2010-12-30 expiry and European from the 2011-01-27 expiry (NSE/faop/16165,
+2010-10-28; NSE/faop/16588). Raw files: 5,547,532 American (`CA` / `PA`) rows, all 2010 stock options, last traded
+2010-12-30; every one expires before 2011-01-27, and every European stock option of 2010–2011 (8,094,786) on or after
+it. Index options were European throughout. In the stored chain (after the filter): 2010 has 2,739,572 American and
+337,432 European rows; every other year is European. `exercise_style` was added to the 2015–2026 tables after a
+snapshot, with row counts and every existing column identical (trial-log event 7).
+
+**Rule:** any implied-vol or put-call-parity feature filters on `exercise_style == "european"`
+(`loader.european_only`; `loader.require_european` raises otherwise, tested). American rows are never parity- or
+intrinsic-tested in the base.
 
 ## 4. Open items (no decision yet)
 

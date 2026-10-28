@@ -19,7 +19,7 @@ ROOT = Path(os.environ.get("RESEARCH_STORE_DIR", "-"))
 pytestmark = pytest.mark.skipif(not (ROOT / "fo_summary").is_dir(), reason="set RESEARCH_STORE_DIR")
 
 
-@pytest.mark.parametrize("dataset", loader.DATASETS)
+@pytest.mark.parametrize("dataset", loader.LIVE + loader.BASE)
 def test_every_row_has_a_known_from_after_its_session(dataset):
     if dataset in loader.BASE and not (ROOT / dataset).is_dir():
         pytest.skip(f"{dataset} not built on this machine")

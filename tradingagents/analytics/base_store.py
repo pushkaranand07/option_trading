@@ -277,3 +277,37 @@ def load(name: str, years: Iterable[int] | None = None, symbols: Iterable[str] |
         return pd.DataFrame()
     filters = [("symbol", "in", sorted(set(symbols)))] if symbols is not None else None
     return pd.concat((pd.read_parquet(f, filters=filters) for f in files), ignore_index=True)
+
+
+def add_exercise_style(years: Iterable[int], root: Path | None = None) -> dict[int, dict]:
+    """Add ``exercise_style = "european"`` to stored chain years built before the column existed (2015-2026: every
+    option European, every row CE / PE). Snapshot first; afterwards the row count and every existing column must be
+    identical to the snapshot, or the file is restored and an error raised. Returns per-year counts."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.parquet as pq
+
+    root = root or ds.store_root()
+    done = {}
+    for y in sorted(set(years)):
+        path = root / CHAIN / f"{y}.parquet"
+        before = pq.read_table(path)
+        if "exercise_style" in before.column_names:
+            done[y] = {"rows": before.num_rows, "changed": False}
+            continue
+        types = before.column("option_type")
+        bad = before.num_rows - pc.sum(pc.is_in(types, value_set=pa.array(["CE", "PE"]))).as_py()
+        if bad:
+            raise ValueError(f"{y}: {bad} rows are not CE / PE; cannot mark them European")
+        snap = _snapshot(path)
+        after = before.append_column("exercise_style", pa.array(["european"] * before.num_rows, pa.string()))
+        pq.write_table(after, path)
+        check = pq.read_table(path)
+        same = (check.num_rows == before.num_rows
+                and check.select(before.column_names).equals(before)
+                and check.column_names == before.column_names + ["exercise_style"])
+        if not same:
+            shutil.copy2(snap, path)
+            raise RuntimeError(f"{y}: schema change altered existing data; restored from {snap}")
+        done[y] = {"rows": check.num_rows, "changed": True, "snapshot": str(snap)}
+    return done
