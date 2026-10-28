@@ -38,15 +38,27 @@ SUMMARY_KEY = ["trade_date", "symbol"]
 JUMP_SIGMA, JUMP_WINDOW = 5.0, 60
 
 
+CIRCULARS = Path(__file__).resolve().parents[1] / "docs" / "data" / "nse_fo_calendar_2010_2014.json"
+CIRCULAR_YEARS = range(2010, 2015)      # NSE's holiday API lists none for 2010 and an incomplete 2011
+
+
 def calendar(years: list[int], published: set[date]) -> NSECalendar:
-    client, hol = default_client(), {}
+    """NSE's F&O calendar: from the circulars for 2010-2014, from NSE's holiday API after. Muhurat days count as
+    sessions (by the circulars, or for API years when NSE published files on a listed holiday)."""
+    client, hol, special, muhurat = default_client(), {}, set(KNOWN_SPECIAL_SESSIONS), set()
+    circ = json.loads(CIRCULARS.read_text(encoding="utf-8"))
     for y in range(min(years), max(years) + 2):
-        hol |= parse_holiday_master(client.get_json("/api/holiday-master", {"type": "trading", "year": str(y)},
-                                                    ttl=86400).data)
-    muhurat = {d for d, n in hol.items() if n.endswith("*")} | (set(hol) & published)
-    return NSECalendar(hol, special_sessions=set(KNOWN_SPECIAL_SESSIONS) | {d for d, k in ARCHIVE_HOLES.items()
-                                                                          if "fo" in k},
-                       muhurat_days=muhurat)
+        if y in CIRCULAR_YEARS:
+            hol |= {date.fromisoformat(d): n for d, n in circ["weekday_holidays"][str(y)]["dates"].items()}
+            continue
+        api = parse_holiday_master(client.get_json("/api/holiday-master", {"type": "trading", "year": str(y)},
+                                                   ttl=86400).data)
+        hol |= api
+        muhurat |= {d for d, n in api.items() if n.endswith("*")} | (set(api) & published)
+    muhurat |= {date.fromisoformat(d) for d in circ["muhurat"]}
+    special |= {date.fromisoformat(d) for d in circ["special_sessions"]}
+    special |= {d for d, k in ARCHIVE_HOLES.items() if "fo" in k}
+    return NSECalendar(hol, special_sessions=special, muhurat_days=muhurat)
 
 
 def main() -> int:
@@ -84,9 +96,10 @@ def main() -> int:
         base_days = set(summary["trade_date"])
         diff = sorted(base_days ^ {d for d in fo_days if d.year == y})
         holes = sorted(d for d in ARCHIVE_HOLES if d.year == y and "fo" in ARCHIVE_HOLES[d])
-        result(f"{y} sessions vs NSE holiday list", "PASS" if not missing and not diff else "FAIL",
-               f"{sum(d.year == y for d in fo_days)} F&O files; unexplained missing {missing}; base vs files {diff}; "
-               f"documented holes {holes}")
+        status = "FAIL" if missing or diff or holes else "PASS"
+        result(f"{y} sessions vs NSE calendar", status,
+               f"{sum(d.year == y for d in fo_days)} F&O files; unexplained missing {missing}; base vs files {diff}"
+               + (f"; documented NSE archive holes (unrecoverable, kept FAIL) {holes}" if holes else ""))
         # 2. duplicates
         for name, df, key in ((bs.SUMMARY, summary, SUMMARY_KEY), (bs.CHAIN, chain, CHAIN_KEY)):
             dup = int(df.duplicated(key).sum())
@@ -125,7 +138,7 @@ def main() -> int:
                 good = 0
                 for _, r in df.iloc[rng.sample(range(len(df)), 10)].iterrows():
                     rec = ok[(r["trade_date"], "fo")]
-                    fo = ds.parse_fo(raw_path(raw, "fo", r["trade_date"], rec.url).read_bytes(),
+                    fo = bs.parse_fo_with_style(raw_path(raw, "fo", r["trade_date"], rec.url).read_bytes(),
                                      rec.url.rsplit("/", 1)[-1])
                     if name == bs.CHAIN:
                         m = fo[(fo["symbol"] == r["symbol"]) & (fo["expiry"] == r["expiry"])

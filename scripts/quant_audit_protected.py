@@ -41,7 +41,7 @@ def main() -> int:
             sample, good = df.iloc[rng.sample(range(len(df)), 10)], 0
             for _, r in sample.iterrows():
                 rec = ok[(r["trade_date"], "fo")]
-                fo = ds.parse_fo(raw_path(raw, "fo", r["trade_date"], rec.url).read_bytes(), rec.url.rsplit("/", 1)[-1])
+                fo = bs.parse_fo_with_style(raw_path(raw, "fo", r["trade_date"], rec.url).read_bytes(), rec.url.rsplit("/", 1)[-1])
                 if name == bs.CHAIN:
                     m = fo[(fo["symbol"] == r["symbol"]) & (fo["expiry"] == r["expiry"]) & (fo["strike"] == r["strike"])
                            & (fo["option_type"] == r["option_type"])]
