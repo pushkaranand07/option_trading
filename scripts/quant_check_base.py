@@ -1,9 +1,11 @@
-"""Quality checks of the stored base, per the data-foundation standards (docs/PA_34).
+"""Quality checks of the stored base, per the data-foundation standards (docs/PA_34, PA_35).
 
-    python scripts/quant_check_base.py --years 2015 2016 2017
+    python scripts/quant_check_base.py --years 2018 2019 ... 2026
 
-Prints PASS / FAIL (or REPORTED / LISTED where the standard asks for a report) with the measured numbers, and
-writes the price jumps for review to <store>/base_jumps.csv. Exit code 1 on any FAIL.
+One year at a time. Counts and integrity checks (sessions, duplicates, known_from, lot status, metadata) run on
+every year. Checks that read values or statistics (parity and intrinsic rates, > 5 sigma moves, the raw-file
+value audit) run only on rows first public before the final holdout (2025-01-01): the protected range is built,
+not studied. Prints PASS / FAIL (REPORTED / LISTED where the standard asks for a report); exit code 1 on FAIL.
 """
 
 from __future__ import annotations
@@ -29,19 +31,22 @@ from tradingagents.dataflows.vendors.nse.calendar import (  # noqa: E402
     parse_holiday_master,
 )
 from tradingagents.dataflows.vendors.nse.client import default_client  # noqa: E402
+from tradingagents.research import splits  # noqa: E402
 
 CHAIN_KEY = ["trade_date", "symbol", "instrument", "expiry", "strike", "option_type"]
 SUMMARY_KEY = ["trade_date", "symbol"]
 JUMP_SIGMA, JUMP_WINDOW = 5.0, 60
 
 
-def calendar(years: list[int], published: set[date]) -> tuple[NSECalendar, dict[date, str]]:
+def calendar(years: list[int], published: set[date]) -> NSECalendar:
     client, hol = default_client(), {}
     for y in range(min(years), max(years) + 2):
         hol |= parse_holiday_master(client.get_json("/api/holiday-master", {"type": "trading", "year": str(y)},
                                                     ttl=86400).data)
     muhurat = {d for d, n in hol.items() if n.endswith("*")} | (set(hol) & published)
-    return NSECalendar(hol, special_sessions=set(KNOWN_SPECIAL_SESSIONS), muhurat_days=muhurat), hol
+    return NSECalendar(hol, special_sessions=set(KNOWN_SPECIAL_SESSIONS) | {d for d, k in ARCHIVE_HOLES.items()
+                                                                          if "fo" in k},
+                       muhurat_days=muhurat)
 
 
 def main() -> int:
@@ -51,110 +56,117 @@ def main() -> int:
     args = parser.parse_args()
     years, results = sorted(args.years), []
     raw, root = raw_root(), ds.store_root()
-    manifest = load_manifest(raw)
-    ok = {(d, k): r for (d, k), r in manifest.items() if r.status == "ok"}
+    ok = {(d, k): r for (d, k), r in load_manifest(raw).items() if r.status == "ok"}
     fo_days = {d for d, k in ok if k == "fo"}
-    cal, hol = calendar(years, fo_days)
-    summary = bs.load(bs.SUMMARY, years)
-    chain = bs.load(bs.CHAIN, years)
+    cal = calendar(years, fo_days)
+    protected = splits.periods()["final_holdout"].start
+    rng = random.Random(args.seed)
+    totals = {"pt": 0, "pf": 0, "it": 0, "if": 0, "rows": 0}
+    lots = {"stated": 0, bs.UNVERIFIED: 0, "derived_oi": 0, "none": 0, "other_status": 0}
+    summary_all = bs.load(bs.SUMMARY, years)
 
     def result(name, status, detail):
         results.append(status)
-        print(f"[{status}] {name}: {detail}")
+        print(f"[{status}] {name}: {detail}", flush=True)
 
-    # 1. trading days vs NSE's holiday lists
+    def next_session(d: date) -> date:
+        d += timedelta(days=1)
+        while not cal.is_trading_day(d):
+            d += timedelta(days=1)
+        return d
+
     for y in years:
-        weekdays = [d.date() for d in pd.bdate_range(f"{y}-01-01", f"{y}-12-31")]
+        chain = bs.load(bs.CHAIN, [y])
+        summary = summary_all[pd.to_datetime(summary_all["trade_date"]).dt.year == y]
+        # 1. sessions vs NSE's holiday lists (archive holes count as documented holes, not gaps)
+        weekdays = [d.date() for d in pd.bdate_range(f"{y}-01-01", f"{y}-12-31") if d.date() <= max(fo_days)]
         missing = [d for d in weekdays if cal.is_trading_day(d) and d not in fo_days and d not in ARCHIVE_HOLES]
-        extra = sorted(set(pd.to_datetime(summary["trade_date"]).dt.date[pd.to_datetime(summary["trade_date"]).dt.year == y])
-                       ^ {d for d in fo_days if d.year == y})
-        result(f"{y} sessions vs NSE holiday list", "PASS" if not missing and not extra else "FAIL",
-               f"{sum(d.year == y for d in fo_days)} F&O files; unexplained missing sessions {missing}; "
-               f"days in the base but not in the files (or the reverse) {extra}")
+        base_days = set(summary["trade_date"])
+        diff = sorted(base_days ^ {d for d in fo_days if d.year == y})
+        holes = sorted(d for d in ARCHIVE_HOLES if d.year == y and "fo" in ARCHIVE_HOLES[d])
+        result(f"{y} sessions vs NSE holiday list", "PASS" if not missing and not diff else "FAIL",
+               f"{sum(d.year == y for d in fo_days)} F&O files; unexplained missing {missing}; base vs files {diff}; "
+               f"documented holes {holes}")
+        # 2. duplicates
+        for name, df, key in ((bs.SUMMARY, summary, SUMMARY_KEY), (bs.CHAIN, chain, CHAIN_KEY)):
+            dup = int(df.duplicated(key).sum())
+            result(f"{y} {name} duplicate keys", "PASS" if dup == 0 else "FAIL", f"{dup} of {len(df):,}")
+        # 3. known_from
+        for name, df in ((bs.SUMMARY, summary), (bs.CHAIN, chain)):
+            t, k = pd.to_datetime(df["trade_date"]).dt.date, pd.to_datetime(df["known_from"]).dt.date
+            exp = t.map({d: next_session(d) for d in set(t)})
+            settled = exp <= date.today()
+            bad = int(k.isna().sum() + (k <= t).sum() + (settled & (k != exp)).sum())
+            result(f"{y} {name} known_from = next official session", "PASS" if bad == 0 else "FAIL",
+                   f"{bad} rows wrong")
+        # 4. lots: verified only when stated in the file
+        for s in ("stated", bs.UNVERIFIED):
+            lots[s] += int((summary["lot_status"] == s).sum())
+        lots["other_status"] += int((~summary["lot_status"].isin(["stated", bs.UNVERIFIED])).sum())
+        for s in ("derived_oi", "none"):
+            lots[s] += int((summary["lot_source"] == s).sum())
+        wrong = int(((summary["lot_source"] == "stated") != (summary["lot_status"] == "stated")).sum())
+        result(f"{y} lot_status stated only where the file states it", "PASS" if wrong == 0 else "FAIL",
+               f"stated {int((summary['lot_status'] == 'stated').sum()):,}, UNVERIFIED "
+               f"{int((summary['lot_status'] == bs.UNVERIFIED).sum()):,}, inconsistent {wrong}")
+        # value / statistics checks: open periods only
+        open_rows = pd.to_datetime(chain["known_from"]) < pd.Timestamp(protected)
+        c = chain[open_rows]
+        totals["rows"] += len(c)
+        totals["pt"] += int(c["parity_tested"].sum())
+        totals["pf"] += int(c["flag_parity"].sum())
+        totals["it"] += int(c["intrinsic_tested"].sum())
+        totals["if"] += int(c["flag_below_intrinsic"].sum())
+        if len(c):
+            s_open = summary[pd.to_datetime(summary["known_from"]) < pd.Timestamp(protected)]
+            good = 0
+            for name, df, cols in ((bs.SUMMARY, s_open, ["fut_close", "fut_oi", "call_oi", "put_oi"]),
+                                   (bs.CHAIN, c, ["close", "settle", "open_interest", "contracts"])):
+                good = 0
+                for _, r in df.iloc[rng.sample(range(len(df)), 10)].iterrows():
+                    rec = ok[(r["trade_date"], "fo")]
+                    fo = ds.parse_fo(raw_path(raw, "fo", r["trade_date"], rec.url).read_bytes(),
+                                     rec.url.rsplit("/", 1)[-1])
+                    if name == bs.CHAIN:
+                        m = fo[(fo["symbol"] == r["symbol"]) & (fo["expiry"] == r["expiry"])
+                               & (fo["strike"] == r["strike"]) & (fo["option_type"] == r["option_type"])]
+                        same = len(m) == 1 and all(np.isclose(float(m[x].iloc[0]), float(r[x])) for x in cols)
+                    else:
+                        again = ds.fo_summary(fo, [r["symbol"]]).iloc[0]
+                        same = all(np.isclose(float(again[x]), float(r[x]), equal_nan=True) for x in cols)
+                    good += bool(same and (fo["trade_date"] == r["trade_date"]).all())
+                result(f"{y} {name} 10 random rows vs raw file", "PASS" if good == 10 else "FAIL", f"{good}/10")
+        else:
+            print(f"[--] {y}: value checks not run (protected range from {protected})", flush=True)
+        del chain, c
 
-    # 2. duplicates
-    for name, df, key in ((bs.SUMMARY, summary, SUMMARY_KEY), (bs.CHAIN, chain, CHAIN_KEY)):
-        dup = int(df.duplicated(key).sum())
-        result(f"{name} duplicate keys", "PASS" if dup == 0 else "FAIL", f"{dup} of {len(df):,} rows ({', '.join(key)})")
+    if totals["pt"]:
+        result("put-call parity (> 1% of F)", "REPORTED",
+               f"{totals['pf']:,} of {totals['pt']:,} tested rows flagged ({totals['pf'] / totals['pt']:.1%}), "
+               f"open-period rows only; flagged rows kept")
+        result("below discounted intrinsic", "REPORTED",
+               f"{totals['if']:,} of {totals['it']:,} tested traded rows ({totals['if'] / totals['it']:.2%}); kept")
 
-    # 3. option-chain consistency: flagged, never dropped
-    pt, pf = int(chain["parity_tested"].sum()), int(chain["flag_parity"].sum())
-    it, iflag = int(chain["intrinsic_tested"].sum()), int(chain["flag_below_intrinsic"].sum())
-    result("put-call parity (|C-P-e^-rT(F-K)| > 1% of F, same-expiry future as F)", "REPORTED",
-           f"{pf:,} of {pt:,} tested rows flagged ({pf / pt:.1%}); {len(chain) - pt:,} rows not testable "
-           f"(no traded pair or no same-expiry future); flagged rows kept")
-    result("price below discounted intrinsic (no valid implied vol; by > max(0.05, 0.25% of F))", "REPORTED",
-           f"{iflag:,} of {it:,} tested traded rows flagged ({iflag / it:.2%}); flagged rows kept")
+    # > 5 sigma moves, open periods only
+    s = summary_all[pd.to_datetime(summary_all["known_from"]) < pd.Timestamp(protected)].copy()
+    if len(s):
+        s["ref"] = s["underlying_price"].fillna(s["fut_close"])
+        s = s.sort_values(["symbol", "trade_date"])
+        s["ret"] = np.log(s["ref"]).groupby(s["symbol"]).diff()
+        s["sd"] = s.groupby("symbol")["ret"].transform(lambda r: r.shift(1).rolling(JUMP_WINDOW, min_periods=20).std())
+        jumps = s[s["ret"].abs() > JUMP_SIGMA * s["sd"]][["trade_date", "symbol", "kind", "ref", "ret", "sd"]]
+        out = root / f"base_jumps_{years[0]}_{years[-1]}.csv"
+        jumps.to_csv(out, index=False)
+        result("one-day moves > 5 sigma", "LISTED", f"{len(jumps)} on {jumps['symbol'].nunique()} underlyings -> {out}")
 
-    # 4. price jumps > 5 sigma (reference price: NSE's underlying, else the near-month future)
-    s = summary.copy()
-    s["ref"] = s["underlying_price"].fillna(s["fut_close"])
-    s = s.sort_values(["symbol", "trade_date"])
-    s["ret"] = np.log(s["ref"]).groupby(s["symbol"]).diff()
-    s["sd"] = s.groupby("symbol")["ret"].transform(lambda r: r.shift(1).rolling(JUMP_WINDOW, min_periods=20).std())
-    jumps = s[(s["ret"].abs() > JUMP_SIGMA * s["sd"])][["trade_date", "symbol", "kind", "ref", "ret", "sd"]]
-    jumps.to_csv(root / "base_jumps.csv", index=False)
-    result(f"one-day moves > {JUMP_SIGMA:.0f} sigma ({JUMP_WINDOW}-session sigma of earlier days)", "LISTED",
-           f"{len(jumps)} moves on {jumps['symbol'].nunique()} underlyings -> {root / 'base_jumps.csv'}; matching to "
-           "corporate actions UNVERIFIED (no corporate-action source in the store yet)")
-
-    # 5. point in time
-    traded, known = pd.to_datetime(chain["trade_date"]).dt.date, pd.to_datetime(chain["known_from"]).dt.date
-    for name, df in ((bs.SUMMARY, summary), (bs.CHAIN, chain)):
-        t, k = pd.to_datetime(df["trade_date"]).dt.date, pd.to_datetime(df["known_from"]).dt.date
-        nxt = {}
-        for d in set(t):
-            n = d + timedelta(days=1)
-            while not cal.is_trading_day(n):
-                n += timedelta(days=1)
-            nxt[d] = n
-        exp = t.map(nxt)
-        bad = int(k.isna().sum() + (k <= t).sum() + (k < exp).sum())
-        late = sorted(set(t[k > exp]))
-        result(f"{name} known_from (next official session)", "PASS" if bad == 0 else "FAIL",
-               f"{bad} missing / not after the session / earlier than the next session; later than it on "
-               f"{len(late)} trade dates {late[:5]}")
-    del traded, known
-
-    # 6. lot sizes before 2018
-    early = pd.to_datetime(summary["trade_date"]) < pd.Timestamp(bs.LOTS_VERIFIED_FROM)
-    wrong = int((summary.loc[early, "lot_status"] != bs.UNVERIFIED).sum())
-    none = int((summary["lot_source"] == "none").sum())
-    result("lot_status UNVERIFIED on every pre-2018 row", "PASS" if wrong == 0 else "FAIL",
-           f"{int(early.sum()):,} pre-2018 rows, {wrong} not UNVERIFIED; {none} rows with no lot at all")
-
-    # 7. timestamp / value audit: 10 random rows per dataset against the raw file
-    rng = random.Random(args.seed)
-    cache = {}
-    for name, df, cols in ((bs.SUMMARY, summary, ["fut_close", "fut_oi", "call_oi", "put_oi"]),
-                           (bs.CHAIN, chain, ["close", "settle", "open_interest", "contracts"])):
-        rows, good = df.iloc[rng.sample(range(len(df)), 10)], 0
-        for _, r in rows.iterrows():
-            d = r["trade_date"]
-            if d not in cache:
-                rec = ok[(d, "fo")]
-                cache[d] = ds.parse_fo(raw_path(raw, "fo", d, rec.url).read_bytes(), rec.url.rsplit("/", 1)[-1])
-            fo = cache[d]
-            if name == bs.CHAIN:
-                m = fo[(fo["symbol"] == r["symbol"]) & (fo["expiry"] == r["expiry"]) & (fo["strike"] == r["strike"])
-                       & (fo["option_type"] == r["option_type"])]
-                same = len(m) == 1 and all(np.isclose(float(m[c].iloc[0]), float(r[c])) for c in cols)
-            else:
-                again = ds.fo_summary(fo, [r["symbol"]]).iloc[0]
-                same = all(np.isclose(float(again[c]), float(r[c]), equal_nan=True) for c in cols)
-            good += bool(same and (fo["trade_date"] == d).all())
-        result(f"{name} 10 random rows vs raw file", "PASS" if good == 10 else "FAIL",
-               f"{good}/10 match the raw file ({', '.join(cols)}) and its date")
-
-    # 8. table metadata
+    print(f"Lots, all years: stated {lots['stated']:,}; UNVERIFIED {lots[bs.UNVERIFIED]:,} "
+          f"(derived from open interest {lots['derived_oi']:,}, no lot {lots['none']:,})")
     meta = json.loads((root / "base_manifest.json").read_text(encoding="utf-8"))
     need = ("rows", "min_date", "max_date", "sha256", "source", "downloaded")
     gaps = [(n, y) for n in bs.DATASETS for y in years
             if not all(meta.get(n, {}).get(str(y), {}).get(k) for k in need)
             or bs.sha256(root / n / f"{y}.parquet") != meta[n][str(y)]["sha256"]]
-    result("source, download dates, rows, date range, checksum per table", "PASS" if not gaps else "FAIL",
-           f"missing or mismatched: {gaps}")
-
+    result("source, download dates, rows, range, checksum per table", "PASS" if not gaps else "FAIL", f"gaps {gaps}")
     print("\nRESULT:", "FAIL" if "FAIL" in results else "PASS (no FAIL)")
     return 1 if "FAIL" in results else 0
 
