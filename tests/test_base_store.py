@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tradingagents.analytics import base_store as bs
+from tradingagents.analytics import base_store as bs, datastore as ds
 from tradingagents.research import loader
 
 
@@ -92,3 +92,19 @@ def test_loader_masks_unverified_lots_unless_asked(tmp_path):
     assert raw["lot_size"].iloc[0] == 500.0
     assert list(loader.mask_unverified_lots(pd.DataFrame({"lot_size": [250.0], "lot_status": ["stated"]}))
                 ["lot_size"]) == [250.0]
+
+
+@pytest.mark.unit
+def test_alternating_lot_blips_settle_the_way_repeated_nightly_despiking_does():
+    # around a lot change, open-interest GCDs can alternate day to day (DIVISLAB 2022-06, WIPRO 2022-12)
+    lots = pd.Series([1000.0] * 6 + [2000, 1000, 2000, 1000, 2000] + [1000.0] * 6)
+    once = ds.despike_lots(lots)
+    stable = bs.despike_until_stable(lots)
+    assert (stable == 1000.0).all()
+    assert not once.equals(stable)                     # a single pass is not enough
+    s = pd.DataFrame({"symbol": "WIPRO", "trade_date": pd.bdate_range("2022-11-21", periods=len(lots)).date,
+                      "lot_size": lots, "lot_source": "derived_oi"})
+    fixed, changed = bs.stable_lots(s)
+    assert (fixed["lot_size"] == 1000.0).all() and changed == 3
+    s["lot_source"] = "stated"                         # stated lots are never touched
+    assert bs.stable_lots(s)[1] == 0
