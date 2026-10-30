@@ -85,6 +85,7 @@ manually on Dhan. **Research and decision support, not investment advice.**
 | [PA-36](PA_36-base-2010-2014.md) | Data foundation batch c: stored base 2010–2014 (15.5M chain rows, 126 MB), F&O calendar from NSE circulars, American options marked, research loader base-only | Done |
 | [PA-37](PA_37-symbol-map-and-universes.md) | Data foundation batch d: NSE symbol map (41 of 57 renames mapped), point-in-time universes U1 (indices + top 100 stocks by prior-year turnover) and U2, sealed 2026 ranking | Done |
 | [PA-38](PA_38-intraday-free-source-probe.md) | Dataset B (intraday): free-source probe; parked, no usable source; nothing ingested | Done |
+| [PA-39](PA_39-gate-v1-and-harness.md) | Prompt 2: frozen gate v1, targets, validation harness and self-tests, forward registry, baseline measurement; no model | Done |
 
 **Renumbered on 2026-10-26.** Sixteen small records were folded into the ones they belong to and the rest numbered 01–27. Pull requests and commits before that date use the old numbers:
 

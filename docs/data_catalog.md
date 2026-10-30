@@ -160,6 +160,19 @@ Rules for any intraday data: `known_from` is the bar's **end** (capped at 15:30)
 sources are never spliced (`tradingagents/research/intraday.py`, tested). Any later intraday-dependent test is "sample size
 limited by data depth".
 
+### Gate v1 (Prompt 2)
+
+Frozen before any harness run: [gate_v1.json](gate_v1.json), hash `48379c7a…`; plain English in
+[gate_v1_summary.md](gate_v1_summary.md); record in [PA-39](PA_39-gate-v1-and-harness.md).
+
+| Item | Value |
+|---|---|
+| Table added | `base_futures`, 2010-2024, 2,068,418 contract-days, 0 duplicate keys. Prices as NSE reports them |
+| Targets | T1 net sign, T2 net magnitude, T3 forward realized volatility (risk use only), h = 1, 2, 3, 5, 10 |
+| Folds | Entry years 2013-14, 15-16, 17-18, 19-20, 21-22, 23-24 (validation, once per frozen spec) |
+| Trial count | 234 (184 + 50 baselines). Bonferroni threshold 0.000214 |
+| Baselines | [gate_v1_baselines.md](gate_v1_baselines.md) |
+
 ### Symbol map and universes
 
 | File | What | Rows |

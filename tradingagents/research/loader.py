@@ -30,7 +30,7 @@ from tradingagents.research import splits
 # Derived tables that carry known_from, beside the store's own datasets.
 DERIVED = {"prices": ("prices", "prices.parquet"), "iv30": ("iv", "iv30.parquet"), "regime": ("regime", "regime.parquet")}
 # The stored base (every F&O underlying), one file per year: tradingagents/analytics/base_store.py
-BASE = ("base_fo_summary", "base_option_chain")
+BASE = ("base_fo_summary", "base_option_chain", "base_futures")
 # The live pipeline's tables: 31 symbols from 2018, and their known_from is one session late on 2021-03-26 (they skip
 # the 2021-03-30 archive hole). Research reads the base only (user, 2026-10-28); the live pipeline keeps its own access.
 LIVE = ds.DATASETS + tuple(DERIVED)
