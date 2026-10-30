@@ -160,6 +160,12 @@ Rules for any intraday data: `known_from` is the bar's **end** (capped at 15:30)
 sources are never spliced (`tradingagents/research/intraday.py`, tested). Any later intraday-dependent test is "sample size
 limited by data depth".
 
+### Gate v2
+
+Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; plain English in
+[gate_v2_summary.md](gate_v2_summary.md); record in [PA-40](PA_40-gate-v2.md); baselines in
+[gate_v2_baselines.md](gate_v2_baselines.md). Trial count 334. Validation has been seen for baselines. Gate v1 below stays on file.
+
 ### Gate v1 (Prompt 2)
 
 Frozen before any harness run: [gate_v1.json](gate_v1.json), hash `48379c7a…`; plain English in

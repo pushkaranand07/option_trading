@@ -52,7 +52,7 @@ def load_rule(rule: str = "A") -> dict:
     sessions = g.session_list(f, [d for d, k in ARCHIVE_HOLES.items() if "fo" in k])
     ev, returns = g2.prepare(f, actions, rule)
     u1, u2 = g.universe_members(summ, pd.read_csv(uv.SYMBOL_MAP))
-    return dict(f=f, sessions=sessions, events=ev, returns=returns, months=months, U1=u1, U2=u2, rule=rule)
+    return {"f": f, "sessions": sessions, "events": ev, "returns": returns, "months": months, "U1": u1, "U2": u2, "rule": rule}
 
 
 def trades_for(data: dict, h: int, universe: str) -> pd.DataFrame:
