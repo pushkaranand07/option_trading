@@ -30,7 +30,7 @@ from tradingagents.research import splits
 # Derived tables that carry known_from, beside the store's own datasets.
 DERIVED = {"prices": ("prices", "prices.parquet"), "iv30": ("iv", "iv30.parquet"), "regime": ("regime", "regime.parquet")}
 # The stored base (every F&O underlying), one file per year: tradingagents/analytics/base_store.py
-BASE = ("base_fo_summary", "base_option_chain", "base_futures")
+BASE = ("base_fo_summary", "base_option_chain", "base_futures", "base_participant", "base_delivery", "base_index")
 # The live pipeline's tables: 31 symbols from 2018, and their known_from is one session late on 2021-03-26 (they skip
 # the 2021-03-30 archive hole). Research reads the base only (user, 2026-10-28); the live pipeline keeps its own access.
 LIVE = ds.DATASETS + tuple(DERIVED)
@@ -217,6 +217,34 @@ def load_actions(end: date | None = None, root: Path | None = None) -> tuple[pd.
     months = pd.read_parquet(folder / "months.parquet")["month"]
     actions = actions[pd.to_datetime(actions["ex_date"]) <= pd.Timestamp(end)].reset_index(drop=True)
     return actions, {m for m in months if m <= f"{end:%Y-%m}"}
+
+
+def load_price_events(end: date | None = None, root: Path | None = None) -> pd.DataFrame:
+    """Every price-affecting action subject in NSE's files, with ex_date up to ``end``: the discontinuity flag's input. Using
+    an ex-date only on or after that date needs no announcement date."""
+    end = end or splits.last_open_day()
+    if any(p.locked and p.overlaps(None, end) for p in splits.periods().values()):
+        raise HoldoutLocked(f"price events to {end} touch a locked period")
+    e = pd.read_parquet((root or ds.store_root()) / "base_actions" / "price_events.parquet")
+    return e[pd.to_datetime(e["ex_date"]) <= pd.Timestamp(end)].reset_index(drop=True)
+
+
+def load_board_notices(end: date | None = None, root: Path | None = None) -> pd.DataFrame:
+    """Stored board-meeting notices stamped up to ``end``, with each notice's own timestamp."""
+    end = end or splits.last_open_day()
+    if any(p.locked and p.overlaps(None, end) for p in splits.periods().values()):
+        raise HoldoutLocked(f"board notices to {end} touch a locked period")
+    n = pd.read_parquet((root or ds.store_root()) / "base_actions" / "board_notices.parquet")
+    return n[n["notice"] < pd.Timestamp(end) + pd.Timedelta(days=1)].reset_index(drop=True)
+
+
+def load_features(family: str, end: date | None = None, root: Path | None = None) -> pd.DataFrame:
+    """A built feature table, signal dates up to ``end``. A locked period is refused."""
+    end = end or splits.last_open_day()
+    if any(p.locked and p.overlaps(None, end) for p in splits.periods().values()):
+        raise HoldoutLocked(f"features to {end} touch a locked period")
+    t = pd.read_parquet((root or ds.store_root()) / "features_v1" / f"{family}.parquet")
+    return t[pd.to_datetime(t["signal_date"]) <= pd.Timestamp(end)].reset_index(drop=True)
 
 
 def holdout_counts(dataset: str, symbols: Iterable[str] | None = None, root: Path | None = None) -> pd.DataFrame:
