@@ -180,6 +180,13 @@ counts: [PA-37](PA_37-symbol-map-and-universes.md).
 | Put-call parity flags | Driven by thin trading. 2015–2017 tested pairs: thinner leg 1–9 contracts 16.1% flagged (91.7% of all flags), 10–99: 2.6%, 100–999: 0.2%, 1000+: 0.0%. Stock options 10.5%, index options 1.2%. Rate rises with distance from the money (2.5% within 2.5% of the future, 22.3% at 10–25%); days to expiry matter little (9–11%). Untraded rows are never tested | Any implied-vol feature needs a liquidity filter on **both** legs. The threshold is chosen in the feature-library step and pre-registered before any model sees results; not picked here |
 | Large one-day moves (> 5σ) | 2015–2017: 51 of 455 explained by a split or bonus in NSE's corporate-action data; 9 have another action in the window; 323 stock moves and 72 index moves UNVERIFIED. 2018–2024: 53 of 957 explained (17 splits, 36 bonuses); 33 another action; 828 stock and 43 index moves UNVERIFIED | Flag only; no price adjusted. The unexplained moves are UNVERIFIED, not labelled as anything else |
 
+### Nightly job: open items
+
+| Item | Finding | Rule |
+|---|---|---|
+| 2026-10-30 download failure | 11:10:25 IST, `ConnectionError` on `nsearchives.nseindia.com`, **cause UNVERIFIED** (the log kept only the type name). The run stopped at the download step | No action. The NSE client now logs the full exception text, retries unchanged |
+| 5 symbols with no 2026-10-28 row in `prices` | CANBK, DIVISLAB, INDIGO, KOTAKBANK, MARUTI. NSE's F&O data has them that day; what Yahoo returned is UNVERIFIED (responses are not saved) | Logged as gaps, not filled |
+
 ### Terms of use: open item
 
 The user is seeking a written answer from NSE's data products team or a lawyer on personal research use (2026-10-30).
