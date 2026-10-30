@@ -233,7 +233,7 @@ class NSEClient:
             try:
                 response = self._session.get(url, params=params, timeout=REQUEST_TIMEOUT)
             except requests.RequestException as exc:
-                last_problem = f"{type(exc).__name__}"
+                last_problem = f"{type(exc).__name__}: {exc!r}"      # keeps the chain (DNS, timeout, reset) in the log
                 self._sleep(self._backoff(attempt, None))
                 continue
             status = response.status_code
