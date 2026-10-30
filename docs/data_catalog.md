@@ -170,7 +170,18 @@ New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_acti
 
 Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; plain English in
 [gate_v2_summary.md](gate_v2_summary.md); record in [PA-40](PA_40-gate-v2.md); baselines in
-[gate_v2_baselines.md](gate_v2_baselines.md). Trial count 334. Validation has been seen for baselines. Gate v1 below stays on file.
+[gate_v2_baselines.md](gate_v2_baselines.md). Validation has been seen for baselines. Gate v1 below stays on file.
+
+**Addendum 1:** [gate_v2_addendum_1.json](gate_v2_addendum_1.json), hash `0152d74e…`; record in [PA-41](PA_41-gate-v2-addendum.md). Trial count 339.
+
+| Item | Record |
+|---|---|
+| Deviation from instruction | Rule A also skips demergers and consolidations; the instruction named splits and bonuses. Kept. Trades removed only by them, development, U1: h = 1 0, h = 2 7, h = 3 14, h = 5 26, h = 10 56 |
+| Gap in rule A's list | Scheme of arrangement, amalgamation, capital reduction and the spelling "De-Merger" are left out (68 rows). Those trades stay in rule A |
+| Forward skip rule | Only an action on the list at signal time causes a skip; the registry stores that list's hash. **Forward list source not decided; the nightly job does not collect it** |
+| Rule A and announcements | Whether rule A used unannounced information is UNVERIFIED per action; the bound is in PA-41 |
+| ADANIENT 2015-06-03 | Price discontinuity on a listed Scheme Of Arrangement ex-date. Yahoo bar and holder outcome UNVERIFIED. Stays in rule A results |
+| 2027 calendar | **The 2027 session list is UNVERIFIED until NSE's 2027 holiday circular is available. All "earliest date" figures are lower bounds** |
 
 ### Gate v1 (Prompt 2)
 

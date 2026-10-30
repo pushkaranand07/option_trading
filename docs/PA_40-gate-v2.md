@@ -18,9 +18,9 @@ Research and decision support only, not investment advice. **Every result: cost 
 
 The list has 926 rows: bonus 422, split 400, demerger 103, consolidation 1. It covers 116 monthly files from 2015-02 to 2024-12, missing 2015-01, 2018-12, 2020-05 and 2021-03, with none for 2010-2014. The announcement date is empty in all 22,323 stored rows, so `known_from` is UNVERIFIED.
 
-**The -87% trade:** ADANIENT, signal 2015-05-25, entry 2015-05-26 at 788.25, exit 2015-06-08 at 100.05, gross -87.3%. The close fell from 634.40 on 06-02 to 110.30 on 06-03. Open interest barely moved, so the detector missed it, and the action files list nothing for ADANIENT. Cause UNVERIFIED.
+**The -87% trade:** ADANIENT, signal 2015-05-25, entry 2015-05-26 at 788.25, exit 2015-06-08 at 100.05, gross -87.3%. The close fell from 634.40 on 06-02 to 110.30 on 06-03. The detector missed it. **Corrected in [PA-41](PA_41-gate-v2-addendum.md):** the action files do list a Scheme Of Arrangement on 03-Jun-2015, which rule A's kinds leave out, and open interest was reset that day.
 
-**The 115 flags:** all 115 sit in development. 7 have an action in the files within 3 days; 108 have none.
+**The 115 flags:** all 115 sit in development. 7 have a rule A action within 3 days; 108 have none. Counting every subject, 13 and 102 ([PA-41](PA_41-gate-v2-addendum.md)).
 
 | h | Trades | With list | Removed by list | Removed by detector | Left under A, flagged | Extreme under A | Of those, no list | Extreme under B | Flagged, not listed | Their positive share | Their mean gross % |
 |---|---|---|---|---|---|---|---|---|---|---|---|

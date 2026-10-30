@@ -18,7 +18,10 @@ from tradingagents.research import gate as g
 
 GATE_FILE = g.ROOT / "docs" / "gate_v2.json"
 GATE_SHA256 = "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59"
+ADDENDUM_FILE = g.ROOT / "docs" / "gate_v2_addendum_1.json"
+ADDENDUM_SHA256 = "0152d74ee7d7cd20151a45011c586fda65df2e86e61d0572fa8c684010c1435c"
 MIN_DATES, TARGET_DATES = 100, 150
+RULE_A_KINDS = ("split", "bonus", "demerger", "consolidation")
 
 
 def read_spec(path: Path | None = None) -> dict:
@@ -26,6 +29,14 @@ def read_spec(path: Path | None = None) -> dict:
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != GATE_SHA256:
         raise ValueError("gate_v2.json changed after it was frozen")
+    return spec
+
+
+def read_addendum(path: Path | None = None) -> dict:
+    spec = json.loads((path or ADDENDUM_FILE).read_text(encoding="utf-8"))
+    text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_SHA256:
+        raise ValueError("gate_v2_addendum_1.json changed after it was frozen")
     return spec
 
 
@@ -94,6 +105,19 @@ def evaluate(forward: dict, walk_forward: dict, baselines: dict[str, float], u2_
     items["tier1"] = all(items[i]["pass"] for i in "acdefg")
     items["tier2"] = items["tier1"] and items["b"]["pass"]
     return items
+
+
+def action_list_sha256(path: Path) -> str:
+    """The hash the forward registry stores: the action list file's bytes as they stood at signal time."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def forward_skip(listed_at_signal: pd.DataFrame, symbol: str, entry, exit_day) -> bool:
+    """Forward rule (addendum): skip only if the list as it stood at signal time holds an action of rule A's kinds with an
+    ex-date after entry, up to exit. An action not on that list causes no skip, and the trade counts as normal."""
+    a = listed_at_signal[(listed_at_signal["symbol"] == symbol) & listed_at_signal["kind"].isin(RULE_A_KINDS)]
+    ex = pd.to_datetime(a["ex_date"])
+    return bool(((ex > pd.Timestamp(entry)) & (ex <= pd.Timestamp(exit_day))).any())
 
 
 def binomial_requirement(p0: float, alpha: float, n: int) -> int:

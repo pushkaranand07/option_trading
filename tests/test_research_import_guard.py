@@ -41,6 +41,7 @@ ALLOWED = {
     "scripts/quant_build_features.py": INGEST,
     "scripts/quant_features_quality.py": "quality checks of the feature tables; reads the manifest for publication times (no store writes beyond its limits file)",
     "scripts/quant_action_diagnostics.py": "development-only diagnostics of the skip rule (counts, no store writes)",
+    "scripts/quant_addendum_diagnostics.py": "gate v2 addendum diagnostics from stored raw files (no store writes, no requests)",
     "scripts/quant_build_universes.py": "writes universe membership built through the research loader (counts logged)",
     "scripts/quant_symbol_map.py": "builds the symbol map from NSE's list and the stored base (flags only)",
     "scripts/quant_audit_protected.py": "equality-only audit of the protected range against raw files",

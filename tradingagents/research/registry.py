@@ -61,8 +61,11 @@ def _entry_open(entry: date) -> datetime:
 
 
 def register(path: Path, *, signal_date: date, entry_date: date, symbol: str, direction: int, spec_hash: str,
-             universe: str, horizon: int, now: datetime) -> dict:
-    """Append a signal. ``now`` must be timezone-aware and before the entry session opens."""
+             universe: str, horizon: int, now: datetime, action_list_sha256: str) -> dict:
+    """Append a signal. ``now`` must be timezone-aware and before the entry session opens. ``action_list_sha256`` is the
+    hash of the action list as it stood at signal time (gate v2 addendum)."""
+    if len(action_list_sha256) != 64 or set(action_list_sha256) - set("0123456789abcdef"):
+        raise RegistryError("action_list_sha256 must be a sha256 hex digest")
     if now.tzinfo is None:
         raise RegistryError("timestamp must be timezone-aware")
     if now >= _entry_open(entry_date):
@@ -79,7 +82,8 @@ def register(path: Path, *, signal_date: date, entry_date: date, symbol: str, di
             raise RegistryError(f"{signal_date} was recorded as missed; it cannot be backfilled")
     return _append(path, {"type": "signal", "timestamp": now.isoformat(), "signal_date": signal_date.isoformat(),
                           "entry_date": entry_date.isoformat(), "symbol": symbol, "direction": direction,
-                          "spec_hash": spec_hash, "universe": universe, "horizon": horizon})
+                          "spec_hash": spec_hash, "universe": universe, "horizon": horizon,
+                          "action_list_sha256": action_list_sha256})
 
 
 def record_missed(path: Path, *, day: date, spec_hash: str, now: datetime, reason: str) -> dict:
