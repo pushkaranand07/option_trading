@@ -150,15 +150,16 @@ intrinsic-tested in the base.
 
 ### Dataset B (intraday)
 
-**Status: free sources only (user, 2026-10-28); depth = none usable.** Probe results in
-[PA-38](PA_38-intraday-free-source-probe.md): Yahoo Finance (60m back to 2024-10-30, 5m/15m 60 days, 1m ~30 days; spot
-only) and NSE's public pages (current session only) are **NOT USABLE**, because their terms forbid automated
-collection; free broker APIs are not probed (they need an account). Nothing is ingested and no forward logger runs.
+**Status: parked, no usable source (user, 2026-10-30).** Probe results: [PA-38](PA_38-intraday-free-source-probe.md). Yahoo
+Finance and NSE's public pages are marked NOT USABLE; free broker APIs are not probed. **No broker API is probed until the
+user has an account; its terms are read first, and no request is made until they permit storing data for research.**
+
+**Nothing was ingested.** Yahoo's 60-minute bars for 2024-10-30 to 2024-12-31 exist, but were **not collected**.
 
 Rules for any intraday data: `known_from` is the bar's **end** (capped at 15:30), every row carries its source, and two
-sources are never spliced (`tradingagents/research/intraday.py`, tested). Rows from 2025-01-01 sit in the locked range
-under the research loader's lock; the forward holdout is not read. **Any intraday-dependent test is "sample size limited
-by data depth".**
+sources are never spliced (`tradingagents/research/intraday.py`, tested). Any later intraday-dependent test is "sample size
+limited by data depth".
+
 ### Symbol map and universes
 
 | File | What | Rows |
@@ -178,6 +179,139 @@ counts: [PA-37](PA_37-symbol-map-and-universes.md).
 |---|---|---|
 | Put-call parity flags | Driven by thin trading. 2015–2017 tested pairs: thinner leg 1–9 contracts 16.1% flagged (91.7% of all flags), 10–99: 2.6%, 100–999: 0.2%, 1000+: 0.0%. Stock options 10.5%, index options 1.2%. Rate rises with distance from the money (2.5% within 2.5% of the future, 22.3% at 10–25%); days to expiry matter little (9–11%). Untraded rows are never tested | Any implied-vol feature needs a liquidity filter on **both** legs. The threshold is chosen in the feature-library step and pre-registered before any model sees results; not picked here |
 | Large one-day moves (> 5σ) | 2015–2017: 51 of 455 explained by a split or bonus in NSE's corporate-action data; 9 have another action in the window; 323 stock moves and 72 index moves UNVERIFIED. 2018–2024: 53 of 957 explained (17 splits, 36 bonuses); 33 another action; 828 stock and 43 index moves UNVERIFIED | Flag only; no price adjusted. The unexplained moves are UNVERIFIED, not labelled as anything else |
+
+### Terms of use: open item
+
+The user is seeking a written answer from NSE's data products team or a lawyer on personal research use (2026-10-30).
+Until the user reports back: the existing nightly job runs unchanged; no new automated NSE or Yahoo collection of any kind;
+the upgraded forward option-chain capture is not started. Quotes only; no interpretation is recorded here.
+
+**NSE**, read 2026-10-28, `https://www.nseindia.com/static/nse-terms-of-use`:
+
+> "User is prohibited to conduct any systematic or automated data collection activities (including scraping, data mining, data extraction and data harvesting) on or in relation to our Website / Mobile Application."
+
+> "User agrees that any information or content or data on the Website / Mobile Application shall not be copied, modified, reverse engineer, reproduced, uploaded, transmitted, posted, stored (either in hardcopy or in an electronic retrieval system), adapted, altered, translated, disseminated, distributed, displayed, performed, broadcasted, published, hyperlinked, sold, marketed, licensed, rented, leased or distributed in any form, without prior written permission of NSE."
+
+> "Unless the information or Content is available for download, not to aggregate, copy or duplicate in any manner any of the content or information which is available on Website / Mobile Application."
+
+**NSE**, read 2026-10-28, `https://www.nseindia.com/static/nse-copyright`:
+
+> "Users may view, print copies and download the Content for personal, non-commercial or educational purpose without in any way amending, altering, deleting or modifying any part of the Content and provide full acknowledgement that the Content originated from this Website/Mobile Application."
+
+**Yahoo**, read 2026-10-28, `https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html`. These are excerpts returned by a
+summarising page reader, not the full clauses; check them against the page before relying on them:
+
+> §2(d)(9): "access or collect data, or attempt to access or collect data, from our Services using any automated means" ... "for any purpose without our express, prior permission."
+
+> §2(d)(10): "use any material or content from, including without limitation any data" ... "competes with or constitutes a material substitute for the Services."
+
+### Automated collection inventory (measured 2026-10-30)
+
+"Terms text" names the quotes above by the host contacted. It is not a finding that they apply.
+
+**Scheduled**
+
+| Collection | Source and endpoint | Frequency | Terms text | Depends on it |
+|---|---|---|---|---|
+| F&O bhavcopy, participant OI, MTO delivery, index closes | NSE, `nsearchives.nseindia.com` (`scripts/quant_backfill.py`) | Task "TradingAgents quant daily update", weekdays 19:30; last 10 days re-checked | NSE | Live store; stored base; web app; paper trading; research |
+| Daily stock and index prices | Yahoo via `yfinance` (`analytics/prices.py`): 63,136 of 69,920 rows in the 2026-10-27 run; NSE index bars 6,552; NSE fills 232 | Same task; history refetched each run | Yahoo | `prices`, GARCH, regime, Market Map, web app |
+| Missing-bar fills | NSE equity bhavcopy (`derivatives.equity_bhavcopy`) | Same task, only for gaps | NSE | `prices` |
+| Closing option bid / ask | NSE `/api/option-chain-contract-info`, `/api/option-chain-v3` (`analytics/quotes.py`) | Same task, last step | NSE | Measured spreads |
+| Morning plan | `scripts/morning_plan.py`: `webapp.planner` and a TradingAgents run; sources as in the web app and agent tables below | Task "TradingAgents morning plan", weekdays 08:30 | NSE, Yahoo | Plan tab morning view |
+
+**The bid / ask snapshot files.** 274 now (the "186" reported earlier was the count on 2026-10-27). Source: NSE's
+`/api/option-chain-v3`; one JSON file per symbol and expiry under `raw/option_quotes/<date>/`, 31 symbols x first 3 expiries,
+collected by `analytics/quotes.py` in the nightly job. 93 files for 2026-10-23, 93 for 2026-10-27, 88 for 2026-10-29.
+
+**While the web app runs** (browser timers: quotes 3 s, candles 5 s, chain 4 s on its tab)
+
+| Collection | Source | Server cache | Terms text | Depends on it |
+|---|---|---|---|---|
+| Quotes | Yahoo `fast_info` | 15 s; refreshed ahead while the market is open and the key was read in the last 90 s | Yahoo | Live prices |
+| Candles | Yahoo `history` | 4 s (daily 20 s), same refresh | Yahoo | Charts |
+| Option chain, option prices | NSE `/api/option-chain-v3`, `/api/chart-databyindex` | 10 s | NSE | Options tab, AI strategist, trade record |
+| Option expiries | NSE `/api/option-chain-contract-info` | 300-600 s | NSE | Options tab |
+| Instrument list, lot sizes | Dhan public scrip master, `images.dhan.co/api-data/api-scrip-master.csv` | 1 hour | Not read | Search, lots |
+
+**On each agent analysis run** (via `tradingagents/dataflows/`)
+
+| Collection | Source | Terms text |
+|---|---|---|
+| Prices, fundamentals, news | Yahoo; Alpha Vantage where configured | Yahoo; Alpha Vantage not read |
+| FII / DII flows, delivery, F&O contract facts, index files | NSE | NSE |
+| Filings, macro, prediction markets, social | SEC EDGAR, FRED, Polymarket, Reddit, StockTwits | Not read |
+
+**One-off runs already made** (not scheduled): NSE F&O files 2010-2014 (1,243 files, 2026-10-28) and 2015-2017; NSE circulars
+listing and PDFs; NSE corporate actions (116 monthly files); NSE board meetings (29 files); NSE symbol-change and equity lists;
+NSE holiday lists; Yahoo history 2012-2017 for the backward holdout (`analytics/holdout.py`); about 20 Yahoo intraday probe
+requests for PA-38 (2026-10-28, not stored).
+
+### Terms of use: open item
+
+The user is seeking a written answer from NSE's data products team or a lawyer on personal research use (2026-10-30).
+Until the user reports back: the existing nightly job runs unchanged; no new automated NSE or Yahoo collection of any kind;
+the upgraded forward option-chain capture is not started. Quotes only; no interpretation is recorded here.
+
+**NSE**, read 2026-10-28, `https://www.nseindia.com/static/nse-terms-of-use`:
+
+> "User is prohibited to conduct any systematic or automated data collection activities (including scraping, data mining, data extraction and data harvesting) on or in relation to our Website / Mobile Application."
+
+> "User agrees that any information or content or data on the Website / Mobile Application shall not be copied, modified, reverse engineer, reproduced, uploaded, transmitted, posted, stored (either in hardcopy or in an electronic retrieval system), adapted, altered, translated, disseminated, distributed, displayed, performed, broadcasted, published, hyperlinked, sold, marketed, licensed, rented, leased or distributed in any form, without prior written permission of NSE."
+
+> "Unless the information or Content is available for download, not to aggregate, copy or duplicate in any manner any of the content or information which is available on Website / Mobile Application."
+
+**NSE**, read 2026-10-28, `https://www.nseindia.com/static/nse-copyright`:
+
+> "Users may view, print copies and download the Content for personal, non-commercial or educational purpose without in any way amending, altering, deleting or modifying any part of the Content and provide full acknowledgement that the Content originated from this Website/Mobile Application."
+
+**Yahoo**, read 2026-10-28, `https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html`. These are excerpts returned by a
+summarising page reader, not the full clauses; check them against the page before relying on them:
+
+> §2(d)(9): "access or collect data, or attempt to access or collect data, from our Services using any automated means" ... "for any purpose without our express, prior permission."
+
+> §2(d)(10): "use any material or content from, including without limitation any data" ... "competes with or constitutes a material substitute for the Services."
+
+### Automated collection inventory (measured 2026-10-30)
+
+"Terms text" names the quotes above by the host contacted. It is not a finding that they apply.
+
+**Scheduled**
+
+| Collection | Source and endpoint | Frequency | Terms text | Depends on it |
+|---|---|---|---|---|
+| F&O bhavcopy, participant OI, MTO delivery, index closes | NSE, `nsearchives.nseindia.com` (`scripts/quant_backfill.py`) | Task "TradingAgents quant daily update", weekdays 19:30; last 10 days re-checked | NSE | Live store; stored base; web app; paper trading; research |
+| Daily stock and index prices | Yahoo via `yfinance` (`analytics/prices.py`): 63,136 of 69,920 rows in the 2026-10-27 run; NSE index bars 6,552; NSE fills 232 | Same task; history refetched each run | Yahoo | `prices`, GARCH, regime, Market Map, web app |
+| Missing-bar fills | NSE equity bhavcopy (`derivatives.equity_bhavcopy`) | Same task, only for gaps | NSE | `prices` |
+| Closing option bid / ask | NSE `/api/option-chain-contract-info`, `/api/option-chain-v3` (`analytics/quotes.py`) | Same task, last step | NSE | Measured spreads |
+| Morning plan | `scripts/morning_plan.py`: `webapp.planner` and a TradingAgents run; sources as in the web app and agent tables below | Task "TradingAgents morning plan", weekdays 08:30 | NSE, Yahoo | Plan tab morning view |
+
+**The bid / ask snapshot files.** 274 now (the "186" reported earlier was the count on 2026-10-27). Source: NSE's
+`/api/option-chain-v3`; one JSON file per symbol and expiry under `raw/option_quotes/<date>/`, 31 symbols x first 3 expiries,
+collected by `analytics/quotes.py` in the nightly job. 93 files for 2026-10-23, 93 for 2026-10-27, 88 for 2026-10-29.
+
+**While the web app runs** (browser timers: quotes 3 s, candles 5 s, chain 4 s on its tab)
+
+| Collection | Source | Server cache | Terms text | Depends on it |
+|---|---|---|---|---|
+| Quotes | Yahoo `fast_info` | 15 s; refreshed ahead while the market is open and the key was read in the last 90 s | Yahoo | Live prices |
+| Candles | Yahoo `history` | 4 s (daily 20 s), same refresh | Yahoo | Charts |
+| Option chain, option prices | NSE `/api/option-chain-v3`, `/api/chart-databyindex` | 10 s | NSE | Options tab, AI strategist, trade record |
+| Option expiries | NSE `/api/option-chain-contract-info` | 300-600 s | NSE | Options tab |
+| Instrument list, lot sizes | Dhan public scrip master, `images.dhan.co/api-data/api-scrip-master.csv` | 1 hour | Not read | Search, lots |
+
+**On each agent analysis run** (via `tradingagents/dataflows/`)
+
+| Collection | Source | Terms text |
+|---|---|---|
+| Prices, fundamentals, news | Yahoo; Alpha Vantage where configured | Yahoo; Alpha Vantage not read |
+| FII / DII flows, delivery, F&O contract facts, index files | NSE | NSE |
+| Filings, macro, prediction markets, social | SEC EDGAR, FRED, Polymarket, Reddit, StockTwits | Not read |
+
+**One-off runs already made** (not scheduled): NSE F&O files 2010-2014 (1,243 files, 2026-10-28) and 2015-2017; NSE circulars
+listing and PDFs; NSE corporate actions (116 monthly files); NSE board meetings (29 files); NSE symbol-change and equity lists;
+NSE holiday lists; Yahoo history 2012-2017 for the backward holdout (`analytics/holdout.py`); about 20 Yahoo intraday probe
+requests for PA-38 (2026-10-28, not stored).
+
 
 ## 5. Forward-only fields
 

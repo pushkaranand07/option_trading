@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Probe done; no source passes; nothing ingested, no logger started |
+| **Status** | Parked, no usable source (user, 2026-10-30); nothing ingested, no logger started |
 | **Scope** | new `tradingagents/research/intraday.py` (bar-end `known_from`, source labelling), `tests/test_research_intraday.py`; `docs/data_catalog.md` |
 | **Related** | [data catalog](data_catalog.md), [PA-31](PA_31-research-splits-and-locked-loader.md) (protected range) |
 | **Pull request** | branch `data/step-b-intraday-probe` |
@@ -49,12 +49,8 @@ Yahoo's 60-minute bars for 2024-10-30 to 2024-12-31; every finer bar is in the l
 | Ingest any source | No: none passes (user decides) |
 | Forward logger (user's step 6) | Not started: it was for "whatever source passes step 1", and none does |
 
-## 5. Risks and open items, for the user
+## 5. Open items
 
-- **The same terms bear on data this project already collects.** NSE's clause covers "systematic or automated data
-  collection ... on or in relation to our Website": the nightly NSE archive downloads, the circulars and corporate-action
-  API calls, and the web app's option-chain polling are automated. Yahoo's clause covers the live pipeline's daily price
-  fetch and the web app's quotes. Whether these uses are permitted is not decided here (not a legal judgment).
-- A licensed source would settle both: NSE's own market-data products (historical and intraday), or a broker API whose
-  terms allow personal storage and research.
-- Any later intraday-dependent test is "sample size limited by data depth".
+Yahoo's 60-minute bars for 2024-10-30 to 2024-12-31 exist but were not collected. The terms question, its quotes and the
+inventory of all automated collection are open items in the [data catalog](data_catalog.md). No broker API is probed until
+the user has an account and its terms permit storing data for research.
