@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "written": "2026-10-28",
+  "written_before_ranking": true,
+  "addendum_to": {"file": "docs/data/splits_v1.json", "sha256": "c647d53089fc05ccb7ee73931b20d2c23493c76f282ec7bb2dc2aa704793642a"},
+  "symbol_map": {"file": "docs/data/symbol_map_v1.csv", "sha256_lf": "50971ccf662e48af0c5d9c8e349e880d5716a832e26b39995c965f7065741616",
+                 "rule": "Only links with status 'mapped' join two symbols into one series; a series is the chain of mapped links; its id is the last symbol of the chain. Unmapped links stay separate series."},
+  "source_table": "base_fo_summary (stored base), read through the research loader",
+  "membership_rule": "A series is a member on session D when it belongs to the universe for D's calendar year and has a row in base_fo_summary whose known_from is D (it traded on the session before D, and that is public at D). Membership is therefore decided from data known at D. A name leaves on its real exit: the first session after its last row. Nobody is added or replaced mid-year.",
+  "universes": {
+    "U1": {
+      "name": "primary: all indices plus the top 100 stocks by prior-year F&O turnover",
+      "indices": "every index underlying (kind = index), each session it has a row as above",
+      "stocks": {
+        "rank_field": "sum over every session with trade_date in calendar year Y-1 of (fut_turnover + opt_turnover) in base_fo_summary, in rupees as NSE reports them (options at notional, legacy VAL_INLAKH x 1e5 or UDiFF TtlTrfVal), summed across every symbol of the series",
+        "eligible": "kind = stock, at least one row with trade_date in Y-1",
+        "order": "turnover descending",
+        "tie_break": "equal turnover: series id in ascending alphabetical order",
+        "cutoff": "rank <= 100 (exactly 100 when at least 100 are eligible)",
+        "rebalance": "once a year, effective from the first session of year Y",
+        "first_year": 2011,
+        "note": "2010 has no prior year in the base, so U1 (stocks and indices) starts in 2011"
+      }
+    },
+    "U2": {"name": "robustness: every underlying in the stored base", "members": "every series of kind stock or index (INDIAVIX futures, kind other, have no options and are excluded), each session it has a row as above", "first_year": 2010}
+  },
+  "protected_range": {
+    "rule": "Ranking a year whose inputs lie in the final holdout runs inside a sealed function: its only output is the member lists with membership dates; it never prints, stores, logs or returns turnover, ranks or rank gaps, and its errors carry no values. Each run is a data build in the trial log.",
+    "sealed_rankings": ["2026 membership (inputs: 2025 turnover)"],
+    "open_rankings": "2011-2025 membership (inputs 2010-2024): turnover and rank gaps may be reported",
+    "end": "membership is built through 2026-10-26, the last day of the final holdout; the forward holdout (from 2026-10-27) is not read"
+  },
+  "changes": "Any change to these rules after results have been seen is a new version of this file and is logged as a trial."
+}

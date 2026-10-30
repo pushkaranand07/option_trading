@@ -37,8 +37,8 @@ traded-contracts-only day looks complete when it is not. The hole stays.
 **2012-05-14** (`fo14MAY2012bhav.csv.zip`): the only one of 2010–2014's 1,243 files with two-digit years (`14-May-12`)
 and a `*Updated` footer row; its CSV is dated 2012-05-22 09:29 inside the zip. A fresh download on 2026-10-28 is
 byte-identical to the stored file, and no other URL form exists (`.csv`, `_old`, `/archives/fo/bhav/`: 404), so NSE
-serves only this version; whether an earlier original existed is UNVERIFIED. **Used** (the only bhavcopy for the
-day). Against NSE's market activity report for 2012-05-14: all 1,539 traded options match on close and open interest;
+serves only this version. **The original version is UNVERIFIED** (not found at any URL form), so no comparison of
+original and re-issued file was possible. **Used** (the only bhavcopy for the day). Against NSE's market activity report for 2012-05-14: all 1,539 traded options match on close and open interest;
 contracts differ on 75 index-option rows (NIFTY 60, BANKNIFTY 10, MINIFTY 5), the bhavcopy equal or higher (median
 +0.3%, at most 2×). The raw file is kept as downloaded; the parser drops the footer row and reads the two-digit years.
 No other file dropped a row.
@@ -53,7 +53,7 @@ in locked periods are not inspected.
 | 2026-10-27 | prices | Bars dated on days with no NSE session removed (not replaced); `known_from` re-stamped from the same sessions | 29 removed (all 2026-01-15); 32 `known_from` corrected (all 2026-01-14) | final_holdout | 2 | [PA-32](PA_32-prices-holiday-bars.md) |
 | 2026-10-28 | base_fo_summary | Derived lots despiked until stable (one pass could flip alternating blips around a lot change; the live store converges by despiking every night) | 877 `lot_size` values (2015: 449, 2016: 128, 2017: 62, 2018: 54, 2019: 48, 2020: 61, 2022: 65, 2023: 10), all UNVERIFIED | development, validation | 4 | [PA-35](PA_35-base-2018-2026.md) |
 | 2026-10-28 | base_fo_summary | Lots despiked across the 2017/2018 batch boundary as one series | 6 (MRF, PAGEIND, SHREECEM), UNVERIFIED | development | 6 | [PA-36](PA_36-base-2010-2014.md) |
-| 2026-10-28 | base_option_chain | Schema: `exercise_style = european` added to 2015–2026; row counts and every existing column identical | 0 values changed; 80,232,394 rows gained the column | all | 7 | [PA-36](PA_36-base-2010-2014.md) |
+| 2026-10-28 | base_option_chain | Schema: `exercise_style = european` added to 2015–2026. Adds a column, so the files are **not byte-identical at file level**; row counts, keys and the data in every existing column are identical | 0 values changed; 80,232,394 rows gained the column | all | 7 | [PA-36](PA_36-base-2010-2014.md) |
 | 2026-10-28 | base_fo_summary | Lots despiked across the 2014/2015 boundary after the 2010–2014 ingest | 4 (2015), UNVERIFIED | development | 9 | [PA-36](PA_36-base-2010-2014.md) |
 
 **2026-10-27 nightly run, `prices`:** 69,920 rows, 7 more than 69,881 + one new session (32). The 7 are Yahoo bars
@@ -80,7 +80,8 @@ counted, never studied.
 | `base_option_chain` | 2010–2026 | 95,700,442 | 1,181.3 MB | ±25% moneyness, ≤70 days | `exercise_style`; `flag_parity`, `flag_below_intrinsic` (kept, never dropped). 2013-10-09 and 2021-03-30 are documented holes |
 
 Quality results: [PA-34](PA_34-base-2015-2017.md) (2015–2017), [PA-35](PA_35-base-2018-2026.md) (2018–2026 and the
-reconciliation with the live store).
+reconciliation with the live store), [PA-36](PA_36-base-2010-2014.md) (2010–2014). **Quality checks 2010–2026: 131 PASS,
+2 FAIL: 2013-10-09 and 2021-03-30, both documented archive holes.**
 
 ### Which `known_from` is canonical for research
 
@@ -140,7 +141,8 @@ Stock options were **American** until the 2010-12-30 expiry and European from th
 2010-12-30; every one expires before 2011-01-27, and every European stock option of 2010–2011 (8,094,786) on or after
 it. Index options were European throughout. In the stored chain (after the filter): 2010 has 2,739,572 American and
 337,432 European rows; every other year is European. `exercise_style` was added to the 2015–2026 tables after a
-snapshot, with row counts and every existing column identical (trial-log event 7).
+snapshot (trial-log event 7). It adds a column, so the files are not byte-identical at file level; the row counts, keys
+and the data in every existing column are identical (re-checked against each snapshot on 2026-10-28).
 
 **Rule:** any implied-vol or put-call-parity feature filters on `exercise_style == "european"`
 (`loader.european_only`; `loader.require_european` raises otherwise, tested). American rows are never parity- or
@@ -157,6 +159,18 @@ Rules for any intraday data: `known_from` is the bar's **end** (capped at 15:30)
 sources are never spliced (`tradingagents/research/intraday.py`, tested). Rows from 2025-01-01 sit in the locked range
 under the research loader's lock; the forward holdout is not read. **Any intraday-dependent test is "sample size limited
 by data depth".**
+### Symbol map and universes
+
+| File | What | Rows |
+|---|---|---|
+| `docs/data/symbol_map_v1.csv` | NSE symbol-change links for the 57 renamed stocks that left F&O: 41 mapped, 16 unmapped (separate series), flags at each change date | 57 |
+| `docs/data/universes_v1.json` | Universe rules (U1, U2), written before ranking; references the split file's and the map's hashes | — |
+| `<store>/universes/U1_membership_v1.parquet` | U1 membership per session, 2011 to 2026-10-26 | see PA-37 |
+| `<store>/universes/U2_membership_v1.parquet` | U2 membership per session, 2010 to 2026-10-26 | see PA-37 |
+
+U1: all indices plus the top 100 stocks by the previous calendar year's F&O turnover, one rebalance a year, no
+mid-year replacement. 2026 was ranked in the sealed function (no turnover, rank or gap reported). Details and member
+counts: [PA-37](PA_37-symbol-map-and-universes.md).
 
 ## 4. Open items (no decision yet)
 
