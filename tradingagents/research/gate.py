@@ -158,6 +158,19 @@ def one_open_trade(trades: pd.DataFrame) -> pd.DataFrame:
     return t[keep].reset_index(drop=True)
 
 
+def universe_members(summary: pd.DataFrame, symbol_map: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(U1, U2) membership per session: flagged symbol links are not joined and foreign indices are out."""
+    from tradingagents.research import universes as uv
+
+    m = symbol_map.copy()
+    m.loc[m["flags"].fillna("").ne("none"), "status"] = "flagged: not crossed"
+    s = uv.with_series(summary, uv.series_ids(m, summary["symbol"]))
+    s = s[~s["symbol"].isin(FOREIGN_INDICES)]
+    last = max(pd.to_datetime(s["known_from"]).dt.year)
+    top = {y: uv.sealed_top_n(s, y) for y in range(2011, last + 1)}
+    return uv.membership(s, "U1", top), uv.membership(s, "U2")
+
+
 # ---------------------------------------------------------------- features, targets
 
 def expected_move(returns: pd.DataFrame, h: int, window: int = 20) -> pd.DataFrame:
@@ -245,8 +258,8 @@ def block_bootstrap_lower(dates: np.ndarray, values: np.ndarray, block: int, rng
     if k == 0:
         return float("nan")
     s, c = np.bincount(inv, values), np.bincount(inv)
-    if k <= block:
-        return float(s.sum() / c.sum())
+    if k <= block:      # no interval can be estimated from so few dates: never a pass
+        return float("-inf")
     blocks = math.ceil(k / block)
     starts = rng.integers(0, k - block + 1, size=(reps, blocks))
     picks = (starts[:, :, None] + np.arange(block)).reshape(reps, -1)[:, :k]
