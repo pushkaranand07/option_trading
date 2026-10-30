@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "written": "2026-10-30",
+  "written_before_the_v2_rerun": true,
+  "replaces_for_new_reports": "docs/gate_v1.json, which stays on file unchanged (hash 48379c7a...). Both are reported side by side",
+  "changes": "Any change after this commit is a new version and is logged as a trial.",
+  "unchanged_from_v1": "scope, universe, trade definition, costs, targets, minimum move, walk-forward folds, forward registry, and the X_h limits in item g, except as stated below",
+  "skip_rule": {
+    "gate_uses": "A",
+    "A": "a trade is not taken if a listed action's ex-date falls after its entry and on or before its exit. Source: the stored NSE corporate-action files only. Actions: split, bonus, demerger, consolidation. Daily returns on those ex-dates are empty",
+    "B": "A plus the price / open-interest detector of v1. Report only; never used by the gate",
+    "detector": "diagnostic only, not an exclusion, because it uses price and open-interest moves inside the trade, which a live trader cannot see at entry",
+    "announcement_date": "none. caBroadcastDate is empty on all 22,323 stored rows and no other field is an announcement date, so known_from of the action list is UNVERIFIED",
+    "coverage": {"files": 116, "first": "2015-02", "last": "2024-12", "missing_months_in_range": ["2015-01", "2018-12", "2020-05", "2021-03"], "no_files": "2010-2014"},
+    "coverage_note": "the files were fetched for months holding a large move, not by a coverage plan; those four months have no file",
+    "no_action_list": "a trade is labelled 'no action list' unless every calendar month from entry to exit has a file. Every result is reported with and without those trades",
+    "report_only_columns": ["median net return", "1%-winsorized net expectancy"]
+  },
+  "gate": {
+    "applies_to": "a model on the clean forward holdout from 2026-10-27, at 1.5x costs",
+    "a": "at least 100 distinct signal dates (target 150). Raw trades are reported beside it",
+    "b": "win rate >= 60%",
+    "c": "one-sided exact binomial p < the forward threshold, n = distinct signal dates, wins = win rate x n rounded, null = the measured win rate of the same structure with a random direction on the same trades",
+    "d": {
+      "rule": "net expectancy per trade > 0 and the lower bound of a block-bootstrap 95% interval > 0 (whole signal dates, 2000 draws)",
+      "block_dates_by_h": {"1": 1, "2": 1, "3": 2, "5": 2, "10": 2},
+      "how_chosen": "by null calibration on development trades, rule A, 1,000 runs per cell, at 100 and 150 dates, on four nulls: random direction with costs; zero-mean random direction per row; zero-mean one sign per date; zero-mean one sign per 20 dates. Grid 1, 2, 3, 5, 10, 15, 20, 30. The block with the lowest worst-case false-pass rate per h",
+      "worst_case_false_pass_at_chosen": {"1": 0.032, "2": 0.038, "3": 0.039, "5": 0.045, "10": 0.042},
+      "note": "longer blocks raised the false-pass rate (0.11 to 0.125 at 30 dates): on 100 to 150 dates they leave too few independent blocks. If a window has no more dates than the block, the interval is not estimated and item d fails"
+    },
+    "e": "as v1: net expectancy above always long, always short, previous-day sign, 5-day momentum sign and GARCH risk-scaled long",
+    "f": "as v1: net expectancy on U2 has the same sign as on U1",
+    "g": {
+      "rule": "as v1, at 1.5x costs: (i) net expectancy > 0 in at least 70% of folds; (ii) no fold below -X_h% of notional per trade; (iii) every fold has at least 100 distinct signal dates; a fold below that is a FAIL, not skipped",
+      "x_h_percent": {"1": 0.16, "2": 0.28, "3": 0.34, "5": 0.44, "10": 0.63},
+      "x_h_note": "the v1 values, measured with v1's skip rule; not re-measured"
+    },
+    "tiers": {
+      "tier_1": {"name": "edge present", "items": ["a", "c", "d", "e", "f", "g"]},
+      "tier_2": {"name": "meets the 60% target", "items": ["a", "b", "c", "d", "e", "f", "g"]},
+      "reporting_rule": "both are reported. A model can pass Tier 1 and fail Tier 2; that result must not be reworded as a pass of the 60% gate"
+    }
+  },
+  "multiple_testing": {
+    "trial_counter": "keeps counting every distinct spec, horizon, universe, target and threshold",
+    "forward_test": "the correction applies across the specs tested forward, which must be pre-registered and at most 3, not across all trials",
+    "forward_thresholds": {"1_spec": 0.05, "2_specs": 0.025, "3_specs": 0.016667}
+  },
+  "validation": "2023-2024 has been seen for baselines only. It is still used once per frozen model spec"
+}

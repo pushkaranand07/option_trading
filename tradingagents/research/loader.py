@@ -206,6 +206,19 @@ def load(dataset: str, start: date | None = None, end: date | None = None, symbo
     return df if allow_unverified_lots else mask_unverified_lots(df)
 
 
+def load_actions(end: date | None = None, root: Path | None = None) -> tuple[pd.DataFrame, set[str]]:
+    """(listed corporate actions with ex_date up to ``end``, the months that have a stored action file). Ex-dates inside a
+    locked period are refused. The files carry no announcement date, so ``known_from_status`` is UNVERIFIED on every row."""
+    end = end or splits.last_open_day()
+    if any(p.locked and p.overlaps(None, end) for p in splits.periods().values()):
+        raise HoldoutLocked(f"action list to {end} touches a locked period")
+    folder = (root or ds.store_root()) / "base_actions"
+    actions = pd.read_parquet(folder / "actions.parquet")
+    months = pd.read_parquet(folder / "months.parquet")["month"]
+    actions = actions[pd.to_datetime(actions["ex_date"]) <= pd.Timestamp(end)].reset_index(drop=True)
+    return actions, {m for m in months if m <= f"{end:%Y-%m}"}
+
+
 def holdout_counts(dataset: str, symbols: Iterable[str] | None = None, root: Path | None = None) -> pd.DataFrame:
     """Rows per ``known_from`` day in each locked period: counts only, for data-quality checks."""
     if dataset in LIVE:

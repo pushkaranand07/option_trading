@@ -36,6 +36,8 @@ ALLOWED = {
     "scripts/quant_build_base.py": INGEST,
     "scripts/quant_check_base.py": INGEST,
     "scripts/quant_build_base_futures.py": INGEST,
+    "scripts/quant_build_base_actions.py": INGEST,
+    "scripts/quant_action_diagnostics.py": "development-only diagnostics of the skip rule (counts, no store writes)",
     "scripts/quant_build_universes.py": "writes universe membership built through the research loader (counts logged)",
     "scripts/quant_symbol_map.py": "builds the symbol map from NSE's list and the stored base (flags only)",
     "scripts/quant_audit_protected.py": "equality-only audit of the protected range against raw files",
