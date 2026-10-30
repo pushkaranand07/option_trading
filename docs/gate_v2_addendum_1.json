@@ -1,0 +1,57 @@
+{
+  "addendum": 1,
+  "applies_to": "docs/gate_v2.json",
+  "gate_v2_sha256": "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59",
+  "written": "2026-10-30",
+  "edits_gate_files": false,
+  "no_model_exists": true,
+  "governing_claim": "The claim is the false-pass rate of the full Tier 1 and Tier 2. Single-item rates are diagnostics",
+  "item_d_h5": {
+    "runs_per_cell": 5000,
+    "seeds": "fresh",
+    "interval": "exact 95%",
+    "cost_carrying_null": {"100_dates": {"rate": 0.0, "ci95": [0.0, 0.0007]}, "150_dates": {"rate": 0.0, "ci95": [0.0, 0.0007]}},
+    "zero_mean_regime_null_worst": {"100_dates": {"rate": 0.0428, "ci95": [0.0374, 0.0488]}, "150_dates": {"rate": 0.0472, "ci95": [0.0415, 0.0534]}},
+    "known_looseness_against_5pct": false,
+    "reason": "the lower end of every interval is below 5%; the 5.7% from 1,000 runs did not repeat",
+    "still_above_nominal_2_5pct": true,
+    "block_changed": false
+  },
+  "full_tier_false_pass_5000_runs": {
+    "every_h_both_nulls_100_and_150_dates": {"tier1_passes": 0, "tier2_passes": 0, "ci95_upper": 0.0007}
+  },
+  "time_shift_control": {
+    "planted_hit_before_shift": 0.90,
+    "runs_per_cell": 1000,
+    "shifts_in_dates": {"h": "h", "2h": "2h", "20": 20},
+    "fail_if_above": 0.05,
+    "result": "PASS at every h, shift and date count: 0 Tier 1 and 0 Tier 2 passes, ci95 upper 0.0037",
+    "note": "at h = 10, 2h and the 20-date shift are the same shift and the same run. The 3-date control in the v2 rerun overlapped the return window and is replaced for reporting"
+  },
+  "forward_skip_rule": {
+    "skip": "only if an action of rule A's kinds, with an announced ex-date after entry and up to exit, was on the list at the signal time",
+    "no_skip": "an action not announced by the signal time causes no skip. The trade counts as normal, including a large gap loss",
+    "registry": "every forward signal stores the sha256 of the action list as it stood at signal time",
+    "list_source": "NOT DECIDED. The nightly job does not collect the list and no collection is started; manual options await the user's decision"
+  },
+  "rule_a_and_announcement": {
+    "rule_a_used_unannounced_information": "UNVERIFIED for each action. The list was downloaded 2026-10-28 and caBroadcastDate is empty on all 22,323 rows, so rule A skips without any announcement test",
+    "rule_a_is_the_development_and_validation_rule": true,
+    "bound": "the forward rule lies between rule A and skipping nothing; see PA-41"
+  },
+  "deviations_from_instruction": [
+    {"what": "rule A also skips demergers and consolidations; the instruction named splits and bonuses", "status": "kept"}
+  ],
+  "known_gaps_in_rule_a_list": [
+    {"what": "scheme of arrangement, amalgamation, capital reduction and the spelling De-Merger are not on the list: 68 rows", "status": "kept in rule A results; rule A is not changed"}
+  ],
+  "adanient_2015_06_03": {
+    "classification": "price discontinuity on the ex-date of a listed Scheme Of Arrangement",
+    "data_error": false,
+    "economic_loss_to_a_holder": "UNVERIFIED",
+    "yahoo_bar": "UNVERIFIED: stored prices start 2018-01-01",
+    "in_rule_a_results": true
+  },
+  "calendar": "The 2027 session list is UNVERIFIED until NSE's 2027 holiday circular is available. All earliest-date figures are lower bounds",
+  "validation": "still used once per frozen model spec"
+}

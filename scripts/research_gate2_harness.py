@@ -155,6 +155,15 @@ def run_calibrate(workers: int) -> dict:
 
 # ---------------------------------------------------------------- self-tests
 
+def shift_dates(values: np.ndarray, labels: np.ndarray, s: int) -> np.ndarray:
+    """Each row takes the value of the row at the same position, ``s`` dates earlier on the timeline (circular). One
+    timeline date is at least one session, so s dates cover at least s sessions."""
+    sizes = np.bincount(labels)
+    first = np.r_[0, np.cumsum(sizes)[:-1]]
+    source = (labels - s) % len(sizes)
+    return values[first[source] + (np.arange(len(labels)) - first[labels]) % sizes[source]]
+
+
 def one_run(args) -> dict:
     h, hit, n, seed, mode = args
     rng = np.random.default_rng(seed)
@@ -186,6 +195,9 @@ def one_run(args) -> dict:
     elif mode == "time_shift":
         dh = np.roll(dh, int(np.median(np.bincount(labels))) * 3)
         df = np.roll(df, int(np.median(np.bincount(lab))) * 3)
+    elif mode.startswith("shift_dates_"):
+        s = int(mode.rsplit("_", 1)[1])
+        dh, df = shift_dates(dh, labels, s), shift_dates(df, lab, s)
     wf = {"fold": (labels // per_fold).clip(max=len(g.FOLDS) - 1), "date": labels, "net": net_of(gh, ch, dh), "n_folds": len(g.FOLDS)}
     net = net_of(gr, co, df)
     win_null = ((gr - co > 0).astype(float) + (-gr - co > 0).astype(float)) / 2

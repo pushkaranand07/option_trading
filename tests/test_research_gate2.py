@@ -140,6 +140,47 @@ def test_binomial_requirements():
 
 
 @pytest.mark.unit
+def test_the_addendum_is_frozen_and_names_the_gate_it_applies_to(tmp_path):
+    spec = g2.read_addendum()
+    assert spec["gate_v2_sha256"] == g2.GATE_SHA256 and not spec["edits_gate_files"]
+    changed = tmp_path / "a.json"
+    changed.write_text(g2.ADDENDUM_FILE.read_text(encoding="utf-8").replace('"addendum": 1', '"addendum": 2'), encoding="utf-8")
+    with pytest.raises(ValueError, match="changed"):
+        g2.read_addendum(changed)
+
+
+@pytest.mark.unit
+def test_forward_skip_uses_only_the_list_at_signal_time():
+    listed = pd.DataFrame({"symbol": ["AAA", "AAA", "BBB"], "ex_date": [date(2027, 1, 8), date(2027, 1, 5), date(2027, 1, 8)],
+                           "kind": ["bonus", "split", "scheme"]})
+    entry, exit_day = date(2027, 1, 5), date(2027, 1, 8)
+    assert g2.forward_skip(listed, "AAA", entry, exit_day)                     # on the list, inside the window
+    assert not g2.forward_skip(listed.iloc[1:], "AAA", entry, exit_day)        # ex-date on the entry session: not inside
+    assert not g2.forward_skip(listed, "CCC", entry, exit_day)                 # not on the list: the trade counts as normal
+    assert not g2.forward_skip(listed, "BBB", entry, exit_day)                 # not one of rule A's kinds
+
+
+@pytest.mark.unit
+def test_the_action_list_hash_changes_with_the_file(tmp_path):
+    p = tmp_path / "list.csv"
+    p.write_text("a", encoding="utf-8")
+    first = g2.action_list_sha256(p)
+    p.write_text("b", encoding="utf-8")
+    assert len(first) == 64 and g2.action_list_sha256(p) != first
+
+
+@pytest.mark.unit
+def test_the_time_shift_moves_whole_dates_with_no_overlap():
+    import sys
+    sys.path.insert(0, str(Path(g.ROOT, "scripts")))
+    import research_gate2_harness as h2
+
+    labels = np.array([0, 0, 1, 2, 2, 2, 3, 4, 4])
+    out = h2.shift_dates(labels, labels, 2)
+    assert list(out) == [3, 3, 4, 0, 0, 0, 1, 2, 2]     # every row reads the date 2 earlier, circularly
+
+
+@pytest.mark.unit
 def test_the_v2_code_holds_no_unlock():
     for rel in ("tradingagents/research/gate2.py", "scripts/research_gate2_harness.py"):
         assert "Unlock(" not in Path(g.ROOT, rel).read_text(encoding="utf-8"), rel
