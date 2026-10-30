@@ -150,6 +150,25 @@ def test_the_addendum_is_frozen_and_names_the_gate_it_applies_to(tmp_path):
 
 
 @pytest.mark.unit
+def test_addendum_2_is_frozen_records_the_timing_counts_and_leaves_item_g_open(tmp_path):
+    from tradingagents.research import features as fx
+
+    spec = g2.read_addendum_2()
+    assert spec["gate_v2_sha256"] == g2.GATE_SHA256 and spec["addendum_1_sha256"] == g2.ADDENDUM_SHA256 and spec["features_v1_sha256"] == fx.SPEC_SHA256
+    timing = spec["decision_2_timing"]
+    public = timing["public_by_close_of_d"]["features"]
+    all_features = fx.read_spec()["features"]
+    assert set(public) == {n for n, f in all_features.items() if f["family"] == "g"}
+    assert len(public) + timing["stay_at_d_minus_1"]["feature_count"] == len(all_features)
+    assert sum(len(v) for v in timing["stay_at_d_minus_1"]["raw_fields"].values()) == timing["stay_at_d_minus_1"]["raw_field_count"]
+    assert spec["decision_3_item_g"]["chosen"] is None
+    changed = tmp_path / "a.json"
+    changed.write_text(g2.ADDENDUM_2_FILE.read_text(encoding="utf-8").replace('"chosen": null', '"chosen": "a"'), encoding="utf-8")
+    with pytest.raises(ValueError, match="changed"):
+        g2.read_addendum_2(changed)
+
+
+@pytest.mark.unit
 def test_forward_skip_uses_only_the_list_at_signal_time():
     listed = pd.DataFrame({"symbol": ["AAA", "AAA", "BBB"], "ex_date": [date(2027, 1, 8), date(2027, 1, 5), date(2027, 1, 8)],
                            "kind": ["bonus", "split", "scheme"]})
