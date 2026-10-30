@@ -317,7 +317,16 @@ def test_real_data_truncated_at_d_leaves_features_and_signals_unchanged(tmp_path
 
 def _sig(path, entry=date(2026, 11, 2), now=None, symbol="NIFTY", **kw):
     return registry.register(path, signal_date=date(2026, 10, 30), entry_date=entry, symbol=symbol, direction=1, spec_hash="abc",
-                             universe="U1", horizon=5, now=now or IST.localize(datetime(2026, 10, 30, 20, 0)), **kw)
+                             universe="U1", horizon=5, now=now or IST.localize(datetime(2026, 10, 30, 20, 0)),
+                             **{"action_list_sha256": "a" * 64, **kw})
+
+
+@pytest.mark.unit
+def test_registry_stores_the_action_list_hash_and_refuses_a_bad_one(tmp_path):
+    p = tmp_path / "r.jsonl"
+    assert _sig(p)["action_list_sha256"] == "a" * 64
+    with pytest.raises(registry.RegistryError, match="sha256"):
+        _sig(p, symbol="BANKNIFTY", action_list_sha256="not-a-hash")
 
 
 @pytest.mark.unit
