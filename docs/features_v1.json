@@ -1,0 +1,1053 @@
+{
+ "version": 1,
+ "written": "2026-10-30",
+ "written_before_any_feature_build": true,
+ "no_model_exists": true,
+ "periods": {
+  "development": "to 2022-12-31",
+  "validation": "2023-2024",
+  "not_read": "2025-01-01 onward and the forward holdout"
+ },
+ "timing": {
+  "rule": "A feature for signal date D uses only rows with known_from at or before D. Every NSE file row has known_from = next session after its trade_date, so a feature for D reads source_trade_date at most the session before D",
+  "columns": "every table has signal_date, source_trade_date, known_from",
+  "truncation_test": "features for D are identical when rebuilt from data with trade_date at or before D-1",
+  "difference_from_gate": "gate v1 and v2 baselines use the close of their signal date, whose known_from is the next session. Features here are one session staler than those baselines. Alignment for a model is decided in the model prompt"
+ },
+ "universe": {
+  "primary": "U1",
+  "robustness": "U2",
+  "foreign_indices": "excluded",
+  "symbol_links": "no window crosses any symbol link, flagged or not",
+  "lots": "no lot-based feature; turnover and open interest in shares are used, contract counts of futures are not"
+ },
+ "liquidity": {
+  "rule": "from candidates 10, 25, 50, 100, 250, 500 contracts on the thinner leg, the smallest at which the put-call parity flag rate is at most 1%, on european rows of 2015-2022, with no return or target read",
+  "chosen_contracts": 25,
+  "flag_rate_at_chosen": 0.006462660470489935,
+  "share_of_european_rows_kept": 0.05265285519972644,
+  "liquid_pair": "both legs traded with close > 0, thinner leg at or above the threshold, neither leg flagged for parity or below-intrinsic",
+  "threshold_period_only": "the threshold is chosen on 2015-2022 and applied to every year"
+ },
+ "option_inputs": {
+  "model": "Black-76 on the out-of-the-money leg at each strike's own call and put",
+  "risk_free": 0.065,
+  "risk_free_status": "ASSUMPTION, the repo's constant",
+  "forward": "K + exp(rT)(C - P) at the liquid pair with the smallest |C - P| for that expiry",
+  "front_expiry": "nearest expiry with at least 7 calendar days and a liquid pair",
+  "next_expiry": "next expiry with a liquid pair"
+ },
+ "handling": {
+  "near_contract": "nearest expiry on or after the session; a return uses one contract on two consecutive sessions, so a roll is never a return",
+  "discontinuity": "a source session is a discontinuity if any of: an NSE action file ex-date of a split, bonus, demerger, consolidation, scheme of arrangement, amalgamation or capital reduction; the split_events price and OI footprint; an OI reset (oi_reset_flag); a near-contract one-day move at or below -40% or at or above +66.7%",
+  "on_a_discontinuity": "return, gap, range and OI-change features of that session are missing; OI history restarts (epoch), so no OI window spans it. The flags never go in a model as a signal: role handling_flag",
+  "known_limit": "a discontinuity with no listing, no footprint, no reset and a move inside the limits cannot be detected",
+  "no_forward_fill": "missing stays missing. No value is carried across sessions",
+  "holes_and_holidays": "windows are in sessions. A hole (2013-10-09, 2021-03-30) is a session with no data: the return after it is missing",
+  "no_trade": "a near contract with zero contracts traded has missing return and range features",
+  "winsorizing": "stored values are never clipped. Limits are the 0.5th and 99.5th percentiles per feature, fitted on signal dates to 2022-12-31, U2 rows; applied by a function at model time. Flags, calendar features and ranks are not clipped. No other scaling",
+  "clusters": "Pearson on winsorized values, development, U1 stocks, pairwise complete, at least 1,000 rows; average linkage on 1 - |rho|, cut at 0.30. Above 0.95 is flagged, never dropped",
+  "selection": "no feature is selected, dropped or tuned on target relationships"
+ },
+ "publication_lag_sessions": {
+  "base_futures": 1,
+  "base_option_chain": 1,
+  "base_participant": 1,
+  "base_delivery": 1,
+  "base_index": 1,
+  "board_notices": "own timestamp"
+ },
+ "coverage_stored": {
+  "base_futures": "2010-2024",
+  "base_option_chain": "2010-2024, european rows only",
+  "base_participant": "2015-01 to 2015-03, 2018-2024",
+  "base_delivery": "2015-01 to 2015-03, 2018-2024",
+  "base_index": "2015-2024",
+  "board_notices": "29 symbols, from 2017-12; those symbols are today's, so this source has survivorship",
+  "action_files": "2015-02 to 2024-12, months missing as in gate v2"
+ },
+ "ranked": [
+  "ret_1",
+  "ret_5",
+  "ret_20",
+  "rv_20",
+  "turnover_ratio_20",
+  "oi_chg_1",
+  "oi_z_60",
+  "atm_iv_front",
+  "iv_minus_rv_20",
+  "skew_5",
+  "pcr_oi_liquid",
+  "deliv_pct"
+ ],
+ "features": {
+  "ret_1": {
+   "family": "a",
+   "formula": "sum of log(close_t / close_t-1) on the near contract over 1 sessions; every session must be present",
+   "window": "1 sessions, all required",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "ret_2": {
+   "family": "a",
+   "formula": "sum of log(close_t / close_t-1) on the near contract over 2 sessions; every session must be present",
+   "window": "2 sessions, all required",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "ret_3": {
+   "family": "a",
+   "formula": "sum of log(close_t / close_t-1) on the near contract over 3 sessions; every session must be present",
+   "window": "3 sessions, all required",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "ret_5": {
+   "family": "a",
+   "formula": "sum of log(close_t / close_t-1) on the near contract over 5 sessions; every session must be present",
+   "window": "5 sessions, all required",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "ret_10": {
+   "family": "a",
+   "formula": "sum of log(close_t / close_t-1) on the near contract over 10 sessions; every session must be present",
+   "window": "10 sessions, all required",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "ret_20": {
+   "family": "a",
+   "formula": "sum of log(close_t / close_t-1) on the near contract over 20 sessions; every session must be present",
+   "window": "20 sessions, all required",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "ret_60": {
+   "family": "a",
+   "formula": "sum of log(close_t / close_t-1) on the near contract over 60 sessions; every session must be present",
+   "window": "60 sessions, all required",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rv_5": {
+   "family": "a",
+   "formula": "std of daily log returns x sqrt(252)",
+   "window": "5 sessions, at least 4 present",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rv_10": {
+   "family": "a",
+   "formula": "std of daily log returns x sqrt(252)",
+   "window": "10 sessions, at least 8 present",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rv_20": {
+   "family": "a",
+   "formula": "std of daily log returns x sqrt(252)",
+   "window": "20 sessions, at least 16 present",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rv_60": {
+   "family": "a",
+   "formula": "std of daily log returns x sqrt(252)",
+   "window": "60 sessions, at least 48 present",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rv_ratio_5_60": {
+   "family": "a",
+   "formula": "rv_5 / rv_60",
+   "window": "5 and 60 sessions",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "parkinson_20": {
+   "family": "a",
+   "formula": "sqrt(mean(ln(high/low)^2) / (4 ln 2)) x sqrt(252)",
+   "window": "20 sessions, at least 16 present",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "garman_klass_20": {
+   "family": "a",
+   "formula": "sqrt(mean(0.5 ln(high/low)^2 - (2 ln 2 - 1) ln(close/open)^2)) x sqrt(252)",
+   "window": "20 sessions, at least 16 present",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "garch_h1": {
+   "family": "a",
+   "formula": "annualised GARCH(1,1) t forecast, horizon 1; refit every 63 sessions on returns through the source session only; needs more than 600 returns",
+   "window": "expanding",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "garch_h5": {
+   "family": "a",
+   "formula": "annualised GARCH(1,1) t forecast, horizon 5; refit every 63 sessions on returns through the source session only; needs more than 600 returns",
+   "window": "expanding",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "garch_h10": {
+   "family": "a",
+   "formula": "annualised GARCH(1,1) t forecast, horizon 10; refit every 63 sessions on returns through the source session only; needs more than 600 returns",
+   "window": "expanding",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "gap_1": {
+   "family": "a",
+   "formula": "log(open_t / close_t-1), same contract",
+   "window": "2 sessions",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "range_1": {
+   "family": "a",
+   "formula": "(high - low) / close",
+   "window": "1 session",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "close_loc_1": {
+   "family": "a",
+   "formula": "(close - low) / (high - low); missing if high = low",
+   "window": "1 session",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "turnover_ratio_20": {
+   "family": "a",
+   "formula": "total futures turnover_t / mean of the previous 20 sessions",
+   "window": "21 sessions, at least 16 previous present",
+   "source": "base_futures, all expiries",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "turnover_ratio_5_60": {
+   "family": "a",
+   "formula": "mean turnover of 5 sessions / mean of 60 sessions",
+   "window": "5 and 60 sessions",
+   "source": "base_futures, all expiries",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "oi_chg_1": {
+   "family": "b",
+   "formula": "sum over contracts on both sessions of (OI_t - OI_t-1) / total OI_t-1. A listed or expired contract does not count, so a roll is not a change",
+   "window": "2 sessions",
+   "source": "base_futures, all expiries",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "oi_chg_5": {
+   "family": "b",
+   "formula": "sum of oi_chg_1 over 5 sessions, all required",
+   "window": "5 sessions",
+   "source": "base_futures, all expiries",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "oi_z_60": {
+   "family": "b",
+   "formula": "z-score of log(total OI) inside the current epoch",
+   "window": "60 sessions in the epoch, at least 40",
+   "source": "base_futures, all expiries",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "oi_rel_252": {
+   "family": "b",
+   "formula": "percentile of total OI among the window inside the current epoch",
+   "window": "252 sessions in the epoch, at least 126",
+   "source": "base_futures, all expiries",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "oi_near_share": {
+   "family": "b",
+   "formula": "near contract OI / total OI",
+   "window": "1 session",
+   "source": "base_futures, all expiries",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "basis_term": {
+   "family": "b",
+   "formula": "log(next close / near close) x 365 / calendar days between expiries; both contracts traded",
+   "window": "1 session",
+   "source": "base_futures, two nearest",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "basis_spot_index": {
+   "family": "b",
+   "formula": "log(near close / index close) x 365 / days to expiry; days to expiry at least 3; NIFTY and BANKNIFTY only. Stock spot is not in the base: missing",
+   "window": "1 session",
+   "source": "base_futures, base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "oi_reset_flag": {
+   "family": "b",
+   "formula": "1 if a contract with OI > 0 on the previous session has oi_change = open_interest",
+   "window": "1 session",
+   "source": "base_futures",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "handling_flag"
+  },
+  "disc_flag": {
+   "family": "b",
+   "formula": "1 if the source session is a discontinuity (see handling rules)",
+   "window": "1 session",
+   "source": "base_futures, price events",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "handling_flag"
+  },
+  "sessions_since_disc": {
+   "family": "b",
+   "formula": "sessions since the last discontinuity of this symbol; missing if none",
+   "window": "expanding",
+   "source": "base_futures, price events",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "handling_flag"
+  },
+  "atm_iv_front": {
+   "family": "c",
+   "formula": "mean of call and put Black-76 IV at the liquid pair nearest the forward, within 2.5%, front expiry",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "atm_iv_next": {
+   "family": "c",
+   "formula": "same, next expiry",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "iv_term_slope": {
+   "family": "c",
+   "formula": "atm_iv_next - atm_iv_front",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "iv_term_ratio": {
+   "family": "c",
+   "formula": "atm_iv_next / atm_iv_front",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "atm_iv_chg_1": {
+   "family": "c",
+   "formula": "ATM IV today - ATM IV on the previous session, same expiry only",
+   "window": "2 sessions",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "atm_iv_rel_252": {
+   "family": "c",
+   "formula": "percentile of atm_iv_front in the window",
+   "window": "252 sessions, at least 126",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "iv_minus_rv_20": {
+   "family": "c",
+   "formula": "atm_iv_front - rv_20",
+   "window": "20 sessions",
+   "source": "base_option_chain, european, liquid pairs; base_futures",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "skew_5": {
+   "family": "c",
+   "formula": "put IV at the liquid strike nearest 0.95F, in [0.90, 0.98], minus call IV at the liquid strike nearest 1.05F, in [1.02, 1.10], front expiry",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "skew_5_norm": {
+   "family": "c",
+   "formula": "skew_5 / atm_iv_front",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pcr_volume_liquid": {
+   "family": "c",
+   "formula": "put contracts / call contracts over liquid pairs of all stored expiries",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pcr_oi_liquid": {
+   "family": "c",
+   "formula": "put OI / call OI over liquid pairs of all stored expiries",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "max_pain_dist": {
+   "family": "c",
+   "formula": "log(max-pain strike / forward), front expiry; OI of all stored european strikes (OI is not a price, so the liquidity filter does not apply); at least 5 strikes",
+   "window": "1 session",
+   "source": "base_option_chain, european",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "n_liquid_pairs": {
+   "family": "c",
+   "formula": "log(1 + number of liquid pairs)",
+   "window": "1 session",
+   "source": "base_option_chain, european, liquid pairs",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "fii_fut_idx_net": {
+   "family": "d",
+   "formula": "FII (long - short) / (long + short), index futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "fii_fut_idx_net_chg_5": {
+   "family": "d",
+   "formula": "fii_fut_idx_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "fii_fut_stk_net": {
+   "family": "d",
+   "formula": "FII (long - short) / (long + short), stock futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "fii_fut_stk_net_chg_5": {
+   "family": "d",
+   "formula": "fii_fut_stk_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "fii_opt_idx_call_net": {
+   "family": "d",
+   "formula": "FII (long - short) / (long + short), index calls",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "fii_opt_idx_put_net": {
+   "family": "d",
+   "formula": "FII (long - short) / (long + short), index puts",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "dii_fut_idx_net": {
+   "family": "d",
+   "formula": "DII (long - short) / (long + short), index futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "dii_fut_idx_net_chg_5": {
+   "family": "d",
+   "formula": "dii_fut_idx_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "dii_fut_stk_net": {
+   "family": "d",
+   "formula": "DII (long - short) / (long + short), stock futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "dii_fut_stk_net_chg_5": {
+   "family": "d",
+   "formula": "dii_fut_stk_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "dii_opt_idx_call_net": {
+   "family": "d",
+   "formula": "DII (long - short) / (long + short), index calls",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "dii_opt_idx_put_net": {
+   "family": "d",
+   "formula": "DII (long - short) / (long + short), index puts",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "client_fut_idx_net": {
+   "family": "d",
+   "formula": "Client (long - short) / (long + short), index futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "client_fut_idx_net_chg_5": {
+   "family": "d",
+   "formula": "client_fut_idx_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "client_fut_stk_net": {
+   "family": "d",
+   "formula": "Client (long - short) / (long + short), stock futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "client_fut_stk_net_chg_5": {
+   "family": "d",
+   "formula": "client_fut_stk_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "client_opt_idx_call_net": {
+   "family": "d",
+   "formula": "Client (long - short) / (long + short), index calls",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "client_opt_idx_put_net": {
+   "family": "d",
+   "formula": "Client (long - short) / (long + short), index puts",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pro_fut_idx_net": {
+   "family": "d",
+   "formula": "Pro (long - short) / (long + short), index futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pro_fut_idx_net_chg_5": {
+   "family": "d",
+   "formula": "pro_fut_idx_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pro_fut_stk_net": {
+   "family": "d",
+   "formula": "Pro (long - short) / (long + short), stock futures",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pro_fut_stk_net_chg_5": {
+   "family": "d",
+   "formula": "pro_fut_stk_net today minus 5 sessions earlier, both present",
+   "window": "6 sessions",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pro_opt_idx_call_net": {
+   "family": "d",
+   "formula": "Pro (long - short) / (long + short), index calls",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "pro_opt_idx_put_net": {
+   "family": "d",
+   "formula": "Pro (long - short) / (long + short), index puts",
+   "window": "1 session",
+   "source": "base_participant",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "deliv_pct": {
+   "family": "e",
+   "formula": "deliverable / traded quantity, EQ series, as NSE reports it",
+   "window": "1 session",
+   "source": "base_delivery",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "deliv_chg_1": {
+   "family": "e",
+   "formula": "deliv_pct today - previous session",
+   "window": "2 sessions",
+   "source": "base_delivery",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "deliv_rel_20": {
+   "family": "e",
+   "formula": "deliv_pct - mean of the previous 20 sessions",
+   "window": "21 sessions, at least 16 previous",
+   "source": "base_delivery",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "vix": {
+   "family": "f",
+   "formula": "India VIX close",
+   "window": "1 session",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "vix_chg_1": {
+   "family": "f",
+   "formula": "log(vix today / previous session)",
+   "window": "2 sessions",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "vix_chg_5": {
+   "family": "f",
+   "formula": "log(vix today / 5 sessions earlier)",
+   "window": "6 sessions",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "vix_z_60": {
+   "family": "f",
+   "formula": "z-score of vix",
+   "window": "60 sessions, at least 40",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "nifty_ret_5": {
+   "family": "f",
+   "formula": "log(NIFTY close / 5 sessions earlier)",
+   "window": "6 sessions",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "nifty_ret_20": {
+   "family": "f",
+   "formula": "log(NIFTY close / 20 sessions earlier)",
+   "window": "21 sessions",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "nifty_ret_60": {
+   "family": "f",
+   "formula": "log(NIFTY close / 60 sessions earlier)",
+   "window": "61 sessions",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "nifty_above_ma_50": {
+   "family": "f",
+   "formula": "1 if NIFTY close > 50-session mean",
+   "window": "50 sessions, all required",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "nifty_above_ma_200": {
+   "family": "f",
+   "formula": "1 if NIFTY close > 200-session mean",
+   "window": "200 sessions, all required",
+   "source": "base_index",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "nifty_fut_ret_20": {
+   "family": "f",
+   "formula": "ret_20 of NIFTY near future; available before 2015, unlike the index file",
+   "window": "20 sessions",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "banknifty_fut_ret_20": {
+   "family": "f",
+   "formula": "ret_20 of BANKNIFTY near future",
+   "window": "20 sessions",
+   "source": "base_futures, near contract",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "breadth_up_1_U1": {
+   "family": "f",
+   "formula": "share of U1 stock members with ret_1 > 0, among those with a value; at least 20",
+   "window": "1 session",
+   "source": "base_futures; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "breadth_up_20_U1": {
+   "family": "f",
+   "formula": "share of U1 stock members with ret_20 > 0, among those with a value; at least 20",
+   "window": "1 session",
+   "source": "base_futures; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "breadth_up_60_U1": {
+   "family": "f",
+   "formula": "share of U1 stock members with ret_60 > 0, among those with a value; at least 20",
+   "window": "1 session",
+   "source": "base_futures; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "breadth_up_1_U2": {
+   "family": "f",
+   "formula": "share of U2 stock members with ret_1 > 0, among those with a value; at least 20",
+   "window": "1 session",
+   "source": "base_futures; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "breadth_up_20_U2": {
+   "family": "f",
+   "formula": "share of U2 stock members with ret_20 > 0, among those with a value; at least 20",
+   "window": "1 session",
+   "source": "base_futures; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "breadth_up_60_U2": {
+   "family": "f",
+   "formula": "share of U2 stock members with ret_60 > 0, among those with a value; at least 20",
+   "window": "1 session",
+   "source": "base_futures; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "day_of_week": {
+   "family": "g",
+   "formula": "signal date weekday, Monday = 0",
+   "window": "none",
+   "source": "calendar",
+   "known_from": "signal date itself; the calendar and the listed expiries are public before it",
+   "role": "input"
+  },
+  "days_to_expiry": {
+   "family": "g",
+   "formula": "calendar days from signal date to the nearest expiry on or after it, from contracts listed on the source session",
+   "window": "none",
+   "source": "base_futures",
+   "known_from": "signal date itself; the calendar and the listed expiries are public before it",
+   "role": "input"
+  },
+  "expiry_week": {
+   "family": "g",
+   "formula": "1 if days_to_expiry <= 7",
+   "window": "none",
+   "source": "base_futures",
+   "known_from": "signal date itself; the calendar and the listed expiries are public before it",
+   "role": "input"
+  },
+  "days_since_prev_session": {
+   "family": "g",
+   "formula": "calendar days from the source session to the signal date",
+   "window": "none",
+   "source": "sessions",
+   "known_from": "signal date itself; the calendar and the listed expiries are public before it",
+   "role": "input"
+  },
+  "board_days_to_next": {
+   "family": "g",
+   "formula": "calendar days to the next stored board meeting with a notice already public",
+   "window": "none",
+   "source": "board_notices, 29 symbols, notices from 2017-12",
+   "known_from": "the notice's own timestamp: only notices stamped before 15:30 IST on the signal date count",
+   "role": "input"
+  },
+  "board_days_since_last": {
+   "family": "g",
+   "formula": "calendar days since the last stored board meeting with a notice already public",
+   "window": "none",
+   "source": "board_notices, 29 symbols, notices from 2017-12",
+   "known_from": "the notice's own timestamp: only notices stamped before 15:30 IST on the signal date count",
+   "role": "input"
+  },
+  "results_days_to_next": {
+   "family": "g",
+   "formula": "same, meetings whose purpose names results",
+   "window": "none",
+   "source": "board_notices, 29 symbols, notices from 2017-12",
+   "known_from": "the notice's own timestamp: only notices stamped before 15:30 IST on the signal date count",
+   "role": "input"
+  },
+  "results_days_since_last": {
+   "family": "g",
+   "formula": "same, meetings whose purpose names results",
+   "window": "none",
+   "source": "board_notices, 29 symbols, notices from 2017-12",
+   "known_from": "the notice's own timestamp: only notices stamped before 15:30 IST on the signal date count",
+   "role": "input"
+  },
+  "rank_U1_ret_1": {
+   "family": "h",
+   "formula": "percentile rank of ret_1 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of ret_1; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_ret_5": {
+   "family": "h",
+   "formula": "percentile rank of ret_5 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of ret_5; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_ret_20": {
+   "family": "h",
+   "formula": "percentile rank of ret_20 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of ret_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_rv_20": {
+   "family": "h",
+   "formula": "percentile rank of rv_20 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of rv_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_turnover_ratio_20": {
+   "family": "h",
+   "formula": "percentile rank of turnover_ratio_20 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of turnover_ratio_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_oi_chg_1": {
+   "family": "h",
+   "formula": "percentile rank of oi_chg_1 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of oi_chg_1; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_oi_z_60": {
+   "family": "h",
+   "formula": "percentile rank of oi_z_60 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of oi_z_60; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_atm_iv_front": {
+   "family": "h",
+   "formula": "percentile rank of atm_iv_front among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of atm_iv_front; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_iv_minus_rv_20": {
+   "family": "h",
+   "formula": "percentile rank of iv_minus_rv_20 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of iv_minus_rv_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_skew_5": {
+   "family": "h",
+   "formula": "percentile rank of skew_5 among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of skew_5; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_pcr_oi_liquid": {
+   "family": "h",
+   "formula": "percentile rank of pcr_oi_liquid among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of pcr_oi_liquid; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U1_deliv_pct": {
+   "family": "h",
+   "formula": "percentile rank of deliv_pct among U1 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of deliv_pct; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_ret_1": {
+   "family": "h",
+   "formula": "percentile rank of ret_1 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of ret_1; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_ret_5": {
+   "family": "h",
+   "formula": "percentile rank of ret_5 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of ret_5; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_ret_20": {
+   "family": "h",
+   "formula": "percentile rank of ret_20 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of ret_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_rv_20": {
+   "family": "h",
+   "formula": "percentile rank of rv_20 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of rv_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_turnover_ratio_20": {
+   "family": "h",
+   "formula": "percentile rank of turnover_ratio_20 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of turnover_ratio_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_oi_chg_1": {
+   "family": "h",
+   "formula": "percentile rank of oi_chg_1 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of oi_chg_1; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_oi_z_60": {
+   "family": "h",
+   "formula": "percentile rank of oi_z_60 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of oi_z_60; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_atm_iv_front": {
+   "family": "h",
+   "formula": "percentile rank of atm_iv_front among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of atm_iv_front; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_iv_minus_rv_20": {
+   "family": "h",
+   "formula": "percentile rank of iv_minus_rv_20 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of iv_minus_rv_20; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_skew_5": {
+   "family": "h",
+   "formula": "percentile rank of skew_5 among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of skew_5; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_pcr_oi_liquid": {
+   "family": "h",
+   "formula": "percentile rank of pcr_oi_liquid among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of pcr_oi_liquid; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  },
+  "rank_U2_deliv_pct": {
+   "family": "h",
+   "formula": "percentile rank of deliv_pct among U2 stock members on the signal date; ties averaged; at least 20 values",
+   "window": "1 date",
+   "source": "family of deliv_pct; universe membership",
+   "known_from": "next session after source_trade_date (first session the NSE file is public)",
+   "role": "input"
+  }
+ }
+}

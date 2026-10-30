@@ -160,6 +160,12 @@ Rules for any intraday data: `known_from` is the bar's **end** (capped at 15:30)
 sources are never spliced (`tradingagents/research/intraday.py`, tested). Any later intraday-dependent test is "sample size
 limited by data depth".
 
+### Feature library v1
+
+Frozen before any build: [features_v1.json](features_v1.json), hash `97129483…`; [catalog](feature_catalog.md), [missingness](feature_missingness.md),
+[threshold report](features_threshold_report.md); record in [PA-42](PA_42-feature-library-v1.md). No model, and no predictive power measured.
+New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_actions/price_events`, `base_actions/board_notices`, `features_v1/`. IV liquidity threshold: 25 contracts on the thinner leg.
+
 ### Gate v2
 
 Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; plain English in
