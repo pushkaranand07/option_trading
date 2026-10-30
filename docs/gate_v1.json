@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "written": "2026-10-30",
+  "written_before_any_harness_run": true,
+  "changes": "Any change after this commit is a new version and is logged as a trial.",
+  "references": {"splits": "docs/data/splits_v1.json", "universes": "docs/data/universes_v1.json", "symbol_map": "docs/data/symbol_map_v1.csv"},
+  "scope": {
+    "instrument": "near-month futures of a universe underlying; futures only, no option trades",
+    "units": "return terms, share of notional; no lots, no lot-based sizing (lots before 2024-07-08 are UNVERIFIED)",
+    "data": "research loader, base tables only (base_futures, base_fo_summary)",
+    "periods": {"development": "to 2022-12-31", "validation": "2023-01-01 to 2024-12-31", "locked": "2025-01-01 onward: not read by this task", "forward_holdout": "from 2026-10-27: final pre-registered test only"},
+    "horizons": [1, 2, 3, 5, 10],
+    "excluded_features": "no implied-vol or put-call parity features"
+  },
+  "universe": {
+    "primary": "U1 of universes_v1.json; first year 2011 (no prior-year ranking in 2010)",
+    "robustness": "U2 of universes_v1.json; first year 2010",
+    "foreign_indices_excluded": ["DJIA", "S&P500", "FTSE100"],
+    "flagged_links": "only symbol-map links with status mapped and flags 'none' join two symbols into a series for ranking. Flagged links (DCB->DCBBANK, MAX->MFSL and the dates-only links) stay separate series",
+    "symbol_links_inside_a_trade": "never crossed: a trade holds one contract of one symbol; if the symbol changes before the exit there is no exit row and no trade",
+    "membership": "member on the entry session, decided from rows public at that session (universes_v1.json)"
+  },
+  "trade": {
+    "signal_time": "after the close of session D, using only data with known_from on or before the next session",
+    "entry": "open of the first session after D",
+    "exit": "close of session D + h (h = 1 enters and exits in the same session; the trade spans h sessions)",
+    "direction": "long, short or no trade",
+    "stops_and_targets": "none",
+    "contract_and_roll": "at D, the nearest listed expiry with at least ceil(1.4 h) + 4 calendar days left. One contract is held from entry to exit, so no roll happens inside a trade and a roll gap can never be profit or loss. Daily returns for features are close-to-close on the one contract that was nearest at the previous session",
+    "no_fill": "no trade if the contract has no entry row, a non-positive open or zero contracts at entry, or no exit row. Dropped, never replaced",
+    "untraded_exit": "if zero contracts traded on the exit session, the exit is NSE's settle price",
+    "archive_holes": "2013-10-09 and 2021-03-30 count as sessions; a trade entering or exiting on one has no price and is not taken",
+    "win": "net return after all costs strictly above 0. Exactly 0 is not a win",
+    "one_open_trade": "one per underlying. Oldest first: a signal is taken only if its entry is after the open trade's exit. Signals during an open trade are ignored, not queued",
+    "splits_and_bonuses": {
+      "rule": "prices are never adjusted. A trade is not taken if a split or bonus footprint falls after its entry and on or before its exit. Footprint: on one contract, session-to-session close ratio p <= 0.8 or p >= 1.25, and p x open-interest ratio within 0.8-1.25. Both directions, decided without reference to the trade's result. Those sessions are also empty in the daily return series",
+      "measured_on_development": "80 of 89 NSE-listed split or bonus moves in the 2015-2022 list are caught; 115 of the 195 footprints in 2015-2022 are not in that list (it holds only moves over 5 sigma with a matching action). Coverage of corporate actions before 2015 is UNVERIFIED. Missed events remain in the data",
+      "worst_gross_trade_on_development": "-87.3% at h = 10, consistent with a missed event; not removed"
+    }
+  },
+  "costs": {
+    "label": "cost model unverified",
+    "source": "tradingagents/analytics/costs.py, futures rates as of 2026-10-23, applied to all history; not checked against a contract note",
+    "brokerage": "Rs 20 per order, as a share of an ASSUMPTION reference notional of Rs 10,00,000 per order",
+    "slippage_per_fill_ASSUMPTION": {"index_futures_bps": 2.0, "stock_futures_bps": 5.0},
+    "round_trip_at_1x_percent": {"index": 0.1013, "stock": 0.1613},
+    "report_at": [1.0, 1.5, 2.0],
+    "gate_at": 1.5
+  },
+  "targets": {
+    "T1": "sign of the net return, per horizon, long and short sides",
+    "T2": "net return magnitude, per horizon, long and short sides",
+    "T3": "forward realized volatility: root mean square of daily returns over sessions D+1 to D+h. Risk use only, not direction",
+    "leak_rule": "a label for D uses no data after D + h; a feature for D uses no data after D",
+    "minimum_move": {
+      "rule": "skip a trade whose ex-ante expected |move| is below 2 x its round-trip cost at 1.5x costs. Expected |move| = 0.8 x std of the last 20 daily returns x sqrt(h), known at the close of D; a symbol with under 20 returns has none and is skipped",
+      "how_chosen": "from cost arithmetic, not results: a trade expected to move less than twice its cost has no room to pay for itself. Checked on development data only",
+      "skipped_on_development_percent": {"1": 0.158, "2": 0.031, "3": 0.020, "5": 0.016, "10": 0.009},
+      "no_history_on_development_percent": {"1": 5.00, "2": 5.01, "3": 5.01, "5": 5.01, "10": 5.02}
+    }
+  },
+  "gate": {
+    "applies_to": "a model on the clean forward holdout from 2026-10-27, all items at 1.5x costs. Failing any item is a FAIL",
+    "a": "at least 100 settled trades (target 150), counted once per signal. Same-date signals are clustered. The gate uses the effective count: N / (1 + (m0 - 1) rho), rho = ANOVA intra-date correlation of net returns floored at 0, m0 = the ANOVA average cluster size. The raw count is also reported",
+    "b": "win rate >= 60%",
+    "c": "one-sided exact binomial p < 0.05 on effective counts (wins and n rounded), null = the measured win rate of the same structure with a random direction on the same trades: the mean of (long wins + short wins) / 2",
+    "d": "net expectancy per trade > 0 and the lower bound of a block-bootstrap 95% interval > 0 (whole signal dates, block = h dates, 2000 draws)",
+    "e": {"rule": "net expectancy above each baseline. None may be added later", "baselines": ["always_long", "always_short", "prev_day_sign", "momentum_5d_sign", "garch_risk_scaled"],
+          "garch_risk_scaled": "always long, weight = 30% annual (ASSUMPTION) / GARCH(1,1) h-session annualised forecast known at D, capped at 2; costs scale with the weight. Student-t, constant mean, refit every 63 sessions, expanding window, first forecast after the module's minimum training length"},
+    "f": "net expectancy on U2 has the same sign as on U1",
+    "g": {
+      "rule": "walk-forward on the folds below, all at 1.5x costs: (i) net expectancy > 0 in at least 70% of folds; (ii) no fold's net expectancy is below -X_h% of notional per trade; (iii) every fold has at least 100 effective trades; a fold below that is a FAIL, not skipped",
+      "x_formula": "X_h = 0.50% x sqrt(h/10), rescaled in proportion to measured / assumed SD where they differ by more than 25%",
+      "x_h_percent": {"1": 0.16, "2": 0.28, "3": 0.34, "5": 0.44, "10": 0.63},
+      "x_h_before_rescale_percent": {"1": 0.16, "2": 0.22, "3": 0.27, "5": 0.35, "10": 0.50},
+      "sd_measurement": {
+        "data": "U1, gross trade returns at each horizon, every eligible signal, exits on or before 2022-12-31; no later data used",
+        "assumed": "30% annual x sqrt(h/252)",
+        "by_h": {
+          "1": {"trades": 299799, "sd_percent": 2.315, "assumed_percent": 1.890, "ratio": 1.225, "rescaled": false},
+          "2": {"trades": 299244, "sd_percent": 3.354, "assumed_percent": 2.673, "ratio": 1.255, "rescaled": true},
+          "3": {"trades": 298774, "sd_percent": 4.099, "assumed_percent": 3.273, "ratio": 1.252, "rescaled": true},
+          "5": {"trades": 298012, "sd_percent": 5.326, "assumed_percent": 4.226, "ratio": 1.260, "rescaled": true},
+          "10": {"trades": 295876, "sd_percent": 7.586, "assumed_percent": 5.976, "ratio": 1.269, "rescaled": true}
+        },
+        "note": "Missed splits or bonuses remain in the data and raise these SDs. h = 1 is just under the 25% line and is not rescaled"
+      }
+    }
+  },
+  "walk_forward": {
+    "window": "expanding",
+    "test_folds_by_entry_year": [[2013, 2014], [2015, 2016], [2017, 2018], [2019, 2020], [2021, 2022], [2023, 2024]],
+    "first_training": "2010-2012 (U1 from 2011)",
+    "purge_and_embargo": "training excludes trades exiting within h sessions before a test fold, and entries within h sessions after an earlier test fold",
+    "tuning": "inside development folds only. The 2023-2024 fold is validation: used once per frozen model spec",
+    "why_two_year_folds": "chosen before any run so a fold can plausibly hold 100 effective trades; whether it does is measured, and a shortfall is a FAIL"
+  },
+  "multiple_testing": {
+    "trial_counter": "every distinct model spec, horizon, universe, target and threshold is a trial in the trial log; the count is reported beside every result",
+    "correction": "Bonferroni: a p-value counts as significant in development or validation only below 0.05 / N, N = the current trial count"
+  },
+  "forward_registry": "append-only, hash-chained; signal, timestamp, model spec hash, universe, horizon, written before the entry session opens (09:15 IST). A trade not in the registry before entry does not count. Missed days are recorded as missed, never backfilled"
+}
