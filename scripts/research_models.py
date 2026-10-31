@@ -401,10 +401,10 @@ def run_evaluate(controls: bool = False) -> dict:
     for n in spec["specs"]:
         for h in g.HORIZONS:
             for u in ("U1", "U2"):
-                idea = f"models_v1_{n}_h{h}_{u}"
+                idea = f"models_v1_refit1_{n}_h{h}_{u}"
                 if idea not in seen:
                     trial_log.record(trial_log.Trial(idea=idea, params={"h": h, "universe": u, "models_sha256": m.SPEC_SHA256}, universe=u, data_start="2010-01-01", data_end=str(DEV_END), n_trials=1, n_oos_trades=0,
-                                                     notes="development evaluation under gate v2 + addenda 1-6; cost model unverified"))
+                                                     notes="development evaluation after the GARCH fix, gate v2 + addenda 1-7; cost model unverified"))
     rep["trial_count"] = trial_log.trial_count()
     (OUT / "development.json").write_text(json.dumps(rep, indent=1, default=str), encoding="utf-8")
     return rep

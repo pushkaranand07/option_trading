@@ -373,3 +373,14 @@ def test_features_refuse_a_locked_period(tmp_path):
         loader.load_board_notices(end=date(2025, 1, 1), root=tmp_path)
     with pytest.raises(loader.HoldoutLocked):
         loader.load_price_events(end=date(2025, 1, 1), root=tmp_path)
+
+
+@pytest.mark.unit
+def test_garch_features_recover_a_known_volatility_in_annual_terms():
+    """Regression, addendum 7: fractions went in where percent was expected, so values were about 77 times too small."""
+    days = pd.bdate_range("2015-01-01", periods=900)
+    r = pd.Series(np.random.default_rng(0).standard_t(6, 900) * 0.02 / np.sqrt(6 / 4), index=days)
+    out = fx.garch_one(("AAA", r))
+    annual = 0.02 * np.sqrt(252)
+    for c in ("garch_h1", "garch_h5", "garch_h10"):
+        assert 0.6 * annual < out[c].median() < 1.4 * annual, c

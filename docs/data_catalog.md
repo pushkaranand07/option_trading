@@ -170,7 +170,7 @@ New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_acti
 
 [models_v1.json](models_v1.json), hash `2f2484ef…`, frozen before any fit; [report](models_v1_report.md); record in [PA-47](PA_47-model-suite-v1.md). **No edge found at a trial count of 1,459.** Validation not read.
 
-**Known defect, not fixed:** `garch_h1`, `garch_h5` and `garch_h10` in `features_v1` are about 77 times too small and fitted on badly scaled returns (fractions passed where percent is expected). Any fix is a logged change, for the user to decide.
+**Corrected by [addendum 7](gate_v2_addendum_7.json):** `garch_h1`, `garch_h5` and `garch_h10` in `features_v1` were about 77 times too small and scrambled; the first run's numbers used those values. Refit: [report](models_v1_refit_report.md), [PA-48](PA_48-model-suite-v1-refit.md). **No edge found at a final trial count of 1,532. This line of work is closed.** Validation was not read.
 
 ### Gate v2
 
