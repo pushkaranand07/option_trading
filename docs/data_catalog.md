@@ -183,6 +183,8 @@ Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; pl
 | ADANIENT 2015-06-03 | Price discontinuity on a listed Scheme Of Arrangement ex-date. Yahoo bar and holder outcome UNVERIFIED. Stays in rule A results |
 | 2027 calendar | **The 2027 session list is UNVERIFIED until NSE's 2027 holiday circular is available. All "earliest date" figures are lower bounds** |
 
+**Addendum 2:** [gate_v2_addendum_2.json](gate_v2_addendum_2.json), hash `dacab5ce…`; record in [PA-43](PA_43-gate-v2-addendum-2.md). Tier 1 is the pass and 60% is report-only; timing: 8 features public by D's close, 113 stay at D-1, none changed. **Item g options are open for the user's decision; whether item c stays is open too.**
+
 ### Gate v1 (Prompt 2)
 
 Frozen before any harness run: [gate_v1.json](gate_v1.json), hash `48379c7a…`; plain English in

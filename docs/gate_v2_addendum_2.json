@@ -1,0 +1,54 @@
+{
+  "addendum": 2,
+  "applies_to": ["docs/gate_v2.json", "docs/gate_v2_addendum_1.json", "docs/features_v1.json"],
+  "gate_v2_sha256": "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59",
+  "addendum_1_sha256": "0152d74ee7d7cd20151a45011c586fda65df2e86e61d0572fa8c684010c1435c",
+  "features_v1_sha256": "971294830a4a7408255e5845231de37b949914b821abac0049e163650cd17090",
+  "written": "2026-10-30",
+  "edits_earlier_files": false,
+  "no_model_exists": true,
+  "decision_1_goal": {
+    "status": "decided by the user",
+    "pass": "Tier 1 is the pass",
+    "named_by_user": "net expectancy after 1.5x costs, lower bootstrap bound above 0, beats baselines, U2 same direction",
+    "win_rate_60pct": "report-only number",
+    "tier_2": "removed as a pass condition",
+    "items_in_tier_1": "a, c, d, e, f, g as gate v2 defines them, until the user decides the open question below",
+    "open_question_for_the_user": "the user's wording names items d, e and f. Items a, c and g are not named. Item c is kept here because no instruction removed it, but it is a win-rate test: at 100 dates it needs 53 to 60 wins depending on h and the number of specs, so a positive-expectancy model below that win rate fails"
+  },
+  "decision_2_timing": {
+    "status": "decided by the user",
+    "rule": "a field public by the close of D may use D. Any other field stays at D-1. An unverified publication time counts as D-1",
+    "close": "15:30 IST",
+    "public_by_close_of_d": {
+      "raw_fields": ["calendar date", "listed contract expiries", "board meeting date", "board notice timestamp", "board notice purpose"],
+      "features": ["day_of_week", "days_to_expiry", "expiry_week", "days_since_prev_session", "board_days_to_next", "board_days_since_last", "results_days_to_next", "results_days_since_last"],
+      "feature_count": 8,
+      "raw_field_count": 5,
+      "note": "board notices count only when stamped before 15:30 on D; these features already read D in features_v1"
+    },
+    "stay_at_d_minus_1": {
+      "raw_fields": {
+        "futures_bhavcopy": ["open", "high", "low", "close", "open_interest", "oi_change", "contracts", "turnover"],
+        "option_bhavcopy": ["close", "contracts", "open_interest", "flag_parity", "flag_below_intrinsic"],
+        "participant_file": ["fut_idx_long", "fut_idx_short", "fut_stk_long", "fut_stk_short", "opt_idx_call_long", "opt_idx_call_short", "opt_idx_put_long", "opt_idx_put_short"],
+        "mto_file": ["deliv_pct"],
+        "index_file": ["close, for NIFTY, BANKNIFTY and India VIX"],
+        "action_files": ["ex_date"]
+      },
+      "feature_count": 113,
+      "raw_field_count": 24,
+      "reason": "no stored evidence of publication by 15:30. The manifest holds same-evening fetches on 2 dates only, at 20:52 and 21:14; both are after the close"
+    },
+    "features_that_change": 0,
+    "consequence": "features_v1 already follows this rule. Features for D still read D-1 for market data, while the baselines in item e read D's close"
+  },
+  "decision_3_item_g": {
+    "status": "OPEN: the user decides",
+    "option_a": "the model only uses families that exist in that fold, fixed in advance per fold",
+    "option_b": "folds without a family are excluded from the 70% rule, with a minimum fold count stated now",
+    "exists_tests": {"item_g_minimum": "at least 100 signal dates with at least 20 U1 stocks filled", "stricter": "at least 80% of the fold's dates and 50% of U1 stock rows filled"},
+    "chosen": null
+  },
+  "validation": "still used once per frozen model spec"
+}
