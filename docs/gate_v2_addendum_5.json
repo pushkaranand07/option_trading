@@ -1,0 +1,62 @@
+{
+ "addendum": 5,
+ "applies_to": [
+  "docs/gate_v2.json",
+  "docs/gate_v2_addendum_1.json",
+  "docs/gate_v2_addendum_2.json",
+  "docs/gate_v2_addendum_3.json",
+  "docs/gate_v2_addendum_4.json"
+ ],
+ "gate_v2_sha256": "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59",
+ "addendum_4_sha256": "589501f3769a9f9ae8b6c0d22b9c041f100b1eeb06c659965786e6c2a8cc2f29",
+ "written": "2026-10-31",
+ "edits_earlier_files": false,
+ "no_model_exists": true,
+ "pass_condition": {
+  "items": [
+   "a",
+   "d",
+   "e",
+   "f",
+   "g"
+  ],
+  "report_only": [
+   "b",
+   "c"
+  ]
+ },
+ "item_e": {
+  "status": "adopted by the user; replaces the single-schedule comparison",
+  "rule": "a model must beat each baseline's highest net expectancy across 20 schedules, on the same evaluation data",
+  "evaluation_data": [
+   "development folds",
+   "validation",
+   "forward"
+  ],
+  "schedules": "20 start offsets per symbol, restarted in the evaluation data, then the one-open rule; D-1 timing (addendum 3)"
+ },
+ "horizons": {
+  "primary": [
+   1,
+   2,
+   3
+  ],
+  "low_power_under_item_e": {
+   "horizons": [
+    5,
+    10
+   ],
+   "status": "allowed",
+   "label": "low power under item e"
+  }
+ },
+ "item_d": {
+  "lower_bound_percentile": {
+   "1_spec": 2.5,
+   "2_specs": 1.25,
+   "3_specs": 0.8333333333333334
+  },
+  "status": "unchanged from addendum 4"
+ },
+ "trial_count": 1389
+}

@@ -26,6 +26,8 @@ ADDENDUM_3_FILE = g.ROOT / "docs" / "gate_v2_addendum_3.json"
 ADDENDUM_3_SHA256 = "811be62ded485b6d23f49407f0676929130d6912402c6b893b301ecf2755f8d8"
 ADDENDUM_4_FILE = g.ROOT / "docs" / "gate_v2_addendum_4.json"
 ADDENDUM_4_SHA256 = "589501f3769a9f9ae8b6c0d22b9c041f100b1eeb06c659965786e6c2a8cc2f29"
+ADDENDUM_5_FILE = g.ROOT / "docs" / "gate_v2_addendum_5.json"
+ADDENDUM_5_SHA256 = "e6d1fb74337a5f0771e17f3eb17fd2bba21810bd0ac7bbe55cf71946cc76cde1"
 MIN_DATES, TARGET_DATES = 100, 150
 RULE_A_KINDS = ("split", "bonus", "demerger", "consolidation")
 
@@ -67,6 +69,14 @@ def read_addendum_4(path: Path | None = None) -> dict:
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_4_SHA256:
         raise ValueError("gate_v2_addendum_4.json changed after it was frozen")
+    return spec
+
+
+def read_addendum_5(path: Path | None = None) -> dict:
+    spec = json.loads((path or ADDENDUM_5_FILE).read_text(encoding="utf-8"))
+    text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_5_SHA256:
+        raise ValueError("gate_v2_addendum_5.json changed after it was frozen")
     return spec
 
 
@@ -177,6 +187,24 @@ def bootstrap_lowers(dates: np.ndarray, values: np.ndarray, block: int, rng, per
     picks = (starts[:, :, None] + np.arange(block)).reshape(reps, -1)[:, :k]
     means = s[picks].sum(axis=1) / c[picks].sum(axis=1)
     return {name: float(np.percentile(means, p)) for name, p in percentiles.items()}
+
+
+def beats_upper_range(expectancy: float, schedules: dict[str, list[float]], minimum: int = 20) -> bool:
+    """Item e (addendum 5): above each baseline's highest net expectancy across its schedules on the same data. Too few schedules, or none usable, fails."""
+    if not schedules:
+        return False
+    for values in schedules.values():
+        v = [x for x in values if np.isfinite(x)]
+        if len(v) < minimum or not expectancy > max(v):
+            return False
+    return True
+
+
+LOW_POWER_HORIZONS = (5, 10)
+
+
+def horizon_label(h: int) -> str:
+    return "low power under item e" if h in LOW_POWER_HORIZONS else "primary"
 
 
 PASS_ITEMS = "adefg"

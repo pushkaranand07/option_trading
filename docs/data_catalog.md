@@ -194,6 +194,8 @@ Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; pl
 | Participant and delivery in the 2015-16 fold | They pass item g's 100-date existence test on 129 and 128 dates, **all from the first quarter of 2015**. One quarter stands in for a two-year fold |
 | Expiry quirk | A signal is dropped when its session has no one-contract return, the session after an expiry: **about 5% of signal sessions**. The frozen trade definition is unchanged. Moving to D-1 shifts which session drops, and kept trades then differ by 94% to 99.7% at h of 2 or more |
 
+**Addendum 5:** [gate_v2_addendum_5.json](gate_v2_addendum_5.json), hash `e6d1fb74…`. Item e: a model must beat each baseline's highest net expectancy across 20 schedules on the same evaluation data. Primary horizons h = 1, 2, 3; h = 5 and 10 are allowed, labelled "low power under item e". Item d unchanged.
+
 ### Gate v1 (Prompt 2)
 
 Frozen before any harness run: [gate_v1.json](gate_v1.json), hash `48379c7a…`; plain English in
