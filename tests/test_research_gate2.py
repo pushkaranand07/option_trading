@@ -294,3 +294,20 @@ def test_the_time_shift_moves_whole_dates_with_no_overlap():
 def test_the_v2_code_holds_no_unlock():
     for rel in ("tradingagents/research/gate2.py", "scripts/research_gate2_harness.py"):
         assert "Unlock(" not in Path(g.ROOT, rel).read_text(encoding="utf-8"), rel
+
+
+@pytest.mark.unit
+def test_addendum_5_is_frozen_and_item_e_needs_the_upper_range(tmp_path):
+    spec = g2.read_addendum_5()
+    assert spec["addendum_4_sha256"] == g2.ADDENDUM_4_SHA256 and "".join(spec["pass_condition"]["items"]) == g2.PASS_ITEMS
+    assert g2.horizon_label(3) == "primary" and g2.horizon_label(5) == "low power under item e" and g2.horizon_label(10) == "low power under item e"
+    twenty = {"always_long": [0.001] * 19 + [0.004], "prev_day": [0.002] * 20}
+    assert g2.beats_upper_range(0.005, twenty)
+    assert not g2.beats_upper_range(0.003, twenty)                 # beats 19 schedules, not the highest
+    assert not g2.beats_upper_range(0.004, twenty)                 # must be above, not equal
+    assert not g2.beats_upper_range(0.005, {"always_long": [0.001] * 19})     # too few schedules
+    assert not g2.beats_upper_range(0.005, {})
+    changed = tmp_path / "a.json"
+    changed.write_text(g2.ADDENDUM_5_FILE.read_text(encoding="utf-8").replace('"addendum": 5', '"addendum": 6'), encoding="utf-8")
+    with pytest.raises(ValueError, match="changed"):
+        g2.read_addendum_5(changed)
