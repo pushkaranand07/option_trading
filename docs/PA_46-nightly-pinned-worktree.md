@@ -43,6 +43,6 @@ The task ran from the main checkout. On 2026-10-31 at 10:12 it started while tha
 
 ## 6. Not changed
 
-The morning plan task ("TradingAgents morning plan", 08:30) still runs from the main checkout and has the same exposure. It was not in scope.
+The morning plan task runs the same way, with `--job morning`, installed by `python scripts/nightly_pinned.py --install --job morning`. Its plans stay in the main checkout's `reports/morning/`.
 
 Why the 2026-10-30 19:30 run is missing from the log is not addressed here; the user will report it.

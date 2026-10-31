@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -22,7 +23,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
-PLAN_DIR = ROOT / "reports" / "morning"
+PLAN_DIR = Path(os.environ.get("TRADINGAGENTS_REPORTS_DIR") or ROOT / "reports") / "morning"
 INDICES = {"NIFTY": "^NSEI", "BANKNIFTY": "^NSEBANK"}
 PRE_OPEN, OPEN, CLOSE = time(9, 0), time(9, 15), time(15, 30)
 FIRST_SIGNAL = time(9, 45)                 # the live rule waits for the first half hour
