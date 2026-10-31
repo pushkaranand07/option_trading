@@ -212,7 +212,11 @@ def one_run(args) -> dict:
     u2_exp = float((u2d * p2["gross"][u2_rows] - p2["cost"][u2_rows]).mean())
     block = _S["block"][h]
     res = g2.evaluate({"date": lab, "net": net, "win_null": win_null}, wf, base, u2_exp, h, _S["x"][h], block, rng, reps=500)
-    return {k: bool(res[k]["pass"]) for k in "abcdefg"} | {"tier1": bool(res["tier1"]), "tier2": bool(res["tier2"]),
+    extra = {}
+    if "lower_percentiles" in _S:       # addendum 4: item d at each forward spec count, and the baselines for a stricter item e
+        low = g2.bootstrap_lowers(lab, net, block, rng, _S["lower_percentiles"], reps=g.BOOTSTRAP_REPS)
+        extra = {"d_by_spec": {k: bool(net.mean() > 0 and v > 0) for k, v in low.items()}, "base": base}
+    return extra | {k: bool(res[k]["pass"]) for k in "abcdefg"} | {"tier1": bool(res["tier1"]), "tier2": bool(res["tier2"]),
             "win": res["b"]["win_rate"], "exp": res["d"]["expectancy"], "raw": res["a"]["raw"], "dates": res["a"]["distinct_dates"],
             "min_fold_dates": res["g"]["min_fold_dates"]}
 

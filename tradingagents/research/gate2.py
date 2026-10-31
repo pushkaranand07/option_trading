@@ -24,6 +24,8 @@ ADDENDUM_2_FILE = g.ROOT / "docs" / "gate_v2_addendum_2.json"
 ADDENDUM_2_SHA256 = "dacab5ced2d7aefcae402fe31ba39d62a408df9acc6edb90f283140af02b0261"
 ADDENDUM_3_FILE = g.ROOT / "docs" / "gate_v2_addendum_3.json"
 ADDENDUM_3_SHA256 = "811be62ded485b6d23f49407f0676929130d6912402c6b893b301ecf2755f8d8"
+ADDENDUM_4_FILE = g.ROOT / "docs" / "gate_v2_addendum_4.json"
+ADDENDUM_4_SHA256 = "589501f3769a9f9ae8b6c0d22b9c041f100b1eeb06c659965786e6c2a8cc2f29"
 MIN_DATES, TARGET_DATES = 100, 150
 RULE_A_KINDS = ("split", "bonus", "demerger", "consolidation")
 
@@ -57,6 +59,14 @@ def read_addendum_3(path: Path | None = None) -> dict:
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_3_SHA256:
         raise ValueError("gate_v2_addendum_3.json changed after it was frozen")
+    return spec
+
+
+def read_addendum_4(path: Path | None = None) -> dict:
+    spec = json.loads((path or ADDENDUM_4_FILE).read_text(encoding="utf-8"))
+    text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_4_SHA256:
+        raise ValueError("gate_v2_addendum_4.json changed after it was frozen")
     return spec
 
 
@@ -146,6 +156,27 @@ def lag_one_session(frame: pd.DataFrame, sessions: list, column: str) -> pd.Data
     following = dict(zip(sessions[:-1], sessions[1:], strict=True))
     out = frame.assign(**{column: frame[column].map(following)})
     return out[out[column].notna()].reset_index(drop=True)
+
+
+def schedule_rows(frame: pd.DataFrame, offset: int, position: dict) -> pd.DataFrame:
+    """A baseline's candidate rows on one trade schedule: each symbol starts ``offset`` sessions after its first row in
+    ``frame``. The one-open rule, applied next, then follows from that start."""
+    pos = frame["signal"].map(position)
+    return frame[pos >= pos.groupby(frame["symbol"]).transform("min") + offset]
+
+
+def bootstrap_lowers(dates: np.ndarray, values: np.ndarray, block: int, rng, percentiles: dict[str, float], reps: int = g.BOOTSTRAP_REPS) -> dict[str, float]:
+    """Item d's bound at each percentile, from the same draws as ``gate.block_bootstrap_lower``."""
+    u, inv = np.unique(dates, return_inverse=True)
+    k = len(u)
+    if k <= block:      # no interval can be estimated from so few dates: never a pass
+        return dict.fromkeys(percentiles, float("-inf"))
+    s, c = np.bincount(inv, values), np.bincount(inv)
+    blocks = int(np.ceil(k / block))
+    starts = rng.integers(0, k - block + 1, size=(reps, blocks))
+    picks = (starts[:, :, None] + np.arange(block)).reshape(reps, -1)[:, :k]
+    means = s[picks].sum(axis=1) / c[picks].sum(axis=1)
+    return {name: float(np.percentile(means, p)) for name, p in percentiles.items()}
 
 
 PASS_ITEMS = "adefg"

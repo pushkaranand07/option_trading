@@ -186,6 +186,52 @@ def test_addendum_3_is_frozen_and_consistent(tmp_path):
 
 
 @pytest.mark.unit
+def test_a_schedule_offset_starts_each_symbol_later_and_the_one_open_rule_follows():
+    s = _sessions(12)
+    rows = pd.DataFrame({"symbol": ["AAA"] * 10 + ["BBB"] * 6, "signal": s[:10] + s[4:10]})
+    rows["entry"] = rows["signal"].map(dict(zip(s[:-1], s[1:], strict=True)))
+    rows["exit"] = rows["signal"].map(dict(zip(s[:-2], s[2:], strict=True)))
+    position = {d: i for i, d in enumerate(s)}
+    moved = g2.schedule_rows(rows, 1, position)
+    assert moved.groupby("symbol")["signal"].min().to_dict() == {"AAA": s[1], "BBB": s[5]}
+    a, b = g.one_open_trade(rows), g.one_open_trade(moved)
+    assert set(a.loc[a["symbol"] == "AAA", "signal"]).isdisjoint(b.loc[b["symbol"] == "AAA", "signal"])      # h = 2: the other phase
+
+
+@pytest.mark.unit
+def test_addendum_4_is_frozen_and_does_not_apply_the_item_e_rule(tmp_path):
+    spec = g2.read_addendum_4()
+    assert spec["addendum_3_sha256"] == g2.ADDENDUM_3_SHA256 and spec["item_e_schedules"]["status"].startswith("proposal")
+    assert spec["validation_reads"]["this_addendum"] == 5 * 5 * 2 * 20
+    changed = tmp_path / "a.json"
+    changed.write_text(g2.ADDENDUM_4_FILE.read_text(encoding="utf-8").replace('"addendum": 4', '"addendum": 5'), encoding="utf-8")
+    with pytest.raises(ValueError, match="changed"):
+        g2.read_addendum_4(changed)
+
+
+@pytest.mark.unit
+def test_rule_offsets_turn_the_percent_report_into_fractions():
+    import sys
+    sys.path.insert(0, str(Path(g.ROOT, "scripts")))
+    import research_gate2_addendum4 as a4
+
+    cell = {"always_long": {"development": {"upper_minus_mean": 0.03}, "validation": {"upper_minus_mean": 0.1},
+                            "window_100": {"median_upper_minus_mean": 0.2, "p90_upper_minus_mean": 0.4}}}
+    out = a4.rule_offsets(cell)
+    assert out["upper_development"]["always_long"] == pytest.approx(0.0003) and out["one_schedule"]["always_long"] == 0.0
+    assert out["upper_100_session_p90"]["always_long"] == pytest.approx(0.004)
+
+
+@pytest.mark.unit
+def test_lower_percentile_bounds_are_ordered_and_match_the_gate_at_2_5():
+    d, v = np.arange(200), np.random.default_rng(0).normal(0.001, 0.01, 200)
+    low = g2.bootstrap_lowers(d, v, 2, np.random.default_rng(3), {"1": 2.5, "2": 1.25, "3": 2.5 / 3})
+    assert low["3"] <= low["2"] <= low["1"]
+    assert low["1"] == pytest.approx(g.block_bootstrap_lower(d, v, 2, np.random.default_rng(3)), abs=1e-12)
+    assert g2.bootstrap_lowers(d[:2], v[:2], 2, np.random.default_rng(0), {"1": 2.5})["1"] == float("-inf")
+
+
+@pytest.mark.unit
 def test_a_baseline_on_d_minus_1_ignores_the_signal_days_own_return():
     s = _sessions(12)
     r = pd.DataFrame({"symbol": "AAA", "trade_date": s[:10], "ret": [0.01, -0.02, 0.03, 0.01, 0.02, -0.01, 0.02, 0.01, -0.03, 0.04]})
