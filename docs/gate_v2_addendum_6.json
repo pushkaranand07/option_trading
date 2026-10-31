@@ -1,0 +1,24 @@
+{
+ "addendum": 6,
+ "applies_to": [
+  "docs/gate_v2.json",
+  "docs/gate_v2_addendum_1.json",
+  "docs/gate_v2_addendum_2.json",
+  "docs/gate_v2_addendum_3.json",
+  "docs/gate_v2_addendum_4.json",
+  "docs/gate_v2_addendum_5.json"
+ ],
+ "gate_v2_sha256": "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59",
+ "addendum_5_sha256": "e6d1fb74337a5f0771e17f3eb17fd2bba21810bd0ac7bbe55cf71946cc76cde1",
+ "written": "2026-10-31",
+ "edits_earlier_files": false,
+ "no_model_exists": true,
+ "item_e_application": {
+  "baseline_upper_range": "highest net expectancy across the 20 schedules, computed on the same evaluation data as the model",
+  "can_fail_the_gate_on": [
+   "validation",
+   "forward"
+  ],
+  "on_development_folds": "report-only; item g governs the folds"
+ }
+}

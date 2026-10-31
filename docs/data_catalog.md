@@ -166,6 +166,12 @@ Frozen before any build: [features_v1.json](features_v1.json), hash `97129483…
 [threshold report](features_threshold_report.md); record in [PA-42](PA_42-feature-library-v1.md). No model, and no predictive power measured.
 New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_actions/price_events`, `base_actions/board_notices`, `features_v1/`. IV liquidity threshold: 25 contracts on the thinner leg.
 
+### Model suite v1
+
+[models_v1.json](models_v1.json), hash `2f2484ef…`, frozen before any fit; [report](models_v1_report.md); record in [PA-47](PA_47-model-suite-v1.md). **No edge found at a trial count of 1,459.** Validation not read.
+
+**Known defect, not fixed:** `garch_h1`, `garch_h5` and `garch_h10` in `features_v1` are about 77 times too small and fitted on badly scaled returns (fractions passed where percent is expected). Any fix is a logged change, for the user to decide.
+
 ### Gate v2
 
 Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; plain English in

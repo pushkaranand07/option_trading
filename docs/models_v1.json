@@ -1,0 +1,414 @@
+{
+ "version": 1,
+ "written": "2026-10-31",
+ "written_before_any_fit": true,
+ "gate": {
+  "gate_v2_sha256": "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59",
+  "addendum_6_sha256": "49ee9353558a6cf7453517de32d102626e37f5ba8e74e9c33cd648ae95b23191",
+  "pass": [
+   "a",
+   "d",
+   "e",
+   "f",
+   "g"
+  ],
+  "report_only": [
+   "b",
+   "c"
+  ],
+  "item_e_on_development": "report-only"
+ },
+ "features_v1_sha256": "971294830a4a7408255e5845231de37b949914b821abac0049e163650cd17090",
+ "features": [
+  "atm_iv_chg_1",
+  "atm_iv_front",
+  "atm_iv_rel_252",
+  "banknifty_fut_ret_20",
+  "basis_spot_index",
+  "basis_term",
+  "board_days_since_last",
+  "breadth_up_1_U1",
+  "breadth_up_1_U2",
+  "breadth_up_20_U1",
+  "breadth_up_20_U2",
+  "breadth_up_60_U1",
+  "breadth_up_60_U2",
+  "client_fut_idx_net",
+  "client_fut_idx_net_chg_5",
+  "client_fut_stk_net",
+  "client_fut_stk_net_chg_5",
+  "client_opt_idx_call_net",
+  "client_opt_idx_put_net",
+  "close_loc_1",
+  "day_of_week",
+  "days_since_prev_session",
+  "days_to_expiry",
+  "deliv_chg_1",
+  "deliv_pct",
+  "deliv_rel_20",
+  "dii_fut_idx_net",
+  "dii_fut_idx_net_chg_5",
+  "dii_fut_stk_net",
+  "dii_fut_stk_net_chg_5",
+  "dii_opt_idx_call_net",
+  "dii_opt_idx_put_net",
+  "expiry_week",
+  "fii_fut_idx_net",
+  "fii_fut_idx_net_chg_5",
+  "fii_fut_stk_net",
+  "fii_fut_stk_net_chg_5",
+  "fii_opt_idx_call_net",
+  "fii_opt_idx_put_net",
+  "gap_1",
+  "garch_h1",
+  "garch_h10",
+  "garch_h5",
+  "garman_klass_20",
+  "iv_minus_rv_20",
+  "max_pain_dist",
+  "n_liquid_pairs",
+  "nifty_above_ma_200",
+  "nifty_above_ma_50",
+  "nifty_fut_ret_20",
+  "nifty_ret_20",
+  "nifty_ret_5",
+  "nifty_ret_60",
+  "oi_chg_1",
+  "oi_chg_5",
+  "oi_near_share",
+  "oi_rel_252",
+  "oi_z_60",
+  "parkinson_20",
+  "pcr_oi_liquid",
+  "pcr_volume_liquid",
+  "pro_fut_idx_net",
+  "pro_fut_idx_net_chg_5",
+  "pro_fut_stk_net",
+  "pro_fut_stk_net_chg_5",
+  "pro_opt_idx_call_net",
+  "pro_opt_idx_put_net",
+  "range_1",
+  "rank_U1_atm_iv_front",
+  "rank_U1_deliv_pct",
+  "rank_U1_iv_minus_rv_20",
+  "rank_U1_oi_chg_1",
+  "rank_U1_oi_z_60",
+  "rank_U1_pcr_oi_liquid",
+  "rank_U1_ret_1",
+  "rank_U1_ret_20",
+  "rank_U1_ret_5",
+  "rank_U1_rv_20",
+  "rank_U1_skew_5",
+  "rank_U1_turnover_ratio_20",
+  "rank_U2_atm_iv_front",
+  "rank_U2_deliv_pct",
+  "rank_U2_iv_minus_rv_20",
+  "rank_U2_oi_chg_1",
+  "rank_U2_oi_z_60",
+  "rank_U2_pcr_oi_liquid",
+  "rank_U2_ret_1",
+  "rank_U2_ret_20",
+  "rank_U2_ret_5",
+  "rank_U2_rv_20",
+  "rank_U2_skew_5",
+  "rank_U2_turnover_ratio_20",
+  "results_days_since_last",
+  "ret_1",
+  "ret_10",
+  "ret_2",
+  "ret_20",
+  "ret_3",
+  "ret_5",
+  "ret_60",
+  "rv_10",
+  "rv_20",
+  "rv_5",
+  "rv_60",
+  "rv_ratio_5_60",
+  "skew_5",
+  "turnover_ratio_20",
+  "turnover_ratio_5_60",
+  "vix",
+  "vix_chg_1",
+  "vix_chg_5",
+  "vix_z_60"
+ ],
+ "feature_count": 112,
+ "excluded_features": [
+  "atm_iv_next",
+  "board_days_to_next",
+  "iv_term_ratio",
+  "iv_term_slope",
+  "results_days_to_next",
+  "skew_5_norm"
+ ],
+ "horizons": {
+  "primary": [
+   1,
+   2,
+   3
+  ],
+  "low_power_under_item_e": [
+   5,
+   10
+  ]
+ },
+ "universes": {
+  "fit": "U1 stocks and indices",
+  "primary": "U1",
+  "required": "U2: the U1 fit is applied to U2 rows, with no refit, so U2 is a true out-of-universe check"
+ },
+ "trades": "gate v1 trade build, rule A skips, the minimum-move filter on D-1 data, then the one-open rule; features for signal D read D-1; entry at the open after D; costs at 1.5x, cost model unverified",
+ "protocol": {
+  "folds": "gate folds. Development test folds 2013-14 to 2021-22; 2023-24 is validation",
+  "training": "all earlier rows ending before the test fold less a purge of h sessions, less entries within h sessions after each earlier test fold. gate.train_mask is NOT used: it drops every earlier test fold, against its own description. The frozen code is left as it is",
+  "inner_holdout": "the last 20% of a training window's signal dates, purged by h, is used to pick the grid point, fit calibration and score the band",
+  "winsorizing": "0.5th and 99.5th percentiles fitted per fold on that fold's training rows; flags, calendar and ranks excepted",
+  "missing": "trees: native missing. Linear and sequence: a value missing is 0 after scaling, with a missing flag per feature group. No forward-fill and no use of later rows",
+  "scaling": "mean and standard deviation per fold on training rows, linear and sequence only",
+  "acting": "the band is chosen once per spec and h: the median across folds of the inner-holdout's best net expectancy, requiring at least 50 distinct signal dates, then frozen for every test fold and validation. It uses later folds' inner holdouts for earlier test folds, inside development only",
+  "calibration": "Platt on the inner holdout, development only; applied to test folds. Reliability curve and Brier score reported",
+  "seeds": [
+   11,
+   22,
+   33,
+   44,
+   55
+  ],
+  "seed_use": "stochastic models report per-seed results and act on the mean prediction; a sign change across seeds is reported as unstable"
+ },
+ "specs": {
+  "a_elastic_logistic": {
+   "family": "linear control",
+   "target": "T1: sign of gross return",
+   "model": "SGD logistic, elastic net",
+   "grid": {
+    "alpha": [
+     0.0001,
+     0.001
+    ],
+    "l1_ratio": [
+     0.15,
+     0.5
+    ]
+   },
+   "epochs": 5,
+   "features": "the 112 features addendum 3 lets go forward, limited in each fold to that fold's allowed list",
+   "seeds": "1: fixed order, deterministic",
+   "loss": "log",
+   "band": [
+    0.01,
+    0.02,
+    0.03,
+    0.05
+   ],
+   "act": "long above 0.5 + band, short below 0.5 - band, on the calibrated probability"
+  },
+  "a_elastic_linear": {
+   "family": "linear control",
+   "target": "T2: gross return, winsorized on training rows",
+   "model": "SGD linear, elastic net",
+   "grid": {
+    "alpha": [
+     0.0001,
+     0.001
+    ],
+    "l1_ratio": [
+     0.15,
+     0.5
+    ]
+   },
+   "epochs": 5,
+   "features": "the 112 features addendum 3 lets go forward, limited in each fold to that fold's allowed list",
+   "seeds": "1",
+   "loss": "squared",
+   "band_cost_multiples": [
+    1,
+    2,
+    3
+   ],
+   "act": "long if the prediction is above band x 1.5x round-trip cost, short if below minus that"
+  },
+  "b_lightgbm": {
+   "family": "trees",
+   "target": "T1",
+   "model": "LightGBM",
+   "grid": {
+    "max_depth": [
+     3,
+     5
+    ]
+   },
+   "fixed": {
+    "num_leaves": "2^depth - 1, at most 15",
+    "n_estimators": 200,
+    "learning_rate": 0.05,
+    "min_data_in_leaf": 500,
+    "feature_fraction": 0.5,
+    "bagging_fraction": 0.5,
+    "bagging_freq": 1,
+    "lambda_l2": 10
+   },
+   "monotone": {
+    "constraint": 1,
+    "features": [
+     "ret_20",
+     "ret_60",
+     "nifty_fut_ret_20",
+     "breadth_up_20_U1"
+    ],
+    "basis": "ASSUMPTION written before any fit: slower trend continues. Not measured, and not changed after any result"
+   },
+   "features": "the 112 features addendum 3 lets go forward, limited in each fold to that fold's allowed list",
+   "seeds": "5",
+   "loss": "binary log",
+   "band": [
+    0.01,
+    0.02,
+    0.03,
+    0.05
+   ],
+   "act": "as a_elastic_logistic"
+  },
+  "c_har_vol": {
+   "family": "risk only",
+   "target": "T3: log forward realized volatility over h sessions",
+   "model": "HAR: least squares on log rv_5, log rv_20, log rv_60",
+   "grid": {},
+   "features": [
+    "rv_5",
+    "rv_20",
+    "rv_60"
+   ],
+   "seeds": "1",
+   "loss": "squared on logs",
+   "use": "risk scaling only. It gives no direction, so it cannot pass or fail the gate. Reported: QLIKE against garch_h on the same rows"
+  },
+  "d_temporal_cnn": {
+   "family": "sequence",
+   "target": "T1",
+   "model": "temporal CNN: two dilated 1-D convolutions, kernel 3, dilations 1 and 2, then a linear output",
+   "grid": {
+    "channels": [
+     16,
+     32
+    ]
+   },
+   "fixed": {
+    "sequence_sessions": 10,
+    "dropout": 0.2,
+    "epochs": 4,
+    "batch": 1024,
+    "optimizer": "Adam, learning rate 0.001, weight decay 0.0001"
+   },
+   "features": "same as a, each session's row for the same symbol; a session with no row is zeros with flags on",
+   "seeds": "5",
+   "loss": "binary log",
+   "band": [
+    0.01,
+    0.02,
+    0.03,
+    0.05
+   ],
+   "act": "as a_elastic_logistic"
+  },
+  "e_ensemble": {
+   "family": "ensemble",
+   "target": "T1",
+   "model": "equal-weight mean of the calibrated probabilities of a_elastic_logistic, b_lightgbm and d_temporal_cnn",
+   "weights": {
+    "a_elastic_logistic": 0.3333333333333333,
+    "b_lightgbm": 0.3333333333333333,
+    "d_temporal_cnn": 0.3333333333333333
+   },
+   "grid": {},
+   "seeds": "those of its members",
+   "loss": "none: no new fit",
+   "band": [
+    0.01,
+    0.02,
+    0.03,
+    0.05
+   ],
+   "act": "as a_elastic_logistic",
+   "features": "those of its members"
+  },
+  "f_rank": {
+   "family": "cross-sectional",
+   "target": "percentile rank of gross return among stocks on the signal date, at least 20 names",
+   "model": "LightGBM regression on that rank",
+   "grid": {
+    "max_depth": [
+     3,
+     5
+    ]
+   },
+   "fixed": {
+    "n_estimators": 200,
+    "learning_rate": 0.05,
+    "min_data_in_leaf": 500,
+    "feature_fraction": 0.5,
+    "bagging_fraction": 0.5,
+    "bagging_freq": 1,
+    "lambda_l2": 10
+   },
+   "features": "the 112 features addendum 3 lets go forward, limited in each fold to that fold's allowed list",
+   "seeds": "5",
+   "loss": "squared",
+   "bucket": [
+    0.1,
+    0.2
+   ],
+   "act": "per signal date, long the top bucket and short the bottom bucket of the universe's stocks with a prediction; at least 20 names; each leg pays its own cost"
+  }
+ },
+ "trials": {
+  "definition": "each spec x horizon x universe x target",
+  "count_by_spec": {
+   "a_elastic_logistic": 10,
+   "a_elastic_linear": 10,
+   "b_lightgbm": 10,
+   "c_har_vol": 10,
+   "d_temporal_cnn": 10,
+   "e_ensemble": 10,
+   "f_rank": 10
+  },
+  "total": 70,
+  "note": "a has two targets, so 7 rows for 6 specs. Grid points are not separate trials under this definition; they are reported beside the count. Each validation read adds a trial"
+ },
+ "item_d": {
+  "development_and_validation_percentile": 0.8333333333333334,
+  "why": "the number of forward specs is not known before results, so the strictest level is used until it is",
+  "forward": {
+   "1_spec": 2.5,
+   "2_specs": 1.25,
+   "3_specs": 0.8333333333333334
+  },
+  "forward_spec": "one spec at one horizon",
+  "block_dates_by_h": {
+   "1": 1,
+   "2": 1,
+   "3": 2,
+   "5": 2,
+   "10": 2
+  }
+ },
+ "development_pass": "items a, d, f and g on pooled development test folds and the 5 development folds: at least 70% of folds positive, none below -X_h, at least 100 distinct signal dates in every fold; U2 same sign; item e report-only",
+ "validation_pass": "items a, d, e, f and g: item e against the upper range on validation; item g on all 6 folds; at most one read per spec and horizon",
+ "forward_registration": "at most 3. If more pass validation, the 3 with the highest development lower bound",
+ "controls": {
+  "shuffled_labels": "labels permuted within training",
+  "time_shift": "labels moved by 2h sessions per symbol",
+  "stale_features": "features taken h sessions older, which must destroy any real performance",
+  "scope": "a_elastic_logistic, b_lightgbm and f_rank at every h, one seed, first grid point; d_temporal_cnn at h = 1 and 3. Each must fail development"
+ },
+ "report_only": [
+  "win rate",
+  "item c",
+  "by year",
+  "by VIX tercile",
+  "feature importance",
+  "family ablation of b_lightgbm at h = 1, 2, 3"
+ ],
+ "no_rescue": "if none pass, the report says no edge found at the stated trial count. No model, feature or horizon is added"
+}
