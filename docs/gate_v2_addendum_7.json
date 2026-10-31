@@ -1,0 +1,69 @@
+{
+ "addendum": 7,
+ "written": "2026-10-31",
+ "edits_earlier_files": false,
+ "applies_to": [
+  "docs/gate_v2.json",
+  "docs/gate_v2_addendum_1.json",
+  "docs/gate_v2_addendum_2.json",
+  "docs/gate_v2_addendum_3.json",
+  "docs/gate_v2_addendum_4.json",
+  "docs/gate_v2_addendum_5.json",
+  "docs/gate_v2_addendum_6.json",
+  "docs/features_v1.json",
+  "docs/models_v1.json"
+ ],
+ "gate_v2_sha256": "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59",
+ "addendum_6_sha256": "49ee9353558a6cf7453517de32d102626e37f5ba8e74e9c33cd648ae95b23191",
+ "features_v1_sha256": "971294830a4a7408255e5845231de37b949914b821abac0049e163650cd17090",
+ "models_v1_sha256": "2f2484efa543a3c9e2c5567747342b23f6eb32df26ff5dc8682e55907280ff78",
+ "bug": {
+  "where": "tradingagents/research/features.py, garch_one",
+  "what": "daily returns passed as fractions; volatility_model.garch_forecasts expects percent. The output was about 77 times too small at the median and scrambled, because the fit ran on the wrong scale",
+  "introduced": "PR 66",
+  "look_ahead": "none found: values for a date do not change when data is cut at that date",
+  "first_run_validation_read": false
+ },
+ "fix": "multiply the returns by 100 before garch_forecasts. Only that line changes",
+ "affected_features": [
+  "garch_h1",
+  "garch_h5",
+  "garch_h10"
+ ],
+ "stored_before_fix": {
+  "a_parquet_sha256": "95b9f86c01187a3c39773d0f58e713fcf070334a5f8702b390963ae6c8e72268",
+  "garch_parquet_sha256": "ca57a201169ca5f93cc3b7a844bb162da1641bfd92d37f2e56b3ad85d4d13a65",
+  "snapshot": "store/_snapshots/features_v1_before_garch_fix"
+ },
+ "unchanged": [
+  "specs",
+  "grids",
+  "seeds",
+  "thresholds",
+  "horizons",
+  "universes",
+  "the gate"
+ ],
+ "no_new": [
+  "models",
+  "features",
+  "horizons"
+ ],
+ "refit": {
+  "scope": "all specs",
+  "repeat": [
+   "shuffled-label control",
+   "time-shift control",
+   "stale-feature control",
+   "truncation test"
+  ],
+  "controls_must_fail": true
+ },
+ "validation": "read only for a spec that passes development folds and U2, once per spec",
+ "trials": {
+  "feature_change": 3,
+  "refit": 70,
+  "note": "each validation read adds one"
+ },
+ "if_nothing_passes": "record no edge found at the final trial count and close this line of work. No further rescue"
+}

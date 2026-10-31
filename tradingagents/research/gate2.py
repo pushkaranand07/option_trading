@@ -30,6 +30,8 @@ ADDENDUM_5_FILE = g.ROOT / "docs" / "gate_v2_addendum_5.json"
 ADDENDUM_5_SHA256 = "e6d1fb74337a5f0771e17f3eb17fd2bba21810bd0ac7bbe55cf71946cc76cde1"
 ADDENDUM_6_FILE = g.ROOT / "docs" / "gate_v2_addendum_6.json"
 ADDENDUM_6_SHA256 = "49ee9353558a6cf7453517de32d102626e37f5ba8e74e9c33cd648ae95b23191"
+ADDENDUM_7_FILE = g.ROOT / "docs" / "gate_v2_addendum_7.json"
+ADDENDUM_7_SHA256 = "f8a7b029710035c770483c7b29a03b4a0ec4573f767113395c3ae0ee526aeed6"
 MIN_DATES, TARGET_DATES = 100, 150
 RULE_A_KINDS = ("split", "bonus", "demerger", "consolidation")
 
@@ -87,6 +89,14 @@ def read_addendum_6(path: Path | None = None) -> dict:
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_6_SHA256:
         raise ValueError("gate_v2_addendum_6.json changed after it was frozen")
+    return spec
+
+
+def read_addendum_7(path: Path | None = None) -> dict:
+    spec = json.loads((path or ADDENDUM_7_FILE).read_text(encoding="utf-8"))
+    text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_7_SHA256:
+        raise ValueError("gate_v2_addendum_7.json changed after it was frozen")
     return spec
 
 

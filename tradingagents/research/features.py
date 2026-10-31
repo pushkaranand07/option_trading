@@ -148,7 +148,7 @@ def garch_one(args: tuple[str, pd.Series]) -> pd.DataFrame:
     from tradingagents.analytics import volatility_model as vm
 
     symbol, r = args
-    r = r.dropna()
+    r = r.dropna() * 100.0     # garch_forecasts takes percent returns (addendum 7)
     if len(r) <= GARCH_MIN_RETURNS:
         return pd.DataFrame()
     try:
