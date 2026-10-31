@@ -187,6 +187,13 @@ Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; pl
 
 **Addendum 3:** [gate_v2_addendum_3.json](gate_v2_addendum_3.json), hash `811be62d…`; record in [PA-44](PA_44-gate-v2-addendum-3.md); baselines on D-1 in [gate_v2_baselines_d_minus_1.md](gate_v2_baselines_d_minus_1.md). The pass is items a, d, e, f, g. Item g option (a), with at least 4 full-set folds. Trial count 389.
 
+**Addendum 4:** [gate_v2_addendum_4.json](gate_v2_addendum_4.json), hash `589501f3…`; record in [PA-45](PA_45-gate-v2-addendum-4.md); ranges in [gate_v2_baseline_schedules.md](gate_v2_baseline_schedules.md). Trial count 1,389. The item e schedule rule is a proposal, not applied.
+
+| Known weakness | Record |
+|---|---|
+| Participant and delivery in the 2015-16 fold | They pass item g's 100-date existence test on 129 and 128 dates, **all from the first quarter of 2015**. One quarter stands in for a two-year fold |
+| Expiry quirk | A signal is dropped when its session has no one-contract return, the session after an expiry: **about 5% of signal sessions**. The frozen trade definition is unchanged. Moving to D-1 shifts which session drops, and kept trades then differ by 94% to 99.7% at h of 2 or more |
+
 ### Gate v1 (Prompt 2)
 
 Frozen before any harness run: [gate_v1.json](gate_v1.json), hash `48379c7a…`; plain English in

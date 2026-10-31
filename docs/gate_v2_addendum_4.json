@@ -1,0 +1,50 @@
+{
+ "addendum": 4,
+ "applies_to": [
+  "docs/gate_v2.json",
+  "docs/gate_v2_addendum_1.json",
+  "docs/gate_v2_addendum_2.json",
+  "docs/gate_v2_addendum_3.json"
+ ],
+ "gate_v2_sha256": "ecd52239077f0543700b236bf7a9ecee37c0187d4ded2adf60745458c22dfc59",
+ "addendum_3_sha256": "811be62ded485b6d23f49407f0676929130d6912402c6b893b301ecf2755f8d8",
+ "written": "2026-10-31",
+ "edits_earlier_files": false,
+ "no_model_exists": true,
+ "forward_correction": {
+  "status": "confirmed by the user",
+  "lower_bound_percentile": {
+   "1_spec": 2.5,
+   "2_specs": 1.25,
+   "3_specs": 0.8333333333333334
+  },
+  "runs_per_cell": 5000,
+  "bootstrap_draws": 2000,
+  "item_d_alone_worst": {
+   "1_spec": 0.0462,
+   "2_specs": 0.0264,
+   "3_specs": 0.0192
+  },
+  "pass_false_pass_worst": {
+   "1_spec": 0.0002,
+   "2_specs": 0.0002,
+   "3_specs": 0.0002
+  },
+  "false_pass_above_5pct": false
+ },
+ "item_e_schedules": {
+  "method": "D-1 timing, rule A; 20 start offsets per symbol, restarted in each period, then the one-open rule",
+  "report": "docs/gate_v2_baseline_schedules.md",
+  "proposed_rule_NOT_APPLIED": "a model must beat each baseline's highest net expectancy across 20 schedules built on the same evaluation data, not one schedule",
+  "status": "proposal; item e is unchanged until the user decides"
+ },
+ "known_weaknesses": {
+  "participant_delivery_2015_16": "these families count as existing in the 2015-16 fold on 129 and 128 dates, all from the first quarter of 2015",
+  "expiry_quirk": "a signal is dropped when its session has no one-contract return, the session after an expiry: about 5% of signal sessions; the frozen trade definition is unchanged"
+ },
+ "validation_reads": {
+  "this_addendum": 1000,
+  "calculation": "5 baselines x 5 horizons x 2 universes x 20 schedules"
+ },
+ "trial_count": 1389
+}
