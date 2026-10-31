@@ -268,6 +268,35 @@ def run_selftests(workers: int) -> dict:
 
 # ---------------------------------------------------------------- baselines
 
+def measure(x: pd.DataFrame, direction, weight, sessions: pd.Series) -> dict:
+    """One baseline's numbers per period, with and without trades that have no action list."""
+    cell = {}
+    entry = pd.to_datetime(x["entry"])
+    for per, mask in (("development", entry <= DEV_END), ("validation", entry > DEV_END)):
+        for cov, sub in (("all", np.ones(len(x), dtype=bool)), ("with_action_list", x["has_action_list"].to_numpy())):
+            m = mask.to_numpy() & sub
+            y, dd, ww = x[m], direction[m], weight[m]
+            if not len(y):
+                cell.setdefault(per, {})[cov] = {"raw_trades": 0}
+                continue
+            nets = {str(c): g.net_returns(y, dd, c, ww) for c in (1.0, 1.5, 2.0)}
+            n15 = nets["1.5"]
+            dates = y["signal"].astype(str).to_numpy()
+            d = pd.to_datetime(y["entry"])
+            weeks = (d.max() - d.min()).days / 7
+            k = len(np.unique(dates))
+            span = int(((sessions >= d.min()) & (sessions <= d.max())).sum())
+            rate = k / weeks if weeks else float("nan")
+            cell.setdefault(per, {})[cov] = {
+                "raw_trades": len(y), "distinct_dates": k, "effective_v1": g.effective_count(dates, n15), "weeks": weeks,
+                "dates_per_week": rate, "dates_per_session": k / span if span else None,
+                "weeks_to_100": 100 / rate if rate else None, "weeks_to_150": 150 / rate if rate else None,
+                **{f"expectancy_{c}x_pct": float(v.mean() * 100) for c, v in nets.items()},
+                **{f"win_rate_{c}x": float((v > 0).mean()) for c, v in nets.items()},
+                "median_1.5x_pct": float(np.median(n15) * 100), "winsorized_1.5x_pct": g2.winsorized_mean(n15) * 100}
+    return cell
+
+
 def run_baselines(workers: int) -> dict:
     seen = {t.idea for t in trial_log.load()}
     rep: dict = {"label": "cost model unverified; slippage ASSUMPTION; known_from of the action list UNVERIFIED"}
@@ -280,30 +309,7 @@ def run_baselines(workers: int) -> dict:
                 t = trades_for(data, h, uni)
                 for name in BASELINES:
                     x, direction, weight = v1.baseline_rows(name, t, data["returns"], garch, h)
-                    cell = {}
-                    entry = pd.to_datetime(x["entry"])
-                    for per, mask in (("development", entry <= DEV_END), ("validation", entry > DEV_END)):
-                        for cov, sub in (("all", np.ones(len(x), dtype=bool)), ("with_action_list", x["has_action_list"].to_numpy())):
-                            m = mask.to_numpy() & sub
-                            y, dd, ww = x[m], direction[m], weight[m]
-                            if not len(y):
-                                cell.setdefault(per, {})[cov] = {"raw_trades": 0}
-                                continue
-                            nets = {str(c): g.net_returns(y, dd, c, ww) for c in (1.0, 1.5, 2.0)}
-                            n15 = nets["1.5"]
-                            dates = y["signal"].astype(str).to_numpy()
-                            d = pd.to_datetime(y["entry"])
-                            weeks = (d.max() - d.min()).days / 7
-                            k = len(np.unique(dates))
-                            span = int(((sessions >= d.min()) & (sessions <= d.max())).sum())
-                            rate = k / weeks if weeks else float("nan")
-                            cell.setdefault(per, {})[cov] = {
-                                "raw_trades": len(y), "distinct_dates": k, "effective_v1": g.effective_count(dates, n15), "weeks": weeks,
-                                "dates_per_week": rate, "dates_per_session": k / span if span else None,
-                                "weeks_to_100": 100 / rate if rate else None, "weeks_to_150": 150 / rate if rate else None,
-                                **{f"expectancy_{c}x_pct": float(v.mean() * 100) for c, v in nets.items()},
-                                **{f"win_rate_{c}x": float((v > 0).mean()) for c, v in nets.items()},
-                                "median_1.5x_pct": float(np.median(n15) * 100), "winsorized_1.5x_pct": g2.winsorized_mean(n15) * 100}
+                    cell = measure(x, direction, weight, sessions)
                     rep.setdefault(rule, {}).setdefault(f"h{h}", {}).setdefault(uni, {})[name] = cell
                     idea = f"gate_v2_baseline_{name}_h{h}_{uni}_rule{rule}"
                     if idea not in seen:

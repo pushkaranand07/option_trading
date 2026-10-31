@@ -185,6 +185,8 @@ Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; pl
 
 **Addendum 2:** [gate_v2_addendum_2.json](gate_v2_addendum_2.json), hash `dacab5ce…`; record in [PA-43](PA_43-gate-v2-addendum-2.md). Tier 1 is the pass and 60% is report-only; timing: 8 features public by D's close, 113 stay at D-1, none changed. **Item g options are open for the user's decision; whether item c stays is open too.**
 
+**Addendum 3:** [gate_v2_addendum_3.json](gate_v2_addendum_3.json), hash `811be62d…`; record in [PA-44](PA_44-gate-v2-addendum-3.md); baselines on D-1 in [gate_v2_baselines_d_minus_1.md](gate_v2_baselines_d_minus_1.md). The pass is items a, d, e, f, g. Item g option (a), with at least 4 full-set folds. Trial count 389.
+
 ### Gate v1 (Prompt 2)
 
 Frozen before any harness run: [gate_v1.json](gate_v1.json), hash `48379c7a…`; plain English in

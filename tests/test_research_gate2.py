@@ -169,6 +169,51 @@ def test_addendum_2_is_frozen_records_the_timing_counts_and_leaves_item_g_open(t
 
 
 @pytest.mark.unit
+def test_addendum_3_is_frozen_and_consistent(tmp_path):
+    from tradingagents.research import features as fx
+
+    spec = g2.read_addendum_3()
+    assert spec["addendum_2_sha256"] == g2.ADDENDUM_2_SHA256 and spec["features_v1_sha256"] == fx.SPEC_SHA256
+    assert "".join(spec["pass_condition"]["items"]) == g2.PASS_ITEMS
+    item_g = spec["item_g"]
+    inputs = {n for n, f in fx.read_spec()["features"].items() if f["role"] == "input"}
+    assert set().union(*item_g["allowed_features_per_fold"].values()) <= inputs
+    assert item_g["features_that_can_go_forward"] + len(item_g["features_in_fewer_than_4_folds_cannot_go_forward"]) == len(inputs)
+    changed = tmp_path / "a.json"
+    changed.write_text(g2.ADDENDUM_3_FILE.read_text(encoding="utf-8").replace('"addendum": 3', '"addendum": 4'), encoding="utf-8")
+    with pytest.raises(ValueError, match="changed"):
+        g2.read_addendum_3(changed)
+
+
+@pytest.mark.unit
+def test_a_baseline_on_d_minus_1_ignores_the_signal_days_own_return():
+    s = _sessions(12)
+    r = pd.DataFrame({"symbol": "AAA", "trade_date": s[:10], "ret": [0.01, -0.02, 0.03, 0.01, 0.02, -0.01, 0.02, 0.01, -0.03, 0.04]})
+    trades = pd.DataFrame({"symbol": ["AAA"], "signal": [s[7]]})
+    lag = g2.lag_one_session(r, s, "trade_date")
+    assert g.signals_baseline("prev_day", trades, lag).iloc[0] == 1          # s[6] rose
+    changed = r.assign(ret=lambda x: x["ret"].where(x["trade_date"] != s[7], -0.5))
+    assert g.signals_baseline("prev_day", trades, g2.lag_one_session(changed, s, "trade_date")).iloc[0] == 1
+    assert g.signals_baseline("prev_day", trades, changed).iloc[0] == -1     # the old timing reads D itself
+
+
+@pytest.mark.unit
+def test_a_signal_after_a_hole_has_no_lagged_value():
+    s = _sessions(6)
+    r = pd.DataFrame({"symbol": "AAA", "trade_date": [s[0], s[1], s[3]], "ret": [0.01, 0.01, 0.01]})     # s[2] is a hole
+    lag = g2.lag_one_session(r, s, "trade_date")
+    assert s[3] not in set(lag["trade_date"]) and list(lag["trade_date"]) == [s[1], s[2], s[4]]
+
+
+@pytest.mark.unit
+def test_the_pass_ignores_items_b_and_c():
+    items = {i: {"pass": True} for i in "abcdefg"}
+    assert g2.passes({**items, "b": {"pass": False}, "c": {"pass": False}})
+    for i in "adefg":
+        assert not g2.passes({**items, i: {"pass": False}}), i
+
+
+@pytest.mark.unit
 def test_forward_skip_uses_only_the_list_at_signal_time():
     listed = pd.DataFrame({"symbol": ["AAA", "AAA", "BBB"], "ex_date": [date(2027, 1, 8), date(2027, 1, 5), date(2027, 1, 8)],
                            "kind": ["bonus", "split", "scheme"]})

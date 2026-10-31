@@ -22,6 +22,8 @@ ADDENDUM_FILE = g.ROOT / "docs" / "gate_v2_addendum_1.json"
 ADDENDUM_SHA256 = "0152d74ee7d7cd20151a45011c586fda65df2e86e61d0572fa8c684010c1435c"
 ADDENDUM_2_FILE = g.ROOT / "docs" / "gate_v2_addendum_2.json"
 ADDENDUM_2_SHA256 = "dacab5ced2d7aefcae402fe31ba39d62a408df9acc6edb90f283140af02b0261"
+ADDENDUM_3_FILE = g.ROOT / "docs" / "gate_v2_addendum_3.json"
+ADDENDUM_3_SHA256 = "811be62ded485b6d23f49407f0676929130d6912402c6b893b301ecf2755f8d8"
 MIN_DATES, TARGET_DATES = 100, 150
 RULE_A_KINDS = ("split", "bonus", "demerger", "consolidation")
 
@@ -47,6 +49,14 @@ def read_addendum_2(path: Path | None = None) -> dict:
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_2_SHA256:
         raise ValueError("gate_v2_addendum_2.json changed after it was frozen")
+    return spec
+
+
+def read_addendum_3(path: Path | None = None) -> dict:
+    spec = json.loads((path or ADDENDUM_3_FILE).read_text(encoding="utf-8"))
+    text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != ADDENDUM_3_SHA256:
+        raise ValueError("gate_v2_addendum_3.json changed after it was frozen")
     return spec
 
 
@@ -128,6 +138,22 @@ def forward_skip(listed_at_signal: pd.DataFrame, symbol: str, entry, exit_day) -
     a = listed_at_signal[(listed_at_signal["symbol"] == symbol) & listed_at_signal["kind"].isin(RULE_A_KINDS)]
     ex = pd.to_datetime(a["ex_date"])
     return bool(((ex > pd.Timestamp(entry)) & (ex <= pd.Timestamp(exit_day))).any())
+
+
+def lag_one_session(frame: pd.DataFrame, sessions: list, column: str) -> pd.DataFrame:
+    """Relabel each row to the next session, so a signal on D reads D-1's value (addendum 3). A row with no next session
+    is dropped. A hole is a session, so a signal after a hole has no value."""
+    following = dict(zip(sessions[:-1], sessions[1:], strict=True))
+    out = frame.assign(**{column: frame[column].map(following)})
+    return out[out[column].notna()].reset_index(drop=True)
+
+
+PASS_ITEMS = "adefg"
+
+
+def passes(items: dict) -> bool:
+    """The pass under addendum 3: items a, d, e, f and g. Items b and c are report-only."""
+    return all(items[i]["pass"] for i in PASS_ITEMS)
 
 
 def binomial_requirement(p0: float, alpha: float, n: int) -> int:
