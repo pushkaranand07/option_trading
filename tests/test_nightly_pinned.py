@@ -140,3 +140,32 @@ def test_the_market_map_page_goes_to_the_directory_it_is_told(tmp_path, monkeypa
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     assert tmp_path / "market_map" == m.OUT
+
+
+@pytest.mark.unit
+def test_the_morning_job_runs_main_code_from_the_worktree_and_saves_plans_in_the_main_checkout(repo, monkeypatch):
+    primary = repo["primary"]
+    (primary / "scripts" / "morning_plan.py").write_text(JOB % "morning-main", encoding="utf-8")
+    _git(primary, "add", "scripts")
+    _git(primary, "commit", "-m", "morning")
+    _git(primary, "push", "origin", "main")
+    _git(primary, "switch", "-c", "research/x")
+    (primary / "scripts" / "morning_plan.py").write_text(JOB % "research", encoding="utf-8")
+    _git(primary, "add", "scripts")
+    _git(primary, "commit", "-m", "not main")
+    assert np_.run(repo["worktree"], None, [], "morning") == 0
+    done = json.loads(repo["out"].read_text())
+    assert done["version"] == "morning-main"
+    assert Path(done["reports"]).resolve() == (primary / "reports").resolve()
+
+
+@pytest.mark.unit
+def test_the_morning_plan_folder_follows_the_reports_setting(tmp_path, monkeypatch):
+    import importlib
+
+    import webapp.morning as morning
+
+    monkeypatch.setenv("TRADINGAGENTS_REPORTS_DIR", str(tmp_path))
+    assert tmp_path / "morning" == importlib.reload(morning).PLAN_DIR
+    monkeypatch.delenv("TRADINGAGENTS_REPORTS_DIR")
+    assert importlib.reload(morning).PLAN_DIR.parts[-2:] == ("reports", "morning")

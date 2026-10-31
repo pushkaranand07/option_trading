@@ -1,7 +1,7 @@
-"""Run the nightly update from a dedicated git worktree pinned to main (docs/PA_46).
+"""Run the nightly update and the morning plan from a dedicated git worktree pinned to main (docs/PA_46).
 
     <main checkout>\\.venv\\Scripts\\pythonw.exe -W ignore <worktree>\\scripts\\nightly_pinned.py --log <file>
-    python scripts/nightly_pinned.py --install        # from the main checkout, after this file is on main
+    python scripts/nightly_pinned.py --install [--job morning]        # from the main checkout, after this file is on main
 
 The task runs this file from the worktree, whose HEAD is detached at origin/main. Whatever branch the main checkout has out, the
 code that runs is main's. Each run moves the worktree to the latest origin/main first; if the fetch fails, it runs the last main commit
@@ -18,7 +18,8 @@ from datetime import datetime
 from pathlib import Path
 
 WORKTREE_NAME = "TradingAgents-nightly"
-TASK = "TradingAgents quant daily update"
+JOBS = {"nightly": ("scripts/quant_daily_update.py", "TradingAgents quant daily update", "daily_update.log"),
+        "morning": ("scripts/morning_plan.py", "TradingAgents morning plan", "morning_plan.log")}
 
 
 class NotPinned(RuntimeError):
@@ -78,7 +79,7 @@ def pinned_env(worktree: Path, base: dict[str, str] | None = None) -> dict[str, 
     return env
 
 
-def run(worktree: Path, log: Path | None, extra: list[str]) -> int:
+def run(worktree: Path, log: Path | None, extra: list[str], job: str = "nightly") -> int:
     def say(text: str) -> None:
         print(text, flush=True)
         if log:
@@ -90,16 +91,16 @@ def run(worktree: Path, log: Path | None, extra: list[str]) -> int:
         note = refresh(worktree)
         commit = check_pinned(worktree)
     except NotPinned as exc:
-        say(f"\n==== {datetime.now():%Y-%m-%d %H:%M:%S} nightly refused: {exc}")
+        say(f"\n==== {datetime.now():%Y-%m-%d %H:%M:%S} {job} refused: {exc}")
         return 2
-    say(f"\n==== {datetime.now():%Y-%m-%d %H:%M:%S} nightly pinned at main {commit[:12]} in {worktree}" + (f"; {note}" if note else ""))
-    cmd = [sys.executable, "-W", "ignore", "scripts/quant_daily_update.py", *extra]
+    say(f"\n==== {datetime.now():%Y-%m-%d %H:%M:%S} {job} pinned at main {commit[:12]} in {worktree}" + (f"; {note}" if note else ""))
+    cmd = [sys.executable, "-W", "ignore", JOBS[job][0], *extra]
     if log:
         cmd += ["--log", str(log)]
     return subprocess.run(cmd, cwd=worktree, env=pinned_env(worktree), creationflags=_no_window()).returncode
 
 
-def install(primary: Path) -> int:
+def install(primary: Path, job: str = "nightly") -> int:
     """Create the worktree and point the scheduled task at it. Run once, from the main checkout, after this file is on main."""
     worktree = primary.parent / WORKTREE_NAME
     git(primary, "fetch", "origin", "main")
@@ -110,9 +111,10 @@ def install(primary: Path) -> int:
             return 1
     commit = check_pinned(worktree)
     py = primary / ".venv" / "Scripts" / "pythonw.exe"
-    log = Path.home() / ".tradingagents" / "cache" / "quant" / "daily_update.log"
-    action = f'"{py}" -W ignore "{worktree / "scripts" / "nightly_pinned.py"}" --log "{log}"'
-    done = subprocess.run(["schtasks", "/Change", "/TN", TASK, "/TR", action], capture_output=True, text=True)
+    script, task, log_name = JOBS[job]
+    log = Path.home() / ".tradingagents" / "cache" / "quant" / log_name
+    action = f'"{py}" -W ignore "{worktree / "scripts" / "nightly_pinned.py"}" --job {job} --log "{log}"'
+    done = subprocess.run(["schtasks", "/Change", "/TN", task, "/TR", action], capture_output=True, text=True)
     print(done.stdout or done.stderr)
     print(f"worktree {worktree} at main {commit[:12]}; task runs: {action}")
     return done.returncode
@@ -121,13 +123,14 @@ def install(primary: Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--log", type=Path)
-    parser.add_argument("--dry-run", action="store_true", help="check the pin and list the steps; no step runs")
+    parser.add_argument("--job", choices=sorted(JOBS), default="nightly")
+    parser.add_argument("--dry-run", action="store_true", help="nightly only: check the pin and list the steps; no step runs")
     parser.add_argument("--install", action="store_true")
     args = parser.parse_args()
     here = Path(__file__).resolve().parents[1]
     if args.install:
-        return install(here)
-    return run(here, args.log, ["--dry-run"] if args.dry_run else [])
+        return install(here, args.job)
+    return run(here, args.log, ["--dry-run"] if args.dry_run else [], args.job)
 
 
 if __name__ == "__main__":
