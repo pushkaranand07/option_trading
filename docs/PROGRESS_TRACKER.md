@@ -12,14 +12,14 @@
 > need a strategy that has passed its tests) are listed as **on hold** without a checkbox, with what would bring them back.
 
 <!-- progress:overall -->
-**Overall:** `███████████████████████░░` 90% (101/112 tasks)
+**Overall:** `████████████████████████░` 94% (101/107 tasks)
 <!-- /progress:overall -->
 
 <!-- progress:download -->
-**NSE history download:** `█████████████████████████` 100% (9,208/9,208 files)
+**NSE history download:** `█████████████████████████` 100% (9,220/9,220 files)
 <!-- /progress:download -->
 
-_Last updated: 2026-10-28 15:18_
+_Last updated: 2026-10-31 17:14_
 
 | Work | Status | In GitHub `main`? |
 |---|---|---|
@@ -41,7 +41,7 @@ _Last updated: 2026-10-28 15:18_
 
 ## Phase 1 — Point-in-time data foundation
 <!-- progress:phase -->
-`██████████████████████░░░` 90% (9/10)
+`█████████████████████████` 100% (9/9)
 <!-- /progress:phase -->
 - [x] Resumable, throttled NSE downloader (F&O bhavcopy, participant OI, MTO delivery, index closes)
 - [x] Parsers + Parquet store with `known_from` on every row
@@ -57,7 +57,7 @@ _Last updated: 2026-10-28 15:18_
 - [x] **Slippage measured, not assumed** (2026-10-24): NSE's closing bid/ask captured every evening (`quotes.py`,
   last step of the 19:30 job; 31 symbols × 3 expiries). First snapshot: real half-spreads **0.85× the model** on
   ATM / wing strikes (ATM 1.1% of premium, wings 1.6%); worst SUNPHARMA 4.8×, JSWSTEEL 4.1×, DIVISLAB 3.1×
-- [ ] Cost model matched to a real Dhan contract note within ₹1 (**needs your contract note**)
+- Dropped (user, 2026-10-31): matching the cost model to a contract note. "Cost model unverified" is a permanent label
 
 ## Phase 2 — Evaluation harness and baselines
 <!-- progress:phase -->
@@ -97,8 +97,11 @@ _Last updated: 2026-10-28 15:18_
   returns by regime not significant (p=0.14) → not a direction signal
 
 ## Phase 5 — Your own idea as exact rules
+
+**Dropped (user, 2026-10-31).** The analyser below stays in the repo; the remaining steps will not be done.
+
 <!-- progress:phase -->
-`█████░░░░░░░░░░░░░░░░░░░░` 20% (1/5)
+`█████████████████████████` 100% (1/1)
 <!-- /progress:phase -->
 Your style (2026-10-24): NIFTY / BANKNIFTY options, stock options, futures and shares; buying and selling options;
 holding from intraday to weeks; entries from OI / PCR, charts, news and indicators together. Under 30 trades in the
@@ -106,10 +109,6 @@ last 6–12 months, so the journal gives a first look, not firm conclusions.
 - [x] **Trade-journal analyser** for your own Dhan tradebook (`python scripts/trade_journal.py <file>`,
   `--horizon intraday|week|month|long|all`): FIFO round trips; results by holding period, buying vs selling,
   instrument, underlying, entry hour, weekday and your own reason/tag column
-- [ ] Your tradebook analysed (**needs your Dhan export in `reports/journal/`**, gitignored)
-- [ ] One setup written as exact rules (entry, stop, target, exit time), from the journal or your description
-- [ ] Coded as a causal signal, leak check passes; tested against baselines with the same gates
-- [ ] Keep / drop decision written down
 
 ## Phase 6 — Machine-learning models (LightGBM) and stock-option tests
 <!-- progress:phase -->
@@ -255,7 +254,7 @@ One step per pull request; each stops for your approval. Details: [PA-31](PA_31-
 - [ ] Step 3: participant, index / VIX history, macro (with release times), events table
 - [ ] Step 4: Dhan intraday spot and futures (**needs your renewed Dhan token and Data API status**)
 - [ ] Step 5: forward option-chain capture, several times a day (forward-only)
-- [ ] Step 6: cost table and measured spread table (**needs your contract note**)
+- [ ] Step 6: cost table and measured spread table (no contract note: cost model unverified, permanently)
 - [ ] Step 7: data catalog and quality report with every PASS / FAIL
 
 **Backlog (optional, after steps 1–3):** mto and participant files 2015-07 to 2017 (never downloaded; the backward
@@ -316,10 +315,8 @@ verdicts — and they are now measured (real spreads ≈ 0.85× the model), not 
 - **Next scheduled run:** Mon 2026-10-26 19:30 (adds 26-Oct, starts the VRP observation ledger, second quotes snapshot).
 
 ### Waiting on you
-1. **Your Dhan tradebook** (Excel/CSV, last 6–12 months) in `reports/journal/` → I run the journal with you (Phase 5).
-2. **One Dhan contract note** → cost model checked within ₹1 (closes Phase 1).
-3. **3–5 real option fills** (screen price vs your fill) → compared with the measured spreads.
-4. **"Something else" bug** — ticked on 23-Oct but never described.
+1. **3–5 real option fills** (screen price vs your fill) → compared with the measured spreads.
+2. **"Something else" bug** — ticked on 23-Oct but never described.
 
 ## Log
 - 2026-10-26 — Plan chart (PA-29): cleaner and larger (only the last price, target and stop keep axis labels; zones are shaded bands). Layer toggles; automatic day levels, swings and EMA crossovers; horizontal / trend line tools; Today / 2D / 5D / All zoom; O/H/L/C readout.

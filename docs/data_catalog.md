@@ -176,7 +176,9 @@ New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_acti
 
 **Volatility finding (risk-scaling use only):** on out-of-fold development rows, U1, corrected GARCH beats HAR on QLIKE at every horizon, lower being better. GARCH against HAR, h = 1: 1.682 against 4.114; h = 2: 1.062 against 1.797; h = 3: 0.789 against 1.153; h = 5: 0.581 against 0.769; h = 10: 0.427 against 0.529. GARCH uses the nearest stored horizon (1, 5 or 10). It gives no direction and is not a trading signal.
 
-**What remains untested:** intraday (no usable source), options structures, and an own-trade test (no broker trade records found on this machine).
+**What remains untested:** intraday (no usable source) and options structures.
+
+**Dropped (user, 2026-10-31):** tradebook, contract note and Phase 5. They are no longer open items. **"Cost model unverified" is a permanent label** on every result, because no contract note will check it. Trade records are not searched for again.
 
 ### Gate v2
 
