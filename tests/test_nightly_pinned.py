@@ -169,3 +169,57 @@ def test_the_morning_plan_folder_follows_the_reports_setting(tmp_path, monkeypat
     assert tmp_path / "morning" == importlib.reload(morning).PLAN_DIR
     monkeypatch.delenv("TRADINGAGENTS_REPORTS_DIR")
     assert importlib.reload(morning).PLAN_DIR.parts[-2:] == ("reports", "morning")
+
+
+@pytest.fixture
+def named_worktree(repo):
+    """install looks for the worktree beside the main checkout under its fixed name."""
+    wt = repo["tmp"] / np_.WORKTREE_NAME
+    _git(repo["primary"], "worktree", "move", str(repo["worktree"]), str(wt))
+    return {**repo, "worktree": wt}
+
+
+@pytest.mark.unit
+def test_install_moves_a_stale_worktree_to_the_latest_main_before_checking_the_pin(named_worktree):
+    repo = named_worktree
+    other = repo["tmp"] / "other"
+    subprocess.run(["git", "clone", str(repo["tmp"] / "origin"), str(other)], check=True, capture_output=True)
+    _commit(other, "main-2", "merged")
+    _git(other, "push", "origin", "main")
+    calls = []
+    code = np_.install(repo["primary"], "morning", lambda *a: calls.append(a) or 0)
+    assert code == 0 and len(calls) == 1
+    task, execute, arguments = calls[0]
+    assert task == "TradingAgents morning plan" and execute.endswith("pythonw.exe")
+    assert "--job morning" in arguments and np_.WORKTREE_NAME in arguments
+    head = subprocess.run(["git", "-C", str(repo["worktree"]), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+    main = subprocess.run(["git", "-C", str(other), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+    assert head == main
+
+
+@pytest.mark.unit
+def test_install_creates_the_worktree_when_it_is_missing(repo):
+    _git(repo["primary"], "worktree", "remove", "--force", str(repo["worktree"]))
+    assert np_.install(repo["primary"], "nightly", lambda *a: 0) == 0
+    assert np_.check_pinned(repo["tmp"] / np_.WORKTREE_NAME)
+
+
+@pytest.mark.unit
+def test_setting_the_task_cannot_wait_for_input():
+    seen = {}
+
+    def runner(cmd, **kw):
+        seen.update(kw, cmd=cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    assert np_.set_task_action("T", "C:/a b/p.exe", '-x "y z"', runner) == 0
+    assert seen["stdin"] == subprocess.DEVNULL and seen["timeout"] > 0 and "-NonInteractive" in seen["cmd"]
+    assert seen["env"]["NIGHTLY_ARGUMENTS"] == '-x "y z"' and "schtasks" not in " ".join(seen["cmd"])
+
+
+@pytest.mark.unit
+def test_a_task_that_will_not_answer_is_a_failure_not_a_hang():
+    def runner(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    assert np_.set_task_action("T", "p", "a", runner) == 1

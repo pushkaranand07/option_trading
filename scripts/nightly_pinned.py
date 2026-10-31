@@ -100,24 +100,40 @@ def run(worktree: Path, log: Path | None, extra: list[str], job: str = "nightly"
     return subprocess.run(cmd, cwd=worktree, env=pinned_env(worktree), creationflags=_no_window()).returncode
 
 
-def install(primary: Path, job: str = "nightly") -> int:
-    """Create the worktree and point the scheduled task at it. Run once, from the main checkout, after this file is on main."""
+def set_task_action(task: str, execute: str, arguments: str, runner=subprocess.run, timeout: int = 60) -> int:
+    """Point a scheduled task at a new command, with no prompt: schtasks /Change can wait for a password that never comes."""
+    script = ("$a = New-ScheduledTaskAction -Execute $env:NIGHTLY_EXECUTE -Argument $env:NIGHTLY_ARGUMENTS; "
+              "Set-ScheduledTask -TaskName $env:NIGHTLY_TASK -Action $a -ErrorAction Stop | Out-Null")
+    env = {**os.environ, "NIGHTLY_TASK": task, "NIGHTLY_EXECUTE": execute, "NIGHTLY_ARGUMENTS": arguments}
+    try:
+        done = runner(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, creationflags=_no_window())
+    except subprocess.TimeoutExpired:
+        print(f"setting the task {task!r} timed out after {timeout} seconds; it was not confirmed changed")
+        return 1
+    if done.returncode != 0:
+        print(done.stderr)
+    return done.returncode
+
+
+def install(primary: Path, job: str = "nightly", scheduler=set_task_action) -> int:
+    """Create or update the worktree and point the scheduled task at it. Run from the main checkout, after this file is on main."""
     worktree = primary.parent / WORKTREE_NAME
     git(primary, "fetch", "origin", "main")
-    if not worktree.exists():
+    if worktree.exists():
+        refresh(worktree)      # the fetch moved origin/main; the worktree must follow it before the pin is checked
+    else:
         added = git(primary, "worktree", "add", "--detach", str(worktree), "origin/main")
         if added.returncode != 0:
             print(added.stderr)
             return 1
     commit = check_pinned(worktree)
     py = primary / ".venv" / "Scripts" / "pythonw.exe"
-    script, task, log_name = JOBS[job]
+    _script, task, log_name = JOBS[job]
     log = Path.home() / ".tradingagents" / "cache" / "quant" / log_name
-    action = f'"{py}" -W ignore "{worktree / "scripts" / "nightly_pinned.py"}" --job {job} --log "{log}"'
-    done = subprocess.run(["schtasks", "/Change", "/TN", task, "/TR", action], capture_output=True, text=True)
-    print(done.stdout or done.stderr)
-    print(f"worktree {worktree} at main {commit[:12]}; task runs: {action}")
-    return done.returncode
+    arguments = f'-W ignore "{worktree / "scripts" / "nightly_pinned.py"}" --job {job} --log "{log}"'
+    code = scheduler(task, str(py), arguments)
+    print(f"worktree {worktree} at main {commit[:12]}; task {task!r} runs: {py} {arguments}; exit {code}")
+    return code
 
 
 def main() -> int:
