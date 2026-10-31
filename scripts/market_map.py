@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -29,7 +30,7 @@ from tradingagents.analytics.universe import SECTOR_OF, STOCKS  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = Path(__file__).with_name("market_map_template.html")
 EVENTS = ROOT / "docs" / "data" / "market_events_2021_2026.json"
-OUT = ROOT / "reports" / "market_map"
+OUT = Path(os.environ.get("TRADINGAGENTS_REPORTS_DIR") or ROOT / "reports") / "market_map"
 
 START = pd.Timestamp("2021-01-01")
 WARMUP = pd.Timestamp("2020-09-01")    # measurement windows before the first 2021 events
