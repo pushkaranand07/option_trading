@@ -1,0 +1,154 @@
+{
+ "version_number": 1,
+ "written": "2026-10-31",
+ "written_before_any_trade_counts": true,
+ "what_this_tests": "whether the AI strategist's NIFTY suggestions earn a net return, against baselines on the same sessions, going forward",
+ "version": {
+  "prompt_sha256": "a32e251f0ca21b8c603974e67b7ff97d02ac1d3876e04cc76c5a58b1fcc557bc",
+  "prompt_covers": "system prompt, answer schema, strategy menu, ask_llm and build_context source",
+  "model": {
+   "provider": "azure",
+   "model": "gpt-5",
+   "reasoning_effort": "medium"
+  },
+  "model_limit": "a provider can change a deployment behind the same name; that cannot be detected here: UNVERIFIED",
+  "rule": "changing the prompt or the model starts a new test and a new count"
+ },
+ "forward_test": {
+  "instrument": "NIFTY, the app's default expiry",
+  "frequency": "the first answer in a session counts: 09:30 to 15:00 IST, weekdays",
+  "starts": "the first session after this file is on main. The user asks on the Plan tab; nothing runs by itself, so the collection freeze is unaffected",
+  "registry": "reports/ai_test/registry.jsonl, append-only and hash-chained (tradingagents/research/registry.py)",
+  "registered_before_entry": [
+   "structure",
+   "strikes",
+   "expiry",
+   "max risk (indicative)",
+   "direction",
+   "timestamp",
+   "spec hash"
+  ],
+  "not_registered_before_entry": "does not count",
+  "entry": "after the row is written, a fresh chain is fetched and the entry is its bid and ask (buy at the ask, sell at the bid). The registered max risk is indicative; the result uses the max risk at this entry. A leg with no two-sided quote makes the trade void, and a void trade is reported",
+  "entry_limit": "a paper entry at quoted prices, not a real fill: real slippage is not measured",
+  "other_outcomes": {
+   "no_trade": "recorded, not a trade",
+   "rejected": "recorded, not a trade",
+   "missed": "a weekday with no question is recorded as missed and cannot be filled; holidays are corrected against NSE's sessions at settlement"
+  },
+  "exit_rule": "hold to expiry. Each leg settles at intrinsic value on NSE's final settlement price (the index close on expiry day, from the nightly store). The AI's target and stop are not used, because following them needs live monitoring and intraday prices that do not exist",
+  "result": "net P&L after charges as a percentage of max risk, per trade. Charges from the repo's model, in and out, per leg: cost model unverified",
+  "baselines": {
+   "random_direction": "the same structure on the same session priced from the saved entry chain: bullish or bearish at random at the same strike distances. An iron condor's centre moves up or down by 1% of spot at random, keeping its wings. 1,000 draws per trade, seeded from this file's hash",
+   "rule_based_pick": "the rule-based ranking's first candidate from the same entry chain, written in the same registry row; same exit rule",
+   "no_trade": "zero"
+  },
+  "report_minimum": 50,
+  "warning_at_minimum": "50 settled trades are too few to prove an edge. Below 50 nothing is reported. Between 50 and the verdict count, results are shown with this warning and no pass or fail",
+  "verdict_count": 500,
+  "pass": "at exactly the verdict count, once: mean net % of max risk above 0, with the 2.5th percentile bound of a bootstrap by expiry week above 0, above the 97.5th percentile of the random-direction draws' means, and above the rule-based pick's mean",
+  "otherwise": "fail. No extension and no second look at the same version",
+  "backtest_of_the_llm": "not allowed: training-data leakage",
+  "ui_until_verdict": "every AI trade and ranked ticket stays labelled UNTESTED, no evidence of edge"
+ },
+ "power": {
+  "method": "as gate v2: planted edge on resampled returns. NIFTY weekly options 2019-2022, three structures in a random direction, hold to expiry, net of charges, resampled by expiry week. No LLM. Closing prices stand in for bid and ask; a real mix of structures is unknown",
+  "source": "scripts/research_ai_test_power.py",
+  "runs_per_cell": 1000,
+  "sessions": 948,
+  "expiries": 200,
+  "return_sd_of_max_risk": {
+   "debit_spread": 1.352,
+   "iron_condor": 0.551,
+   "long_option": 1.504
+  },
+  "pass_rate_by_edge": {
+   "0.00": {
+    "50": 0.006,
+    "100": 0.003,
+    "150": 0.005,
+    "200": 0.004,
+    "300": 0.004,
+    "400": 0.004,
+    "500": 0.002,
+    "750": 0.003,
+    "1000": 0.0,
+    "1500": 0.0,
+    "2000": 0.002
+   },
+   "0.05": {
+    "50": 0.018,
+    "100": 0.017,
+    "150": 0.023,
+    "200": 0.023,
+    "300": 0.03,
+    "400": 0.021,
+    "500": 0.029,
+    "750": 0.024,
+    "1000": 0.048,
+    "1500": 0.065,
+    "2000": 0.064
+   },
+   "0.10": {
+    "50": 0.042,
+    "100": 0.05,
+    "150": 0.069,
+    "200": 0.092,
+    "300": 0.124,
+    "400": 0.142,
+    "500": 0.186,
+    "750": 0.289,
+    "1000": 0.323,
+    "1500": 0.481,
+    "2000": 0.658
+   },
+   "0.15": {
+    "50": 0.058,
+    "100": 0.116,
+    "150": 0.173,
+    "200": 0.196,
+    "300": 0.354,
+    "400": 0.461,
+    "500": 0.553,
+    "750": 0.713,
+    "1000": 0.836,
+    "1500": 0.952,
+    "2000": 0.991
+   },
+   "0.20": {
+    "50": 0.132,
+    "100": 0.22,
+    "150": 0.331,
+    "200": 0.479,
+    "300": 0.66,
+    "400": 0.772,
+    "500": 0.847,
+    "750": 0.952,
+    "1000": 0.991,
+    "1500": 1.0,
+    "2000": 1.0
+   },
+   "0.30": {
+    "50": 0.324,
+    "100": 0.593,
+    "150": 0.778,
+    "200": 0.921,
+    "300": 0.969,
+    "400": 0.993,
+    "500": 1.0,
+    "750": 1.0,
+    "1000": 1.0,
+    "1500": 1.0,
+    "2000": 1.0
+   }
+  },
+  "false_pass_at_zero_edge_max": 0.006,
+  "edge_means": "extra net return per trade as a share of max risk: 0.10 is 10% of max risk per trade",
+  "why_500": "about 85% power at an edge of 20% of max risk. Smaller edges are not reliably detected: 55% at 15%, 19% at 10%. At one trade a session, at most about 2 years"
+ },
+ "does_not_count": {
+  "reports/trade_record/trades.json": "5 app trades (3 by the user, 2 by the AI): not registered before entry",
+  "paper_ledger.sqlite": "1 paper position of a different, rule-based strategy: not registered before entry"
+ },
+ "evaluator": "the settlement and baseline script is not built yet; it needs real rows. It must follow this file"
+}

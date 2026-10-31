@@ -91,6 +91,37 @@ def record_missed(path: Path, *, day: date, spec_hash: str, now: datetime, reaso
                           "spec_hash": spec_hash, "reason": reason})
 
 
+def register_structure(path: Path, *, day: date, symbol: str, expiry: str | None, spec_hash: str, now: datetime, outcome: str, structure: str | None,
+                       direction: str | None, legs: list[dict], max_risk_indicative: float | None) -> dict:
+    """The AI strategist's forward test (docs/ai_strategist_test_v1.json): one answer per session, written before any entry price exists."""
+    if now.tzinfo is None:
+        raise RegistryError("timestamp must be timezone-aware")
+    if outcome not in ("trade", "no_trade", "rejected"):
+        raise RegistryError("outcome is trade, no_trade or rejected")
+    if outcome == "trade" and not (structure and legs and expiry and direction and max_risk_indicative):
+        raise RegistryError("a trade needs its structure, strikes, expiry, direction and max risk")
+    if now.date() != day:
+        raise RegistryError("a session is registered on that session, never later")
+    for r in read(path):
+        if r["type"] in ("strategist", "missed") and (r["date"], r["spec_hash"]) == (day.isoformat(), spec_hash):
+            raise RegistryError(f"{day} already has an entry; it cannot be replaced")
+    return _append(path, {"type": "strategist", "timestamp": now.isoformat(), "date": day.isoformat(), "symbol": symbol, "expiry": expiry, "spec_hash": spec_hash, "outcome": outcome,
+                          "structure": structure, "direction": direction, "legs": legs, "max_risk_indicative": max_risk_indicative})
+
+
+def record_entry(path: Path, *, registration: str, now: datetime, status: str, **fields) -> dict:
+    """The paper entry of a registered trade. It must follow its registration, and only once."""
+    rows = read(path)
+    row = next((r for r in rows if r.get("hash") == registration and r["type"] == "strategist" and r["outcome"] == "trade"), None)
+    if row is None:
+        raise RegistryError("no registered trade to enter: a trade not registered before entry does not count")
+    if now < datetime.fromisoformat(row["timestamp"]):
+        raise RegistryError("the entry is older than its registration")
+    if any(r["type"] == "strategist_entry" and r["registration"] == registration for r in rows):
+        raise RegistryError("this trade already has an entry")
+    return _append(path, {"type": "strategist_entry", "timestamp": now.isoformat(), "registration": registration, "status": status, **fields})
+
+
 def counts(path: Path, *, symbol: str, entry_date: date, spec_hash: str, horizon: int) -> bool:
     """Whether a trade counts: it must be in a valid chain, registered before its entry opened."""
     verify(path)
