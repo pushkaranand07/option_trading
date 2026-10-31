@@ -172,6 +172,12 @@ New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_acti
 
 **Corrected by [addendum 7](gate_v2_addendum_7.json):** `garch_h1`, `garch_h5` and `garch_h10` in `features_v1` were about 77 times too small and scrambled; the first run's numbers used those values. Refit: [report](models_v1_refit_report.md), [PA-48](PA_48-model-suite-v1-refit.md). **No edge found at a final trial count of 1,532. This line of work is closed.** Validation was not read.
 
+**Model suite v1: no edge found, 1,532 trials, line closed.**
+
+**Volatility finding (risk-scaling use only):** on out-of-fold development rows, U1, corrected GARCH beats HAR on QLIKE at every horizon, lower being better. GARCH against HAR, h = 1: 1.682 against 4.114; h = 2: 1.062 against 1.797; h = 3: 0.789 against 1.153; h = 5: 0.581 against 0.769; h = 10: 0.427 against 0.529. GARCH uses the nearest stored horizon (1, 5 or 10). It gives no direction and is not a trading signal.
+
+**What remains untested:** intraday (no usable source), options structures, and an own-trade test (no broker trade records found on this machine).
+
 ### Gate v2
 
 Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; plain English in
