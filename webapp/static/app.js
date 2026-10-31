@@ -664,7 +664,7 @@ async function loadJournal() {
   catch (e) { $("#jrBody").innerHTML = ""; n.hidden = false; n.textContent = e.message; return; }
   const o = r.sections["Overall"][0];
   const few = r.round_trips < 30 ? `<div class="notice">Only ${r.round_trips} completed trades: treat this as a first look, not proof. 30–50 trades start to mean something.</div>` : "";
-  let html = card("Summary", `<p>${r.trades} orders from ${esc(r.from)} to ${esc(r.to)} → <b>${r.round_trips} completed trades</b>${r.still_open ? `, ${r.still_open} still open (not counted)` : ""}. Charges ${esc(r.charges)}.</p>
+  let html = card("Summary", `<p class="small muted">${cap(COST_NOTE)}.</p><p>${r.trades} orders from ${esc(r.from)} to ${esc(r.to)} → <b>${r.round_trips} completed trades</b>${r.still_open ? `, ${r.still_open} still open (not counted)` : ""}. Charges ${esc(r.charges)}.</p>
     ${o ? `<div class="stats"><div class="stat"><span>Won</span><b class="num">${pc(o.win_rate, 0)}</b></div><div class="stat"><span>Average per trade</span><b class="num ${cls(o.net_per_trade)}">${money(o.net_per_trade)}</b></div>
     <div class="stat"><span>Total</span><b class="num ${cls(o.total_net)}">${money(o.total_net)}</b></div><div class="stat"><span>Charges paid</span><b class="num">${money(o.charges)}</b></div></div>` : ""}${few}`);
   if (r.horizon === "all") html += card("By how long you held", jrTable(r.sections["By holding period"]));
@@ -751,17 +751,17 @@ function callHtml(sym, p, ph) {
       <div class="what"><b>${up ? "Buy" : "Short-sell"} ${esc(nameOf(sym))}</b> · intraday, exit by 15:15</div>
       <div class="levels"><div class="lv"><span>Entry</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss</span><b class="down">${fmt(s.stop_loss)}</b></div>
         <div class="lv"><span>Target</span><b class="up">${fmt(s.target)}</b></div></div>${sz}
-      <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs). One trade a day. Not a validated edge — use your judgment.</div></div>`;
+      <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs; ${COST_NOTE}). One trade a day. Not a validated edge — use your judgment.</div></div>`;
   }
   const sizing = `<div class="levels"><div class="lv"><span>One lot</span><b>${leg.lot}</b><small>units</small></div>
-        <div class="lv"><span>Loss at stop, a lot</span><b class="down">${z.approx ? "≈ " : ""}${money(z.loss)}</b><small>before charges</small></div>
+        <div class="lv"><span>Loss at stop, a lot</span><b class="down">${z.approx ? "≈ " : ""}${money(z.loss)}</b><small>before charges · ${COST_NOTE}</small></div>
         <div class="lv"><span>Money needed, a lot</span><b>${z.cost != null ? money(z.cost) : "premium × lot"}</b><small>option premium paid</small></div></div>`;
   return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
     <div class="what"><b>Buy ${esc(NAMES[sym] || nameOf(sym))} ${fmt0(leg.strike)} ${leg.kind}</b>${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}</div>
     <div class="levels"><div class="lv"><span>Entry (index)</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss (index)</span><b class="down">${fmt(s.stop_loss)}</b></div>
       <div class="lv"><span>Target (index)</span><b class="up">${fmt(s.target)}</b></div>${leg.premium ? `<div class="lv"><span>Premium now</span><b>${rupee(leg.premium)}</b><small>stop ${rupee(leg.stop_loss)} · target ${rupee(leg.target)}</small></div>` : ""}</div>
     ${sizing}
-    <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs). Exit by 15:15. One trade a day. Not a validated edge — use your judgment.</div></div>`;
+    <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs; ${COST_NOTE}). Exit by 15:15. One trade a day. Not a validated edge — use your judgment.</div></div>`;
 }
 
 function plainPcr(x) { return x > 1.2 ? "many more puts than calls open (heavy hedging)" : x < 0.8 ? "more calls than puts open" : "calls and puts roughly balanced"; }
@@ -1315,13 +1315,14 @@ function contractName(sym, expiry, l) {
 }
 const pnl = (x) => (x == null ? "—" : `<span class="${cls(x)}">${x > 0 ? "+" : x < 0 ? "−" : ""}₹${fmt0(Math.abs(x))}</span>`);
 
-// Pulse's own evidence score: which of the data agree with the trade's direction and structure.
+// No score: its inputs (trend, PCR, OI) showed no edge in the LightGBM test (same-day AUC 0.502) or in model suite v1 (docs/data_catalog.md).
+const UNTESTED = `<span class="badge untested">UNTESTED, no evidence of edge</span>`;
+const COST_NOTE = "cost model unverified";
 function evidenceHtml(e) {
   if (!e) return "";
-  const mark = { agree: ["✓", "up"], neutral: ["•", "muted"], against: ["✗", "down"] };
-  return `<details class="evidence"><summary>Why the score is ${e.score}/100 — ${e.checks.filter((c) => c.verdict === "agree").length} of ${e.checks.length} checks agree</summary>
-    <ul class="plain">${e.checks.map((c) => `<li><b class="${mark[c.verdict][1]}">${mark[c.verdict][0]}</b> <b>${esc(c.name)}</b> <span class="muted small">(${c.weight} pts)</span> — ${esc(c.why)}</li>`).join("")}</ul>
-    <div class="small muted">Strong ≥ 70 · Moderate 45–69 · Weak &lt; 45. Agreement is not proof: no strategy here has passed the project's tests. The AI track record (Trade Record tab) shows how each band actually performs.</div></details>`;
+  return `<details class="evidence"><summary>Inputs looked at</summary>
+    <ul class="plain">${e.checks.map((c) => `<li><b>${esc(c.name)}</b> — ${esc(c.why)}</li>`).join("")}</ul>
+    <div class="small muted">Inputs only, not evidence: they showed no edge in the project's tests.</div></details>`;
 }
 
 function stratHtml(res, sym) {
@@ -1329,8 +1330,7 @@ function stratHtml(res, sym) {
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
   const head = `<div class="strat-head"><div><div class="ask">${res.source === "pulse" ? `Pulse ranked trade #${res.rank}` : "AI suggestion"} · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
-    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span>
-      ${res.evidence ? `<span class="badge score-${res.evidence.label.toLowerCase()}">Pulse score ${res.evidence.score} · ${esc(res.evidence.label)}</span>` : ""}</div></div>
+    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span> ${UNTESTED}</div></div>
     ${evidenceHtml(res.evidence)}
     ${res.retried ? `<div class="small muted">The AI's first answer was refused (${esc(res.retried.join("; "))}); this is its corrected answer.</div>` : ""}
     ${res.ai_record ? `<div class="small muted">Saved to the AI track record on the <a href="#record">Trade Record</a> tab, which settles it at its target, stop or expiry.</div>` : ""}`;
@@ -1373,7 +1373,7 @@ function stratHtml(res, sym) {
       <div class="lv"><span>Worst case at expiry</span><b class="down">${money(pr.max_loss_per_lot)}</b><small>a lot, if you never exit</small></div>
       <div class="lv"><span>Best case at expiry</span><b class="up">${pr.max_profit_per_lot == null ? "open-ended" : money(pr.max_profit_per_lot)}</b><small>a lot${pr.reward_to_risk != null ? ` · ${pr.reward_to_risk.toFixed(2)}× the risk` : ""}</small></div>
       <div class="lv wide"><div><span>Break-even at expiry</span><b>${pr.breakevens.map(fmt0).join(" / ")}</b></div><div><span>Lot size</span><b>${pr.lot}</b></div>
-        <div><span>Charges a lot, in and out</span><b>${res.charges_per_lot != null ? "≈ " + money(res.charges_per_lot) : "—"}</b></div></div></div>` : "";
+        <div><span>Charges a lot, in and out (${COST_NOTE})</span><b>${res.charges_per_lot != null ? "≈ " + money(res.charges_per_lot) : "—"}</b></div></div></div>` : "";
   const kl = (a.key_levels || []).map((l) => `<li><b class="num">${fmt0(l.price)}</b> ${esc(l.label)}</li>`).join("");
   return `<div class="call ${a.strategy === "no_trade" ? "idle" : a.bias === "bearish" ? "go-down" : a.bias === "bullish" ? "go-up" : "idle"}">${head}
       ${story}${legs}<div class="ticket-slot"></div>${together}${econ}
@@ -1438,6 +1438,7 @@ function renderTicket(sym) {
         <table class="facts small-facts">
           <tr><th>Side</th><td><span class="leg-tag ${buy ? "buy" : "sell"}">${l.action}</span></td></tr>
           <tr><th>Lot</th><td>1 lot = <b>${lot}</b> qty (you choose how many lots)</td></tr>
+          <tr><th>P&L figures</th><td class="small muted">${cap(COST_NOTE)}</td></tr>
           <tr><th>Order type</th><td>${dhan ? "<b>Super</b> order (limit + target + stop loss in one)" : role === "hedge" ? "<b>Limit</b> order — protection, place it first" : "<b>Limit</b> order — close both legs together by hand"}</td></tr>
           <tr><th>Limit price</th><td><b>${rupee(l.price)}</b> <span class="muted small">(${buy ? "the best ask" : "the best bid"} now)</span></td></tr>
           ${dhan ? `<tr><th>Target</th><td><b class="up">${rupee(l.premium_at_target)}</b> ${l.pnl_target_per_lot != null ? `<span class="small">(${pnl(l.pnl_target_per_lot)} a lot)</span>` : ""}</td></tr>
@@ -1489,7 +1490,7 @@ async function loadRecord() {
   try { d = await api("/api/trades"); } catch (e) { el.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
   const s = d.stats;
   const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
-  const summary = `<section class="card"><div class="card-head"><h2>Your trades — summary</h2><span class="small muted">trades you took · 1 lot each · after charges</span></div>
+  const summary = `<section class="card"><div class="card-head"><h2>Your trades — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE}</span></div>
     <div class="body"><div class="levels rec-stats">
       ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}
       ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
@@ -1519,37 +1520,31 @@ async function loadRecord() {
   }));
 }
 
-// Every AI suggestion, recorded automatically and settled by rule (target / stop / expiry): how good is the AI,
-// and does a higher Pulse score really do better?
+// Every AI suggestion, recorded automatically and settled by rule (target / stop / expiry).
 function aiRecordHtml(ai) {
   if (!ai) return "";
-  const s = ai.stats, band = ai.by_score;
-  const row = (k, b) => `<tr><td><span class="badge score-${k.toLowerCase()}">${k}</span></td><td class="num">${b.closed}</td><td class="num">${b.wins} / ${b.losses}</td>
-    <td class="num">${b.win_rate != null ? b.win_rate.toFixed(0) + "%" : "—"}</td><td class="num ${cls(b.net)}">${money(b.net)}</td><td class="num ${cls(b.avg)}">${money(b.avg)}</td></tr>`;
+  const s = ai.stats;
   const legsTxt = (t) => t.legs.map((l) => `${legShort(l)} ${fmt(l.entry)}${l.exit != null ? ` → ${fmt(l.exit)}` : ""}`).join("<br>");
   const all = [...ai.open, ...ai.closed];
   const rows = all.map((t) => {
     const live = t.status === "open" ? t.live || {} : null;
     return `<tr><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
-      <td>${t.score != null ? `<span class="badge score-${(t.score_label || "").toLowerCase()}">${t.score} ${esc(t.score_label)}</span>` : "—"}<br><span class="small muted">AI: ${esc(t.ai_confidence || "—")}</span></td>
+      <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
       <td class="small">${legsTxt(t)}</td><td class="num small">${fmt0(t.index_target)} / ${fmt0(t.index_stop)}</td>
       <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
       <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
       <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
   }).join("");
-  return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2><span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges</span></div>
+  return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2> ${UNTESTED} <span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE}</span></div>
     <div class="body">
       <div class="levels rec-stats">
         <div class="lv"><span>Suggestions</span><b>${s.closed + s.open}</b><small>${s.open} still open</small></div>
         <div class="lv"><span>Won / lost</span><b>${s.wins} / ${s.losses}</b><small>${s.win_rate != null ? s.win_rate.toFixed(0) + "% won" : "none settled yet"}</small></div>
         <div class="lv"><span>Total P&L (settled)</span><b class="${cls(s.net)}">${money(s.net)}</b><small>average ${money(s.avg)}</small></div>
-        <div class="lv"><span>Open now</span><b class="${cls(s.open_pnl)}">${money(s.open_pnl)}</b><small>before charges</small></div></div>
-      <h4 class="mini-h">By Pulse score</h4>
-      <table class="t"><thead><tr><th>Score</th><th>Settled</th><th>Won / lost</th><th>Win rate</th><th>Total P&L</th><th>Average</th></tr></thead>
-        <tbody>${["Strong", "Moderate", "Weak"].map((k) => row(k, band[k])).join("")}</tbody></table>
-      <p class="small muted">A handful of trades proves nothing either way; judge a score band after dozens of settled suggestions.</p>
+        <div class="lv"><span>Open now</span><b class="${cls(s.open_pnl)}">${money(s.open_pnl)}</b><small>before charges · ${COST_NOTE}</small></div></div>
+      <p class="small muted">A handful of trades proves nothing either way.</p>
     </div>
-    ${all.length ? `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Asked</th><th>Trade</th><th>Score</th><th>Legs: entry → exit</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ${all.length ? `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Asked</th><th>Trade</th><th>AI confidence</th><th>Legs: entry → exit</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<p class="muted pad">Every suggestion from the AI strategist will appear here.</p>`}</section>`;
 }
 
@@ -1572,7 +1567,7 @@ function openTradeHtml(t) {
   const plan = { underlying_target: t.index_target, underlying_stop: t.index_stop, underlying_entry_low: t.entry_low, underlying_entry_high: t.entry_high };
   const lad = v.spot != null && t.index_target != null ? ladder(plan, v.spot, down) : "";
   return `<section class="card rec-open"><div class="card-head"><h2>${esc(name)} · ${esc(STRAT_NAMES[t.strategy] || t.strategy)}</h2>
-      <div class="rec-pnl ${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}<small>P&L now, before charges</small></div></div>
+      <div class="rec-pnl ${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}<small>P&L now, before charges · ${COST_NOTE}</small></div></div>
     <div class="body">
       <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
         ${v.as_of ? ` · prices from NSE as of ${esc(v.as_of.slice(-8))}${nseAge(v.as_of)}` : ""}</div>
@@ -1621,7 +1616,7 @@ function rankHtml(sym) {
   if (!d.candidates.length) return `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
   const v = S.view[sym];
   const rows = d.candidates.map((c, i) => {
-    const lv = c.levels, a = c.plan, e = c.evidence;
+    const lv = c.levels, a = c.plan;
     const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
     const prem = (k) => lv.legs.map((l) => {
       const role = legRole(a.strategy, lv.legs, l);
@@ -1631,22 +1626,21 @@ function rankHtml(sym) {
     }).join("");
     return `<tr data-rank="${i}" class="${v === i ? "on" : ""}">
       <td class="num"><b>#${c.rank}</b></td>
-      <td><span class="badge score-${e.label.toLowerCase()}">${e.score}</span><div class="small muted">${esc(e.label)}</div></td>
-      <td><b>${esc(STRAT_NAMES[a.strategy])}</b><div class="small ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</div></td>
+      <td><b>${esc(STRAT_NAMES[a.strategy])}</b><div class="small ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</div><div class="small warn">UNTESTED</div></td>
       <td class="rank-legs">${legs}</td>
       <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
       <td class="num"><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
       <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
       <td class="num">${c.ratio.toFixed(1)} : 1</td></tr>`;
   }).join("");
-  return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades — best first</h4>
+  return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades ${UNTESTED}</h4>
       <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
-      Ranked by the evidence score, then by profit-to-loss at the levels. Tap a row for its orders, ticket and the Take button.
+      The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge in the project's tests. Tap a row for its orders, ticket and the Take button.
       Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.</div></div>
       <button class="btn small-btn rank-refresh" ${r.loading ? "disabled" : ""}>${r.loading ? "Updating…" : "Refresh"}</button></div>
-    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Score</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th></tr></thead>
+    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <div class="small muted">Premium targets and stops are estimates for ${esc(name)} reaching its target or stop today. One lot each; charges not included here (shown in the card). Not a validated edge.</div>`;
+    <div class="small muted">Premium targets and stops are estimates for ${esc(name)} reaching its target or stop today. One lot each; charges not included here (shown in the card). ${cap(COST_NOTE)}. Not a validated edge.</div>`;
 }
 
 // ---------- start ----------

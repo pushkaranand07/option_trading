@@ -15,6 +15,7 @@ Research and decision support only; no strategy here has passed the project's va
 from __future__ import annotations
 
 import json
+import logging
 import math
 import threading
 import uuid
@@ -22,6 +23,8 @@ from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 STRATEGIES = {
     # name: (description, legs as (action, type) in strike order low -> high)
@@ -479,8 +482,7 @@ def rank(symbol: str, expiry: str | None = None, top: int = 8, built=None) -> di
             ev = evidence(plan, ctx, priced)
             ratio = lv["pnl_target_per_lot"] / -lv["pnl_stop_per_lot"]
             word = "rises" if direction == "bullish" else "falls"
-            plan.market_read = (f"Pulse rule: a {direction} trade, ranked by how much of the data agrees "
-                                f"(score {ev['score']}/100). Target at 80% of a typical move to expiry "
+            plan.market_read = (f"Pulse rule: a {direction} trade. Untested, no evidence of edge. Target at 80% of a typical move to expiry "
                                 f"(about {reach:,.0f} points), stop at 40% against.")
             plan.strike_reasoning = ", ".join(f"{a.lower()} {k:,.0f} {t} ({abs(k - spot) / (strikes[1] - strikes[0]):.0f} "
                                               f"strike{'s' if abs(k - spot) >= 2 * (strikes[1] - strikes[0]) else ''} "
@@ -526,6 +528,11 @@ def start(symbol: str, expiry: str | None = None) -> str:
                     res["ai_record"] = trade_record.take(res, source="ai")["id"]
                 except Exception:
                     pass
+            try:                                       # the forward test counts the first NIFTY answer of a session
+                from webapp import ai_test
+                ai_test.record(res)
+            except Exception:
+                logger.exception("the forward-test registry did not record this answer")
             result = {"status": "done", "result": res}
         except Exception as exc:
             result = {"status": "error", "error": f"{type(exc).__name__}: {str(exc)[:400]}"}

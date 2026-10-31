@@ -160,6 +160,12 @@ Rules for any intraday data: `known_from` is the bar's **end** (capped at 15:30)
 sources are never spliced (`tradingagents/research/intraday.py`, tested). Any later intraday-dependent test is "sample size
 limited by data depth".
 
+### AI strategist: UI freeze and forward test
+
+**UI feature freeze: no new UI features until the AI strategist's forward test has a verdict. Bug fixes are allowed.**
+
+Forward test: [ai_strategist_test_v1.json](ai_strategist_test_v1.json), hash `72dd7e97…`; record in [PA-49](PA_49-ai-strategist-test.md). Verdict at 500 settled trades; nothing reported below 50. The 0-100 evidence score is off the screen: its inputs (trend, PCR, OI) showed no edge in the LightGBM test (same-day AUC 0.502) or in model suite v1. Backtesting the LLM is not allowed.
+
 ### Feature library v1
 
 Frozen before any build: [features_v1.json](features_v1.json), hash `97129483…`; [catalog](feature_catalog.md), [missingness](feature_missingness.md),
