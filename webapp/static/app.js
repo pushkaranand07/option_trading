@@ -236,9 +236,9 @@ function renderMood(p) {
 function renderRecord(p) {
   const r = p.record;
   const rows = Object.entries(r.by_target).map(([t, x]) => `<tr class="${+t === r.chosen ? "pick" : ""}">
-    <td>${t}× risk${+t === r.chosen ? " ✓" : ""}</td><td>${x.trades}</td><td>${x.win_rate ?? "—"}${x.win_rate != null ? "%" : ""}</td>
+    <td>${t}× risk${+t === r.chosen ? " ✓" : ""}</td><td>${x.trades}</td><td class="small muted">no edge evidence</td>
     <td class="${cls(x.avg_r)}">${x.avg_r != null ? sign(x.avg_r) + x.avg_r : "—"}</td></tr>`).join("");
-  const side = (k, label) => { const x = r.by_side[k]; return x.trades ? `${label}: <b>${x.win_rate}%</b> of ${x.trades}` : `${label}: none`; };
+  const side = (k, label) => { const x = r.by_side[k]; return x.trades ? `${label}: no edge evidence (${x.trades} trades)` : `${label}: none`; };
   const recent = r.last.slice().reverse();                                    // oldest first
   const won = recent.filter((t) => t.r > 0).length;
   const chips = recent.map((t) => `<div class="trade" title="${esc(t.time.slice(0, 10))} · ${t.side === "BUY" ? "buy" : "sell"} setup · ${sign(t.r)}${t.r}× risk after costs">
@@ -246,14 +246,14 @@ function renderRecord(p) {
   const target = r.by_target[String(r.chosen)] || {};
   $("#record").innerHTML = `<div class="card-head"><h2>Track record of this setup</h2></div>
     <div class="body"><p class="small muted" style="margin-top:0">We replayed this exact rule over the last ${r.days} trading days: one trade a day, entry after 9:45 AM, exit by 3:15 PM, ${r.cost_pct}% costs included.</p>
-      <table class="t"><thead><tr><th>Profit target</th><th>Trades</th><th>Win rate</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="t"><thead><tr><th>Profit target</th><th>Trades</th><th>Edge evidence</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="small" style="margin:10px 0 0">${side("BUY", "Buy setups")} · ${side("SELL", "Sell setups")}</p>
       ${chips ? `<div class="small" style="margin-top:12px"><b>The last ${recent.length} of these ${target.trades ?? recent.length} trades</b> (${r.chosen}× risk target), oldest → newest:
         ${won} won, ${recent.length - won} lost</div>
         <div class="trades">${chips}</div>
         <div class="small muted"><b class="up">W</b> = the trade made money after costs · <b class="down">L</b> = it lost money.
         The number under each box is the result in units of risk: +1.5 = gained 1.5× what was risked, −1.0 = lost the full risk. Hover a box for its date.</div>` : ""}
-      <p class="note">"Avg result" is the average gain per trade as a share of what you risked: +0.10 means you made 10% of your risk per trade on average. A big win rate with a negative average still loses money.</p></div>`;
+      <p class="note">"Avg result" is the average gain per trade as a share of what you risked: +0.10 means you made 10% of your risk per trade on average.</p></div>`;
 }
 
 function renderBtst(p) {
@@ -266,7 +266,7 @@ function renderBtst(p) {
       ? "Today's candle looks strong enough to carry into tomorrow morning."
       : "Today's candle isn't strong enough to hold overnight."} Judge it after <b>3:00 PM</b>, when the day's candle is nearly final.</p>
       ${levels}${checksList(b.checks)}
-      <p class="note">History: this BTST rule fired ${rec.trades || 0} times in the last 2 years and won ${rec.win_rate ?? "—"}${rec.win_rate != null ? "%" : ""} of them (avg ${rec.avg_r != null ? sign(rec.avg_r) + rec.avg_r : "—"}× risk).</p></div>`;
+      <p class="note">History: this BTST rule fired ${rec.trades || 0} times in the last 2 years: no edge evidence (avg ${rec.avg_r != null ? sign(rec.avg_r) + rec.avg_r : "—"}× risk).</p></div>`;
 }
 
 function renderHistory(p) {
@@ -656,7 +656,7 @@ async function loadJournal() {
   catch (e) { $("#jrBody").innerHTML = ""; n.hidden = false; n.textContent = e.message; return; }
   const o = r.sections["Overall"][0];
   const few = r.round_trips < 30 ? `<div class="notice">Only ${r.round_trips} completed trades: treat this as a first look, not proof. 30–50 trades start to mean something.</div>` : "";
-  let html = card("Summary", `<p class="small muted">${cap(COST_NOTE)}.</p><p>${r.trades} orders from ${esc(r.from)} to ${esc(r.to)} → <b>${r.round_trips} completed trades</b>${r.still_open ? `, ${r.still_open} still open (not counted)` : ""}. Charges ${esc(r.charges)}.</p>
+  let html = card("Summary", `${RECORDED_NOTE}<p>${r.trades} orders from ${esc(r.from)} to ${esc(r.to)} → <b>${r.round_trips} completed trades</b>${r.still_open ? `, ${r.still_open} still open (not counted)` : ""}. Charges ${esc(r.charges)}.</p>
     ${o ? `<div class="stats"><div class="stat"><span>Won</span><b class="num">${pc(o.win_rate, 0)}</b></div><div class="stat"><span>Average per trade</span><b class="num ${cls(o.net_per_trade)}">${money(o.net_per_trade)}</b></div>
     <div class="stat"><span>Total</span><b class="num ${cls(o.total_net)}">${money(o.total_net)}</b></div><div class="stat"><span>Charges paid</span><b class="num">${money(o.charges)}</b></div></div>` : ""}${few}`);
   if (r.horizon === "all") html += card("By how long you held", jrTable(r.sections["By holding period"]));
@@ -1311,6 +1311,7 @@ const pnl = (x) => (x == null ? "—" : `<span class="${cls(x)}">${x > 0 ? "+" :
 // No score: its inputs (trend, PCR, OI) showed no edge under the tested conditions in the LightGBM test (same-day AUC 0.502) and model suite v1 (docs/data_catalog.md).
 const UNTESTED = `<span class="badge untested">UNTESTED, no evidence of edge</span>`;
 const COST_NOTE = "cost model unverified";
+const RECORDED_NOTE = `<p class="small muted">recorded trades, not a test (not registered before entry); ${COST_NOTE}</p>`;
 // A typed word before an untested trade's orders, target and stop show. Held in memory: a reload asks again.
 const ACK_WORD = "UNTESTED";
 S.ack = {};
@@ -1504,7 +1505,7 @@ async function loadRecord() {
   const s = d.stats;
   const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
   const summary = `<section class="card"><div class="card-head"><h2>Your trades — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE}</span></div>
-    <div class="body"><div class="levels rec-stats">
+    <div class="body">${RECORDED_NOTE}<div class="levels rec-stats">
       ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}
       ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
       ${stat("Win rate", s.win_rate != null ? s.win_rate.toFixed(0) + "%" : "—")}${stat("Average a trade", money(s.avg), cls(s.avg))}
@@ -1549,7 +1550,7 @@ function aiRecordHtml(ai) {
       <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
   }).join("");
   return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2> ${UNTESTED} <span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE}</span></div>
-    <div class="body">
+    <div class="body">${RECORDED_NOTE}
       <div class="levels rec-stats">
         <div class="lv"><span>Suggestions</span><b>${s.closed + s.open}</b><small>${s.open} still open</small></div>
         <div class="lv"><span>Won / lost</span><b>${s.wins} / ${s.losses}</b><small>${s.win_rate != null ? s.win_rate.toFixed(0) + "% won" : "none settled yet"}</small></div>

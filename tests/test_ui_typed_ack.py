@@ -55,3 +55,23 @@ def test_the_signal_panel_says_no_edge_evidence_with_no_win_rate_or_60_percent_m
     for gone in ("similar trades", "Need 60%+", "the 60% we require", "conf-row"):
         assert gone not in APP, gone
     assert 'class="meter"' in APP          # the regime display keeps its own meter
+
+
+def _fn_any(name: str) -> str:
+    start = APP.index(name)
+    return APP[start:APP.index("\n}\n", start)]
+
+
+@pytest.mark.unit
+def test_the_backtest_table_by_side_line_and_btst_note_show_no_past_win_rate():
+    record, btst = _function("renderRecord"), _function("renderBtst")
+    assert record.count("no edge evidence") == 2 and "win_rate" not in record and "Win rate" not in record
+    assert "no edge evidence" in btst and "win_rate" not in btst.split("History:")[1]
+
+
+@pytest.mark.unit
+def test_recorded_trade_summaries_keep_their_numbers_and_carry_the_line():
+    assert "recorded trades, not a test (not registered before entry); ${COST_NOTE}" in APP
+    for part in (_fn_any("async function loadJournal"), _fn_any("async function loadRecord"), _function("aiRecordHtml")):
+        assert "${RECORDED_NOTE}" in part
+    assert 'stat("Win rate"' in APP and "win_rate.toFixed(0)" in APP       # the numbers stay
