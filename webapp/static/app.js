@@ -239,20 +239,10 @@ function renderRecord(p) {
     <td>${t}× risk${+t === r.chosen ? " ✓" : ""}</td><td>${x.trades}</td><td class="small muted">no edge evidence</td>
     <td class="${cls(x.avg_r)}">${x.avg_r != null ? sign(x.avg_r) + x.avg_r : "—"}</td></tr>`).join("");
   const side = (k, label) => { const x = r.by_side[k]; return x.trades ? `${label}: no edge evidence (${x.trades} trades)` : `${label}: none`; };
-  const recent = r.last.slice().reverse();                                    // oldest first
-  const won = recent.filter((t) => t.r > 0).length;
-  const chips = recent.map((t) => `<div class="trade" title="${esc(t.time.slice(0, 10))} · ${t.side === "BUY" ? "buy" : "sell"} setup · ${sign(t.r)}${t.r}× risk after costs">
-      <span class="${t.r > 0 ? "w" : "l"}">${t.r > 0 ? "W" : "L"}</span><small class="${cls(t.r)}">${sign(t.r)}${t.r}</small></div>`).join("");
-  const target = r.by_target[String(r.chosen)] || {};
   $("#record").innerHTML = `<div class="card-head"><h2>Track record of this setup</h2></div>
     <div class="body"><p class="small muted" style="margin-top:0">We replayed this exact rule over the last ${r.days} trading days: one trade a day, entry after 9:45 AM, exit by 3:15 PM, ${r.cost_pct}% costs included.</p>
       <table class="t"><thead><tr><th>Profit target</th><th>Trades</th><th>Edge evidence</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="small" style="margin:10px 0 0">${side("BUY", "Buy setups")} · ${side("SELL", "Sell setups")}</p>
-      ${chips ? `<div class="small" style="margin-top:12px"><b>The last ${recent.length} of these ${target.trades ?? recent.length} trades</b> (${r.chosen}× risk target), oldest → newest:
-        ${won} won, ${recent.length - won} lost</div>
-        <div class="trades">${chips}</div>
-        <div class="small muted"><b class="up">W</b> = the trade made money after costs · <b class="down">L</b> = it lost money.
-        The number under each box is the result in units of risk: +1.5 = gained 1.5× what was risked, −1.0 = lost the full risk. Hover a box for its date.</div>` : ""}
       <p class="note">"Avg result" is the average gain per trade as a share of what you risked: +0.10 means you made 10% of your risk per trade on average.</p></div>`;
 }
 
@@ -733,7 +723,7 @@ function callHtml(sym, p, ph) {
   if (!p) return `<div class="call idle"><span class="spinner"></span> Checking the live signal…</div>`;
   const v = p.verdict, s = p.signal, leg = p.option;
   if (!(v.safe && s.side !== "WAIT")) {
-    return `<div class="call stop"><b>No trade right now.</b> ${esc(v.blockers[0] || "No clean setup.")}
+    return `<div class="call stop"><b>No trade right now.</b> no trade signal today
       <div class="small muted">Checked again every 15 seconds until 15:15. Not trading is a position too.</div></div>`;
   }
   if (!S.ack[callKey(sym, p)]) return `<div class="call idle"><div class="ask">Take this trade</div>${ackGate(callKey(sym, p), sym)}</div>`;
@@ -1343,7 +1333,7 @@ function stratHtml(res, sym) {
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
   const head = `<div class="strat-head"><div><div class="ask">${res.source === "pulse" ? `Pulse ranked trade #${res.rank}` : "AI suggestion"} · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
-    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span> ${UNTESTED}</div></div>
+    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">${res.source === "pulse" ? "n/a" : `AI confidence ${esc(a.confidence)}`}</span> ${UNTESTED}</div></div>
     ${evidenceHtml(res.evidence)}
     ${res.retried ? `<div class="small muted">The AI's first answer was refused (${esc(res.retried.join("; "))}); this is its corrected answer.</div>` : ""}
     ${res.ai_record ? `<div class="small muted">Saved to the AI track record on the <a href="#record">Trade Record</a> tab, which settles it at its target, stop or expiry.</div>` : ""}`;
