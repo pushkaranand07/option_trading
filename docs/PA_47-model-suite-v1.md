@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Done. **No edge found at a trial count of 1,459.** One defect qualifies this (section 3). Validation not read |
+| **Status** | Done. **First run: no edge found under these conditions, 1,459 trials.** One defect qualifies this (section 3). Validation not read |
 | **Scope** | new `docs/gate_v2_addendum_6.json`, `docs/models_v1.json`, `docs/models_v1_report.md`; new `tradingagents/research/models.py`, `scripts/research_models.py`; tests; `docs/data_catalog.md` |
 | **Related** | [PA-42](PA_42-feature-library-v1.md), [PA-45](PA_45-gate-v2-addendum-4.md) |
 | **Pull request** | branch `research/models-v1` |
@@ -55,6 +55,6 @@ Disclosed, not changed:
 - `shuffle=True` in SGD; the spec says fixed order. It is deterministic per seed.
 - The validation step was not written, because no spec reached it.
 
-## 5. Limits of "no edge found"
+## 5. Limits of this first-run result
 
 This covers these specs, these features, this cost model and D-1 timing. It is not a proof that no edge exists. In particular, D-1 timing skips the signal day's own close, the cost model is unverified, and market-state features took about 64% of LightGBM's gain, so the tree models lean mostly on market-wide state. All are observations, not grounds for a re-test.
