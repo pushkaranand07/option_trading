@@ -194,6 +194,8 @@ New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_acti
 
 **Dropped (user, 2026-10-31):** tradebook, contract note and Phase 5. They are no longer open items. **"Cost model unverified" is a permanent label** on every result, because no contract note will check it. Trade records are not searched for again.
 
+**Rule: no new addenda without a written reason and the list of results seen so far.** Current rules in one place: [gate_current.md](gate_current.md), read-only.
+
 ### Gate v2
 
 Frozen before the v2 rerun: [gate_v2.json](gate_v2.json), hash `ecd52239…`; plain English in
