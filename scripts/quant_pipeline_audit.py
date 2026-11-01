@@ -158,7 +158,9 @@ def main() -> int:
           f"- **U1 stocks, 2022:** the check compared 100 to distinct symbols. The stored membership has {m22['series'].nunique()} distinct series and {m22['symbol'].nunique()} distinct symbols, and {overlap} of the top 100 symbols by own 2021 ranking are members. A series can carry more than one symbol through a rename, so this is a flaw in the check if the series count is 100, not in the universe.",
           f"- **Parity flag rate:** Step 1 loaded each year by `known_from`, then filtered by `trade_date`, so each year's last session fell out of both years. Excluding those sessions, the second path gives {pr3:.6g} against the report's {pr:.6g}. **A small real defect in Step 1:** with them the rate is {pr2:.6g}. It is still at or below 1% and above 10 contracts' 1.77%, so the threshold of 25 does not change.", ""]
     (ROOT / "docs" / "pipeline_audit_v1.md").write_text("\n".join(L), encoding="utf-8", newline="\n")
-    print("range", len(problems), problems[:12]); print("stale", len(stale), stale[:12]); print([(r[0], r[1], r[2]) for r in rows], overlap, "fails", fails, m22["series"].nunique(), pr3)
+    print("range", len(problems), problems[:12])
+    print("stale", len(stale), stale[:12])
+    print([(r[0], r[1], r[2]) for r in rows], overlap, "fails", fails, m22["series"].nunique(), pr3)
     return 0
 
 
