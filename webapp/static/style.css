@@ -363,6 +363,7 @@ table.depth { width: 100%; border-collapse: collapse; font-variant-numeric: tabu
 @media (max-width: 720px) { .rec-stats { grid-template-columns: 1fr 1fr; } }
 
 /* Plain labels */
+.ack-gate { margin: 8px 0; }
 .badge.untested { background: var(--down-soft); color: var(--down); }
 .badge.score-strong { background: var(--up-soft); color: var(--up); } .badge.score-moderate { background: var(--warn-soft); color: var(--warn); }
 .badge.score-weak { background: var(--down-soft); color: var(--down); }
