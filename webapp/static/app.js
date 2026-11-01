@@ -161,15 +161,7 @@ function renderHero(p) {
 
   const when = p.market_open ? "" : `<div class="small warn-c">Market is closed. This reads the last session; check again after 9:45 AM.</div>`;
 
-  let conf = "";
-  if (live && v.win_rate != null && v.trades) {
-    const good = v.win_rate >= 60;
-    conf = `<div class="conf">
-      <div class="conf-row"><span>Won <b>${Math.round(v.win_rate * v.trades / 100)} of ${v.trades}</b> similar trades (${v.win_rate}%)</span>
-        <span class="${cls(v.avg_r)}">avg ${sign(v.avg_r)}${v.avg_r}× risk after costs</span></div>
-      <div class="meter" title="Need 60%+ to call it safe"><i style="width:${v.win_rate}%;background:var(${good ? "--up" : "--warn"})"></i><em style="left:60%"></em></div>
-      <div class="small muted" style="margin-top:6px">Confidence: <b>${v.confidence}</b> · the line marks the 60% we require</div></div>`;
-  }
+  const conf = live ? `<div class="conf small muted"><b>no edge evidence</b></div>` : "";
 
   let right;
   if (live && v.safe) {
