@@ -72,7 +72,7 @@ def build() -> str:
     for name, when, kind, seen in SOURCES:
         out.append(f"| [{name}]({name}) | {when} | {kind} | {seen} | `{canonical_hash(ROOT / 'docs' / name)}` |")
     addenda = sum(k == "addendum" for _, _, k, _ in SOURCES)
-    out += ["", "## Count", "", f"{len(SOURCES)} frozen files in 3 days: 2 gates, {addenda} addenda and {sum(k == "spec" for _, _, k, _ in SOURCES)} specs. Every rule change came before any model fit; addendum 7, written after results, fixed a bug and changed no rule.", "",
+    out += ["", "## Count", "", f"{len(SOURCES)} frozen files in 3 days: 2 gates, {addenda} addenda and {sum(k == 'spec' for _, _, k, _ in SOURCES)} specs. Every rule change came before any model fit; addendum 7, written after results, fixed a bug and changed no rule.", "",
             "**One inconsistency, reported and not changed.** gate_v2 says: \"" + g2["changes"].split(". ")[-1].strip() + "\". The addenda were logged as trial-log events, not trials. Only addendum 7's 3 feature changes were counted as trials.", ""]
     return "\n".join(out)
 
