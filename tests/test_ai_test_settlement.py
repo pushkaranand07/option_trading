@@ -257,3 +257,49 @@ def test_the_backup_has_no_network_or_schedule():
     text = (ROOT / "scripts" / "ai_test_backup.py").read_text(encoding="utf-8")
     for word in ("requests", "urllib", "schtasks", "boto", "http"):
         assert word not in text, word
+
+
+STOP = date(2027, 11, 1)
+TRIALS = ["trial_a", "trial_b"]
+
+
+@pytest.mark.unit
+def test_no_performance_is_read_before_the_stop_date():
+    with pytest.raises(ValueError, match="before the stop date"):
+        s.at_stop(_rows(100, 50.0), SPEC, date(2027, 10, 31), STOP, TRIALS)
+
+
+@pytest.mark.unit
+def test_a_lower_bound_below_zero_retires_the_test_in_the_written_words():
+    r = s.at_stop(_rows(200, -20.0), SPEC, STOP, STOP, TRIALS)
+    assert r["lower_bound_pct"] < 0 and r["action"] == "retire the test" and r["statement"] == "no large edge detected"
+
+
+@pytest.mark.unit
+def test_a_lower_bound_above_zero_under_500_goes_to_a_written_decision_with_the_trial_list():
+    r = s.at_stop(_rows(200, 40.0), SPEC, STOP, STOP, TRIALS)
+    assert r["lower_bound_pct"] > 0 and "in writing" in r["action"] and r["trial_list"] == TRIALS and "statement" not in r
+
+
+@pytest.mark.unit
+def test_fewer_than_50_at_the_stop_reports_nothing_and_goes_to_a_written_decision():
+    r = s.at_stop(_rows(49, 40.0), SPEC, STOP, STOP, TRIALS)
+    assert "in writing" in r["action"] and "mean_net_pct_of_max_risk" not in r and r["trial_list"] == TRIALS
+
+
+@pytest.mark.unit
+def test_the_interim_check_shows_counts_and_missed_days_only(tmp_path):
+    path, chains = _world(tmp_path)
+    _trade(path, chains, date(2027, 1, 4))
+    registry.record_missed(path, day=date(2027, 1, 5), spec_hash=SPEC, now=IST.localize(datetime(2027, 1, 6, 10)), reason="none")
+    r = s.interim_counts(path, SPEC, {date(2027, 1, 5)})
+    assert r["questions"] == 1 and r["entered"] == 1 and r["missed_days"] == ["2027-01-05"]
+    assert not {"pct", "mean_net_pct_of_max_risk", "lower_bound_pct", "settled"} & set(r)
+
+
+@pytest.mark.unit
+def test_the_interim_check_refuses_real_rows_until_approved(tmp_path):
+    path, chains = _world(tmp_path)
+    _trade(path, chains, date(2027, 1, 4), symbol="NIFTY")
+    with pytest.raises(s.RealRowsRefused):
+        s.interim_counts(path, SPEC, set())

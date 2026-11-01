@@ -172,6 +172,8 @@ Forward test: [ai_strategist_test_v1.json](ai_strategist_test_v1.json), hash `72
 - It tests direction and structure only, not the AI's target or stop, because every trade is held to expiry.
 - **"No pass" means "no large edge", not "no edge".**
 
+**Version 1.1 is the spec in force:** [ai_strategist_test_v1_1.json](ai_strategist_test_v1_1.json), hash `4a7c59bb…`; record in [PA-51](PA_51-ai-test-stop-date.md). Stop date 2027-11-01; one interim check on 2027-05-01, counts and missed days only. By the stop, at most about 260 trades, so 500 is out of reach unless you extend.
+
 Settlement and baselines: `tradingagents/research/ai_settle.py`, `scripts/ai_test_settle.py`, **not cleared for real rows** until the user says so ([PA-50](PA_50-ai-test-settlement.md)). Backup and restore: [ai_test_backup_restore.md](ai_test_backup_restore.md).
 
 ### Feature library v1
