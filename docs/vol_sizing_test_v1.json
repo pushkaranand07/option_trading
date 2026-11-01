@@ -1,0 +1,22 @@
+{
+ "version": 1,
+ "written": "2026-11-01",
+ "written_before_it_runs": true,
+ "question": "Does sizing by a volatility forecast change the volatility and drawdown of a fixed always-long basket?",
+ "edge_claim": "none. Report-only: it decides nothing, adds no feature, and reopens no closed line",
+ "period": "development test folds 2013-2022 only; nothing after 2022-12-31 is loaded",
+ "basket": "every U1 stock trade at h = 1 on each signal date from the frozen development rows: long, entry at the open after the signal, exit at that close. Equal weight across names each date",
+ "sizers": {
+  "constant": "weight 1 on every trade",
+  "garch": "weight = min(2, 0.30 / garch_h1), corrected features",
+  "har": "weight = min(2, 0.30 / HAR forecast annualised x sqrt(252)). HAR: least squares of log forward volatility on log rv_5, log rv_20, log rv_60, fitted on rows before each fold less a purge of 1 session, as spec c"
+ },
+ "same_rows": "only trades where all three sizers have a value, so every sizer has identical names and dates",
+ "inputs_known_at": "features for signal D read D-1, as features_v1",
+ "metrics": ["annualised volatility of the daily basket return", "maximum drawdown of the running sum of daily returns, in percent of notional", "mean daily return", "mean weight", "mean absolute day-to-day change in weight per name", "each by fold"],
+ "scaled_view": "each sizer also rescaled to the constant sizer's realised volatility, labelled hindsight scaling, so that drawdown can be compared on equal risk",
+ "costs": "gross, and net at 1.5x costs times the weight; cost model unverified",
+ "reading_rule": "lower volatility or drawdown says only that sizing changed risk over this period. Lower risk is not an edge. Any use needs its own decision",
+ "trials": "3 logged, one per sizer",
+ "not_changed_after_seeing_results": ["basket", "weights cap of 2", "volatility target of 0.30", "folds", "metrics"]
+}
