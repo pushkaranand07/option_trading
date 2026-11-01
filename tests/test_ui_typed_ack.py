@@ -47,3 +47,11 @@ def test_the_intraday_card_has_the_label_and_no_past_win_rate():
 @pytest.mark.unit
 def test_chart_lines_stay_hidden_until_the_acknowledgement():
     assert 'S.ack[callKey(sym, p)]) {\n      level(p.signal.entry' in APP and 'S.ack[stratKey(r, sym)]) {\n      const who' in APP
+
+
+@pytest.mark.unit
+def test_the_signal_panel_says_no_edge_evidence_with_no_win_rate_or_60_percent_meter():
+    assert 'const conf = live ? `<div class="conf small muted"><b>no edge evidence</b></div>` : "";' in APP
+    for gone in ("similar trades", "Need 60%+", "the 60% we require", "conf-row"):
+        assert gone not in APP, gone
+    assert 'class="meter"' in APP          # the regime display keeps its own meter
