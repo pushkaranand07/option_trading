@@ -744,24 +744,25 @@ function callHtml(sym, p, ph) {
     return `<div class="call stop"><b>No trade right now.</b> ${esc(v.blockers[0] || "No clean setup.")}
       <div class="small muted">Checked again every 15 seconds until 15:15. Not trading is a position too.</div></div>`;
   }
+  if (!S.ack[callKey(sym, p)]) return `<div class="call idle"><div class="ask">Take this trade</div>${ackGate(callKey(sym, p), sym)}</div>`;
   const up = s.side === "BUY", z = perLot(p);
   if (!leg) {
     const sz = `<div class="small">Each share loses about <b>${rupee(z.perShare)}</b> at the stop — pick the quantity so the total is a loss you accept.</div>`;
-    return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
+    return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade ${UNTESTED}</div>
       <div class="what"><b>${up ? "Buy" : "Short-sell"} ${esc(nameOf(sym))}</b> · intraday, exit by 15:15</div>
       <div class="levels"><div class="lv"><span>Entry</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss</span><b class="down">${fmt(s.stop_loss)}</b></div>
         <div class="lv"><span>Target</span><b class="up">${fmt(s.target)}</b></div></div>${sz}
-      <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs; ${COST_NOTE}). One trade a day. Not a validated edge — use your judgment.</div></div>`;
+      <div class="small muted"><b>no edge evidence</b> · ${COST_NOTE}. One trade a day.</div></div>`;
   }
   const sizing = `<div class="levels"><div class="lv"><span>One lot</span><b>${leg.lot}</b><small>units</small></div>
         <div class="lv"><span>Loss at stop, a lot</span><b class="down">${z.approx ? "≈ " : ""}${money(z.loss)}</b><small>before charges · ${COST_NOTE}</small></div>
         <div class="lv"><span>Money needed, a lot</span><b>${z.cost != null ? money(z.cost) : "premium × lot"}</b><small>option premium paid</small></div></div>`;
-  return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade</div>
+  return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade ${UNTESTED}</div>
     <div class="what"><b>Buy ${esc(NAMES[sym] || nameOf(sym))} ${fmt0(leg.strike)} ${leg.kind}</b>${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}</div>
     <div class="levels"><div class="lv"><span>Entry (index)</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss (index)</span><b class="down">${fmt(s.stop_loss)}</b></div>
       <div class="lv"><span>Target (index)</span><b class="up">${fmt(s.target)}</b></div>${leg.premium ? `<div class="lv"><span>Premium now</span><b>${rupee(leg.premium)}</b><small>stop ${rupee(leg.stop_loss)} · target ${rupee(leg.target)}</small></div>` : ""}</div>
     ${sizing}
-    <div class="small muted">Won ${v.win_rate}% of ${v.trades} similar trades recently (avg ${sign(v.avg_r)}${v.avg_r}× risk after costs; ${COST_NOTE}). Exit by 15:15. One trade a day. Not a validated edge — use your judgment.</div></div>`;
+    <div class="small muted"><b>no edge evidence</b> · ${COST_NOTE}. Exit by 15:15. One trade a day.</div></div>`;
 }
 
 function plainPcr(x) { return x > 1.2 ? "many more puts than calls open (heavy hedging)" : x < 0.8 ? "more calls than puts open" : "calls and puts roughly balanced"; }
@@ -1111,13 +1112,13 @@ function drawPlanChartLines(sym) {
   }
   if (pcOn("trade")) {
     const p = S.live[sym];
-    if (p?.verdict?.safe && p.signal?.side !== "WAIT") {
+    if (p?.verdict?.safe && p.signal?.side !== "WAIT" && S.ack[callKey(sym, p)]) {
       level(p.signal.entry, col.text, `Entry ${fmt0(p.signal.entry)}`, "solid");
       axis(p.signal.target, col.up, "Target"); axis(p.signal.stop_loss, col.down, "Stop");
       position(p.signal.entry, p.signal.target, p.signal.stop_loss);
     }
     const r = curRes(sym), a = r?.plan;
-    if (a && a.strategy !== "no_trade") {
+    if (a && a.strategy !== "no_trade" && S.ack[stratKey(r, sym)]) {
       const who = r.source === "pulse" ? `#${r.rank}` : "AI", lo = a.underlying_entry_low, hi = a.underlying_entry_high;
       if (lo && hi) {
         bands.push({ from: lo, to: hi, color: hexA(col.text, 0.07) });
@@ -1318,6 +1319,25 @@ const pnl = (x) => (x == null ? "—" : `<span class="${cls(x)}">${x > 0 ? "+" :
 // No score: its inputs (trend, PCR, OI) showed no edge under the tested conditions in the LightGBM test (same-day AUC 0.502) and model suite v1 (docs/data_catalog.md).
 const UNTESTED = `<span class="badge untested">UNTESTED, no evidence of edge</span>`;
 const COST_NOTE = "cost model unverified";
+// A typed word before an untested trade's orders, target and stop show. Held in memory: a reload asks again.
+const ACK_WORD = "UNTESTED";
+S.ack = {};
+const stratKey = (res, sym) => `strat|${sym}|${res.source === "pulse" ? `rank${res.rank}` : res.asked_at}|${res.expiry}`;
+const callKey = (sym, p) => `call|${sym}|${p.signal?.side}`;
+const rankKey = (sym) => `rank|${sym}`;
+function ackGate(key, sym) {
+  return `<div class="ack-gate">${UNTESTED}<p class="small">Orders, target and stop are hidden until you acknowledge that this trade is untested.</p>
+    <button class="btn ack-untested" data-key="${esc(key)}" data-sym="${esc(sym)}">Type ${ACK_WORD} to show this trade</button></div>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest?.(".ack-untested"); if (!b) return;
+  const typed = window.prompt(`This trade is UNTESTED, with no evidence of edge. Type ${ACK_WORD} to show its orders, target and stop.`);
+  if ((typed || "").trim().toUpperCase() !== ACK_WORD) return;
+  S.ack[b.dataset.key] = true;
+  const sym = b.dataset.sym, slot = $(`.plan-card[data-sym="${sym}"] .call-slot`);
+  if (slot && S.morning) slot.innerHTML = callHtml(sym, S.live[sym], phase(S.morning.session));
+  renderStrat(sym); drawPlanChartLines(sym);
+});
 function evidenceHtml(e) {
   if (!e) return "";
   return `<details class="evidence"><summary>Inputs looked at</summary>
@@ -1337,6 +1357,7 @@ function stratHtml(res, sym) {
   const read = `<p>${esc(a.market_read)}</p>`;
   if (res.rejected) return `<div class="call stop">${head}<b>The proposal was refused by the safety checks:</b><ul>${res.rejected.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     <div class="small">Pulse only shows defined-risk trades (no naked option selling). Ask again, or skip.</div></div>${read}`;
+  if (pr && a.strategy !== "no_trade" && !S.ack[stratKey(res, sym)]) return `<div class="call idle">${head}${read}${ackGate(stratKey(res, sym), sym)}</div>`;
   const name = NAMES[sym] || sym, down = a.underlying_target != null && a.underlying_stop != null && a.underlying_target < a.underlying_stop;
   const story = a.strategy === "no_trade" ? "" : `<div class="story">
       <div class="story-line"><b>${down ? `You make money if ${esc(name)} falls` : a.bias === "neutral" ? `You make money if ${esc(name)} stays in a range` : `You make money if ${esc(name)} rises`}.</b>
@@ -1473,7 +1494,7 @@ function renderTicket(sym) {
 // One lot each. Marked live from the NSE chain at the price each leg could be closed at; when the index reaches the
 // AI's target or stop the trade is flagged (never closed for you). Stored on this computer (reports/trade_record).
 async function takeTrade(sym) {
-  const res = curRes(sym); if (!res) return;
+  const res = curRes(sym); if (!res || !S.ack[stratKey(res, sym)]) return;
   const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
   try {
     const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(res) });
@@ -1614,6 +1635,7 @@ function rankHtml(sym) {
   if (r.error && !r.data) return `<div class="notice">Ranking unavailable: ${esc(r.error)}</div>`;
   const d = r.data, name = NAMES[sym] || sym;
   if (!d.candidates.length) return `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
+  if (!S.ack[rankKey(sym)]) return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades</h4>${ackGate(rankKey(sym), sym)}</div></div>`;
   const v = S.view[sym];
   const rows = d.candidates.map((c, i) => {
     const lv = c.levels, a = c.plan;
