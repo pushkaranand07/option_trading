@@ -166,6 +166,14 @@ limited by data depth".
 
 Forward test: [ai_strategist_test_v1.json](ai_strategist_test_v1.json), hash `72dd7e97…`; record in [PA-49](PA_49-ai-strategist-test.md). Verdict at 500 settled trades; nothing reported below 50. The 0-100 evidence score is off the screen: its inputs (trend, PCR, OI) showed no edge in the LightGBM test (same-day AUC 0.502) or in model suite v1. Backtesting the LLM is not allowed.
 
+**What this test can and cannot say, in plain language:**
+
+- At 500 trades it only detects an edge of about 20% of max risk per trade. A smaller edge will probably be missed.
+- It tests direction and structure only, not the AI's target or stop, because every trade is held to expiry.
+- **"No pass" means "no large edge", not "no edge".**
+
+Settlement and baselines: `tradingagents/research/ai_settle.py`, `scripts/ai_test_settle.py`, **not cleared for real rows** until the user says so ([PA-50](PA_50-ai-test-settlement.md)). Backup and restore: [ai_test_backup_restore.md](ai_test_backup_restore.md).
+
 ### Feature library v1
 
 Frozen before any build: [features_v1.json](features_v1.json), hash `97129483…`; [catalog](feature_catalog.md), [missingness](feature_missingness.md),
