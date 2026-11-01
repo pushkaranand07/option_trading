@@ -1,6 +1,6 @@
 # Protocol: when NSE files appear in the evening
 
-> **Status:** Written 2026-11-01. For you to do by hand; nothing automated, no new collection.
+> **Status:** Written 2026-11-01. **Skipped for now, by the user's decision of 2026-11-01.** By hand if ever used; nothing automated, no new collection.
 > **Scope:** 20 evenings of noting when each file is public, because D-1 timing rests on publication times that are UNVERIFIED historically.
 
 **This does not reopen the closed model suite.** Its result stays as stated, whatever this shows. Using evening data in a future test would need a new pre-registered line, and your decision.

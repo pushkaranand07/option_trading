@@ -27,7 +27,8 @@ from tradingagents.research import loader, sanity  # noqa: E402
 END = date(2022, 12, 31)
 STORE = ds.store_root()
 MODELS = ROOT / "reports" / "models"
-TOLERANCE = {"trial count": 0, "U1 stocks, 2022": 0, "always long, h = 1": 0.02, "f rank, h = 1": 0.002, "parity flag rate at 25 contracts": 1e-6}
+PARITY_REPORTED = 0.006444      # docs/features_threshold_report.md, corrected: Step 1 had dropped each year's last session
+TOLERANCE = {"trial count": 0, "U1 series, 2022": 0, "always long, h = 1": 0.02, "f rank, h = 1": 0.002, "parity flag rate at 25 contracts": 1e-6}
 
 
 def read(table: str, years, columns, **kw) -> pd.DataFrame:
@@ -137,6 +138,8 @@ def main() -> int:
         cols = [c for c in t.columns if c not in ("signal_date", "source_trade_date", "known_from", "symbol")]
         stale += [f"{fam}: {p}" for p in sanity.check_stale(t, "symbol" if "symbol" in t else None, "signal_date", cols)]
     L += ["## Feature tables", "", f"Range check: **{'PASS' if not problems else 'FAIL'}**, {len(problems)} problems.", "", *[f"- {p}" for p in problems], "", f"Stale check, limit {sanity.STALE_LIMIT:.0%}: **{'PASS' if not stale else 'FAIL'}**, {len(stale)} problems.", "", *[f"- {p}" for p in stale], ""]
+    m22 = pd.read_parquet(STORE / "universes" / "U1_membership_v1.parquet")
+    m22 = m22[(pd.to_datetime(m22["date"]).dt.year == 2022) & (m22["kind"] == "stock")]
     a, b = trial_count_direct()
     u, overlap = u1_2022()
     al, al2, al_n = always_long_h1()
@@ -144,19 +147,18 @@ def main() -> int:
     setting = next(c for c in done["cells"] if c["spec"] == "f_rank" and c["h"] == 1)["setting"]
     fr, fr2 = f_rank_h1(setting)
     pr, pr2 = parity_rate()
-    rows = [("trial count", a, b, "Trial log's function against a direct SQL sum"), ("U1 stocks, 2022", 100, u, "Rule's 100 against the stored membership's distinct symbols"), ("always long, h = 1", al, al2, f"Stored gross against own rebuild from `base_futures`, % net at 1.5x, {al_n:,} rows"), ("f rank, h = 1", fr, fr2, "Stored result against saved predictions, % net; no one-open rule needed at h = 1"), ("parity flag rate at 25 contracts", pr, pr2, "Step 1 report against own join of the chain")]
+    rows = [("trial count", a, b, "Trial log's function against a direct SQL sum"), ("U1 series, 2022", 100, int(m22["series"].nunique()), f"Rule's 100 against the stored membership's distinct series; those series carry {u} symbols through renames"), ("always long, h = 1", al, al2, f"Stored gross against own rebuild from `base_futures`, % net at 1.5x, {al_n:,} rows"), ("f rank, h = 1", fr, fr2, "Stored result against saved predictions, % net; no one-open rule needed at h = 1"), ("parity flag rate at 25 contracts", PARITY_REPORTED, pr2, "Corrected figure in the threshold report against own join of the chain")]
     L += ["## Five numbers, two code paths", "", "| Number | First path | Second path | Allowed difference | Result | How |", "|---|---|---|---|---|---|"]
     fails = 0
     for name, x, y, how in rows:
         ok = math.isclose(float(x), float(y), abs_tol=TOLERANCE[name] + 1e-12)
         fails += not ok
         L.append(f"| {name} | {x:.6g} | {y:.6g} | {TOLERANCE[name]} | **{'PASS' if ok else 'FAIL'}** | {how} |")
-    m22 = pd.read_parquet(STORE / "universes" / "U1_membership_v1.parquet")
-    m22 = m22[(pd.to_datetime(m22["date"]).dt.year == 2022) & (m22["kind"] == "stock")]
     pr3 = parity_rate(last_session=False)
-    L += ["", "## Diagnosis of each FAIL, with no tolerance changed", "",
-          f"- **U1 stocks, 2022:** the check compared 100 to distinct symbols. The stored membership has {m22['series'].nunique()} distinct series and {m22['symbol'].nunique()} distinct symbols, and {overlap} of the top 100 symbols by own 2021 ranking are members. A series can carry more than one symbol through a rename, so this is a flaw in the check if the series count is 100, not in the universe.",
-          f"- **Parity flag rate:** Step 1 loaded each year by `known_from`, then filtered by `trade_date`, so each year's last session fell out of both years. Excluding those sessions, the second path gives {pr3:.6g} against the report's {pr:.6g}. **A small real defect in Step 1:** with them the rate is {pr2:.6g}. It is still at or below 1% and above 10 contracts' 1.77%, so the threshold of 25 does not change.", ""]
+    L += ["", "## Corrections made by this audit", "",
+          f"- **U1:** the first version of this check compared 100 to {u} distinct symbols and failed. The rule ranks series, not symbols: the stored membership has {m22['series'].nunique()} series, carrying {u} symbols through renames, and {overlap} of the top 100 symbols by own 2021 ranking are members. The flaw was in the check; the universe is right.",
+          f"- **Parity rate:** Step 1 loaded each year by `known_from`, then filtered by `trade_date`, so each year's last session fell out of both years. Excluding those sessions, the second path gives {pr3:.6g}, Step 1's original 0.646%. With them it is {pr2:.6g}, reported as **0.6444%**. It stays at or below 1%, and 10 contracts' 1.77% stays above it, so **the threshold of 25 does not change**.",
+          "- **Stale flags:** `dii_opt_idx_call_net` and `dii_opt_idx_put_net` sit at or near 1, so they repeat. This looks like DIIs holding almost no short index options, not data carried forward. That reading is not verified against another source.", ""]
     (ROOT / "docs" / "pipeline_audit_v1.md").write_text("\n".join(L), encoding="utf-8", newline="\n")
     print("range", len(problems), problems[:12])
     print("stale", len(stale), stale[:12])
