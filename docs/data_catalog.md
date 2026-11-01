@@ -192,7 +192,7 @@ New stored tables: `base_participant`, `base_delivery`, `base_index`, `base_acti
 
 **Conditions behind this verdict, and nothing wider:** features at D-1 timing (no use of the signal day's own data); futures only; 1.5x costs (cost model unverified); horizons of 1, 2, 3, 5 and 10 sessions; public end-of-day features; these 6 specs; development folds 2013-2022. It says nothing about intraday data, options structures, other features or other models.
 
-**Volatility finding (risk-scaling use only):** on out-of-fold development rows, U1, corrected GARCH beats HAR on QLIKE at every horizon, lower being better. GARCH against HAR, h = 1: 1.682 against 4.114; h = 2: 1.062 against 1.797; h = 3: 0.789 against 1.153; h = 5: 0.581 against 0.769; h = 10: 0.427 against 0.529. GARCH uses the nearest stored horizon (1, 5 or 10). It gives no direction and is not a trading signal.
+**Volatility: HAR result unusable (biased fit); GARCH-beats-HAR claim unproven.** Corrected GARCH had lower QLIKE than HAR at every horizon, but this HAR is fitted on logs with no bias correction, and its forecasts run far too low at h = 1 (mean sizing weight 1.73). HAR is not being fixed. Risk-scaling use only: [sizing report](vol_sizing_report_v1.md).
 
 **What remains untested:** intraday (no usable source) and options structures.
 

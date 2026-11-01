@@ -31,13 +31,14 @@ Stale check, limit 50%: **FAIL**, 2 problems.
 
 | Number | First path | Second path | Allowed difference | Result | How |
 |---|---|---|---|---|---|
-| trial count | 1532 | 1532 | 0 | **PASS** | Trial log's function against a direct SQL sum |
-| U1 stocks, 2022 | 100 | 103 | 0 | **FAIL** | Rule's 100 against the stored membership's distinct symbols |
+| trial count | 1535 | 1535 | 0 | **PASS** | Trial log's function against a direct SQL sum |
+| U1 series, 2022 | 100 | 100 | 0 | **PASS** | Rule's 100 against the stored membership's distinct series; those series carry 103 symbols through renames |
 | always long, h = 1 | -0.277148 | -0.277225 | 0.02 | **PASS** | Stored gross against own rebuild from `base_futures`, % net at 1.5x, 284,085 rows |
 | f rank, h = 1 | -0.1635 | -0.1635 | 0.002 | **PASS** | Stored result against saved predictions, % net; no one-open rule needed at h = 1 |
-| parity flag rate at 25 contracts | 0.00646266 | 0.00644368 | 1e-06 | **FAIL** | Step 1 report against own join of the chain |
+| parity flag rate at 25 contracts | 0.006444 | 0.00644368 | 1e-06 | **PASS** | Corrected figure in the threshold report against own join of the chain |
 
-## Diagnosis of each FAIL, with no tolerance changed
+## Corrections made by this audit
 
-- **U1 stocks, 2022:** the check compared 100 to distinct symbols. The stored membership has 100 distinct series and 103 distinct symbols, and 100 of the top 100 symbols by own 2021 ranking are members. A series can carry more than one symbol through a rename, so this is a flaw in the check if the series count is 100, not in the universe.
-- **Parity flag rate:** Step 1 loaded each year by `known_from`, then filtered by `trade_date`, so each year's last session fell out of both years. Excluding those sessions, the second path gives 0.00646266 against the report's 0.00646266. **A small real defect in Step 1:** with them the rate is 0.00644368. It is still at or below 1% and above 10 contracts' 1.77%, so the threshold of 25 does not change.
+- **U1:** the first version of this check compared 100 to 103 distinct symbols and failed. The rule ranks series, not symbols: the stored membership has 100 series, carrying 103 symbols through renames, and 100 of the top 100 symbols by own 2021 ranking are members. The flaw was in the check; the universe is right.
+- **Parity rate:** Step 1 loaded each year by `known_from`, then filtered by `trade_date`, so each year's last session fell out of both years. Excluding those sessions, the second path gives 0.00646266, Step 1's original 0.646%. With them it is 0.00644368, reported as **0.6444%**. It stays at or below 1%, and 10 contracts' 1.77% stays above it, so **the threshold of 25 does not change**.
+- **Stale flags:** `dii_opt_idx_call_net` and `dii_opt_idx_put_net` sit at or near 1, so they repeat. This looks like DIIs holding almost no short index options, not data carried forward. That reading is not verified against another source.
