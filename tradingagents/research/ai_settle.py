@@ -1,4 +1,4 @@
-"""Settlement and baselines for the AI strategist's forward test, following docs/ai_strategist_test_v1.json exactly (docs/PA_50).
+"""Settlement and baselines for the AI strategist's forward test, following docs/ai_strategist_test_v1_1.json exactly (docs/PA_50, PA_51).
 
 Pure: rows, settlement prices and saved chains go in, numbers come out. Hold to expiry; each leg settles at intrinsic on NSE's final
 settlement price. Net P&L after charges as a percentage of max risk. Nothing is reported below 50 settled trades. Pass or fail is decided
@@ -182,3 +182,31 @@ def evaluate(settled: list[dict], spec_hash: str) -> dict:
         return out | {"status": "reported, no verdict", "warning": WARNING}
     checks = {"mean_above_zero": mean > 0, "lower_bound_above_zero": lower > 0, "above_random_97_5": mean > top, "above_rule_pick": rule_mean is not None and mean > rule_mean}
     return out | {"status": "verdict", "checks": checks, "verdict": "pass" if all(checks.values()) else "fail", "meaning_if_fail": "no large edge found; a smaller edge is not ruled out", "no_second_look": True}
+
+
+def interim_counts(path: Path, spec_hash: str, sessions: set[date], approved: bool = False) -> dict:
+    """The one interim check: counts and missed days only. It reads no price and computes no return."""
+    registry.verify(path)
+    rows = registry.read(path)
+    regs = [r for r in rows if r["type"] == "strategist" and r["spec_hash"] == spec_hash]
+    if not approved and any(r["symbol"] != SYNTHETIC for r in regs):
+        raise RealRowsRefused("real rows are refused until the user approves running on them")
+    keys = {r["hash"] for r in regs}
+    entries = [r for r in rows if r["type"] == "strategist_entry" and r["registration"] in keys]
+    missed = [r["date"] for r in rows if r["type"] == "missed" and r["spec_hash"] == spec_hash and date.fromisoformat(r["date"]) in sessions]
+    return {"questions": len(regs), "trades": sum(r["outcome"] == "trade" for r in regs), "no_trade": sum(r["outcome"] == "no_trade" for r in regs), "rejected": sum(r["outcome"] == "rejected" for r in regs),
+            "entered": sum(e["status"] == "entered" for e in entries), "void": sum(e["status"] == "void" for e in entries), "missed_days": sorted(missed)}
+
+
+def at_stop(settled: list[dict], spec_hash: str, today: date, stop: date, trials: list[str]) -> dict:
+    """The pre-registered action at the stop date. It refuses to run before it, and shows the trial list with any written decision."""
+    if today < stop:
+        raise ValueError(f"no performance figure is read before the stop date, {stop}")
+    report = evaluate(settled, spec_hash)
+    if len(settled) < REPORT_MINIMUM:
+        return report | {"action": "the user decides in writing: extend or retire", "trial_list": trials}
+    if report["status"] == "verdict":
+        return report | {"action": "the verdict stands"}
+    if report["lower_bound_pct"] > 0:
+        return report | {"action": "the user decides in writing: extend or retire", "trial_list": trials}
+    return report | {"action": "retire the test", "statement": "no large edge detected"}

@@ -1,4 +1,4 @@
-"""The AI strategist's forward test and the plain labels (docs/ai_strategist_test_v1.json, docs/PA_49)."""
+"""The AI strategist's forward test and the plain labels (docs/ai_strategist_test_v1_1.json, docs/PA_49, PA_51)."""
 
 import json
 from datetime import date, datetime, timedelta
@@ -164,3 +164,19 @@ def test_every_pnl_or_charges_display_carries_the_cost_label():
 def test_power_table_in_the_spec_is_complete():
     spec = json.loads(ai_test.SPEC_FILE.read_text(encoding="utf-8"))["power"]
     assert spec["false_pass_at_zero_edge_max"] < 0.05 and spec["pass_rate_by_edge"]["0.20"]["500"] > 0.8
+
+
+@pytest.mark.unit
+def test_version_1_1_pins_the_same_prompt_and_adds_the_stop_and_interim_check():
+    spec = ai_test.read_spec()
+    old = json.loads((ai_test.ROOT / "docs" / "ai_strategist_test_v1.json").read_text(encoding="utf-8"))
+    assert spec["version"] == old["version"] and spec["supersedes"]["trades_counted_under_it"] == 0
+    assert spec["stop"]["date"] == "2027-11-01" and spec["interim_check"]["date"] == "2027-05-01"
+    assert "no large edge detected" in spec["stop"]["if_lower_bound_is_below_0"] and "in writing" in spec["stop"]["if_above_0_and_under_500_trades"]
+
+
+@pytest.mark.unit
+def test_a_question_after_the_stop_date_does_not_count(world):
+    world["spec"]["stop"] = {"date": "2027-01-04"}
+    assert _record(world, now=at(date(2027, 1, 5))) is None and not world["path"].exists()
+    assert _record(world, now=at(date(2027, 1, 4))) is not None

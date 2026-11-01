@@ -47,9 +47,10 @@ Items a, d, e, f, g must all pass, at 1.5x costs. Items b and c are report-only.
 | [models_v1.json](models_v1.json) | 2026-10-31 | spec | Same. No model | `2f2484efa543a3c9e2c5567747342b23f6eb32df26ff5dc8682e55907280ff78` |
 | [gate_v2_addendum_7.json](gate_v2_addendum_7.json) | 2026-10-31 | addendum | **Development results of the first model run.** It fixed a bug and changed no rule | `f8a7b029710035c770483c7b29a03b4a0ec4573f767113395c3ae0ee526aeed6` |
 | [ai_strategist_test_v1.json](ai_strategist_test_v1.json) | 2026-10-31 | spec | Model suite verdict, power from 2019-2022. No AI trade counted | `72dd7e979c6a43d70eadfb8cbf11b8a66f4b11baa073ad59d0bb74fefb2fb671` |
+| [ai_strategist_test_v1_1.json](ai_strategist_test_v1_1.json) | 2026-11-01 | spec | Same, plus the options table. No AI trade counted. Adds a stop date; changes no gate rule | `4a7c59bb62dc60703b6acd0926a8c3fa1bf3e39e43b542754874cc038f986dc9` |
 
 ## Count
 
-12 frozen files in 2 days: 2 gates, 7 addenda and 3 specs. Every rule change came before any model fit; addendum 7, written after results, fixed a bug and changed no rule.
+13 frozen files in 3 days: 2 gates, 7 addenda and 4 specs. Every rule change came before any model fit; addendum 7, written after results, fixed a bug and changed no rule.
 
 **One inconsistency, reported and not changed.** gate_v2 says: "Any change after this commit is a new version and is logged as a trial.". The addenda were logged as trial-log events, not trials. Only addendum 7's 3 feature changes were counted as trials.

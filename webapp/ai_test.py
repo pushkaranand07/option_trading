@@ -1,4 +1,4 @@
-"""The AI strategist's forward test: write each trade to the registry before entry (docs/ai_strategist_test_v1.json, docs/PA_49).
+"""The AI strategist's forward test: write each trade to the registry before entry (docs/ai_strategist_test_v1_1.json, docs/PA_51).
 
 One NIFTY question per session counts: the first asked in the window. Order: the LLM answers; the structure is registered; only then is a
 fresh chain fetched, and the entry is that chain's bid and ask, so no entry price is older than its registration. The rule-based pick is
@@ -22,8 +22,8 @@ from tradingagents.research import registry
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
-SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v1.json"
-SPEC_SHA256 = "72dd7e979c6a43d70eadfb8cbf11b8a66f4b11baa073ad59d0bb74fefb2fb671"
+SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v1_1.json"
+SPEC_SHA256 = "4a7c59bb62dc60703b6acd0926a8c3fa1bf3e39e43b542754874cc038f986dc9"
 REGISTRY = ROOT / "reports" / "ai_test" / "registry.jsonl"
 CHAINS = ROOT / "reports" / "ai_test" / "chains"
 IST = pytz.timezone("Asia/Kolkata")
@@ -35,7 +35,7 @@ def read_spec(path: Path | None = None) -> dict:
     spec = json.loads((path or SPEC_FILE).read_text(encoding="utf-8"))
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != SPEC_SHA256:
-        raise ValueError("ai_strategist_test_v1.json changed after it was frozen")
+        raise ValueError("ai_strategist_test_v1_1.json changed after it was frozen")
     return spec
 
 
@@ -72,6 +72,8 @@ def record(result: dict, path: Path | None = None, chains: Path | None = None, n
     now = now or datetime.now(IST)
     clock = clock or (lambda: datetime.now(IST))
     if result.get("symbol") != SYMBOL or not WINDOW[0] <= now.time() <= WINDOW[1] or now.weekday() >= 5:
+        return None
+    if "stop" in spec and now.date() > date.fromisoformat(spec["stop"]["date"]):
         return None
     if prompt_fingerprint() != spec["version"]["prompt_sha256"] or model_settings() != spec["version"]["model"]:
         logger.warning("the prompt or model differs from the test's: this answer does not count; a change starts a new test")
