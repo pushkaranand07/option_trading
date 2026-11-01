@@ -1,7 +1,7 @@
 # Model suite v1: evaluation report
 
 > **Status:** Measured 2026-10-31 under gate v2 and addenda 1 to 6, from frozen [models_v1.json](models_v1.json), hash `2f2484ef…`.
-> **Result: no edge found at a trial count of 1,459.** No spec passed development, so validation was not read and nothing is registered for forward testing. One defect qualifies this: see [PA-47](PA_47-model-suite-v1.md).
+> **First-run result, superseded: no edge found under these conditions, 1,459 trials.** D-1 timing, futures only, 1.5x costs, h = 1 to 10, public end-of-day features, these 6 specs. No spec passed development, so validation was not read and nothing is registered for forward testing. One defect qualifies this: see [PA-47](PA_47-model-suite-v1.md).
 
 **Cost model unverified; slippage is an ASSUMPTION.** Item d percentile 0.8333 (the 3-spec level). h = 5 and 10 are low power under item e. Win rate and item c are report-only. Research and decision support only, not investment advice.
 

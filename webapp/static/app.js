@@ -1315,14 +1315,14 @@ function contractName(sym, expiry, l) {
 }
 const pnl = (x) => (x == null ? "—" : `<span class="${cls(x)}">${x > 0 ? "+" : x < 0 ? "−" : ""}₹${fmt0(Math.abs(x))}</span>`);
 
-// No score: its inputs (trend, PCR, OI) showed no edge in the LightGBM test (same-day AUC 0.502) or in model suite v1 (docs/data_catalog.md).
+// No score: its inputs (trend, PCR, OI) showed no edge under the tested conditions in the LightGBM test (same-day AUC 0.502) and model suite v1 (docs/data_catalog.md).
 const UNTESTED = `<span class="badge untested">UNTESTED, no evidence of edge</span>`;
 const COST_NOTE = "cost model unverified";
 function evidenceHtml(e) {
   if (!e) return "";
   return `<details class="evidence"><summary>Inputs looked at</summary>
     <ul class="plain">${e.checks.map((c) => `<li><b>${esc(c.name)}</b> — ${esc(c.why)}</li>`).join("")}</ul>
-    <div class="small muted">Inputs only, not evidence: they showed no edge in the project's tests.</div></details>`;
+    <div class="small muted">Inputs only, not evidence: they showed no edge under the conditions tested (daily data, futures, one day old).</div></details>`;
 }
 
 function stratHtml(res, sym) {
@@ -1635,7 +1635,7 @@ function rankHtml(sym) {
   }).join("");
   return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades ${UNTESTED}</h4>
       <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
-      The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge in the project's tests. Tap a row for its orders, ticket and the Take button.
+      The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge under the conditions tested. Tap a row for its orders, ticket and the Take button.
       Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.</div></div>
       <button class="btn small-btn rank-refresh" ${r.loading ? "disabled" : ""}>${r.loading ? "Updating…" : "Refresh"}</button></div>
     <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th></tr></thead>

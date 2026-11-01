@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Done. **No edge found at a final trial count of 1,532.** Line of work closed, on the user's rule. Validation not read |
+| **Status** | Done. **No edge found under these conditions, 1,532 trials.** Line of work closed, on the user's rule. Validation not read |
 | **Scope** | new `docs/gate_v2_addendum_7.json`, `docs/models_v1_refit_report.md`; `tradingagents/research/features.py` (one line), `gate2.py`; `scripts/research_models.py`; tests; `docs/data_catalog.md` |
 | **Related** | [PA-47](PA_47-model-suite-v1.md), [addendum 7](gate_v2_addendum_7.json) |
 | **Branch** | `research/models-v1-refit` |
@@ -17,6 +17,8 @@ Research and decision support only, not investment advice. **Cost model unverifi
 The fix is one line, frozen in addendum 7, hash `f8a7b029…`, before the refit. Median `garch_h5` is now 0.330 against `rv_20` 0.312, and rank correlation with `rv_20` is 0.85, up from 0.17. Tables b to h are byte-identical; only table a changed. Old tables: `store/_snapshots/features_v1_before_garch_fix`. 277 of 309 symbols still fit, so the scale was not why 32 have no forecast; their cause stays UNVERIFIED.
 
 ## 2. Result
+
+**Conditions behind this verdict, and nothing wider:** features at D-1 timing (no use of the signal day's own data); futures only; 1.5x costs (cost model unverified); horizons of 1, 2, 3, 5 and 10 sessions; public end-of-day features; these 6 specs; development folds 2013-2022. It says nothing about intraday data, options structures, other features or other models.
 
 **0 of 30 development cells passed, as in the first run.** Full tables and the side-by-side: [models_v1_refit_report.md](models_v1_refit_report.md).
 

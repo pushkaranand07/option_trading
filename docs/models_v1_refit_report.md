@@ -1,7 +1,7 @@
 # Model suite v1 after the GARCH fix: evaluation report
 
 > **Status:** Measured 2026-10-31 under gate v2 and addenda 1 to 7, from frozen [models_v1.json](models_v1.json), hash `2f2484ef…`, and addendum 7. Specs, grids, seeds, thresholds, horizons, universes and the gate are unchanged.
-> **Result: no edge found at a trial count of 1,532.** No spec passed development, so validation was not read and nothing is registered for forward testing. This closes the line of work: see [PA-48](PA_48-model-suite-v1-refit.md).
+> **Result: no edge found under these conditions, 1,532 trials.** D-1 timing, futures only, 1.5x costs, h = 1 to 10, public end-of-day features, these 6 specs. No spec passed development, so validation was not read and nothing is registered for forward testing. This closes the line of work: see [PA-48](PA_48-model-suite-v1-refit.md).
 
 **Cost model unverified; slippage is an ASSUMPTION.** Item d percentile 0.8333 (the 3-spec level). h = 5 and 10 are low power under item e. Win rate and item c are report-only. Research and decision support only, not investment advice.
 
