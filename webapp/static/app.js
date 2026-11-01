@@ -1234,14 +1234,16 @@ function renderStrat(sym) {
       : `Uses expiry <b>${esc(S.nseExp[sym] || "nearest")}</b> (pick another in the chain below). Figures are per lot; you choose how many.`}</span></div>`;
   const v = S.view[sym], cand = typeof v === "number" ? S.rank[sym]?.data?.candidates?.[v] : null;
   const detail = cand ? stratHtml(cand, sym) : st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result, sym) : "";
-  slot.innerHTML = rankHtml(sym) + `<h4 class="mini-h">Second opinion from the AI</h4>` + ask
-    + (cand && st.result ? `<div class="small"><a href="#" class="show-ai">Show the AI's suggestion instead</a></div>` : "") + detail;
+  const aiHead = `<h4 class="mini-h">Second opinion from the AI</h4>` + ask
+    + (cand && st.result ? `<div class="small"><a href="#" class="show-ai">Show the AI's suggestion instead</a></div>` : "");
+  slot.innerHTML = st.result ? aiHead + (cand ? "" : detail) + rankHtml(sym) + (cand ? detail : "") : rankHtml(sym) + aiHead + detail;
   slot.querySelectorAll("[data-rank]").forEach((r) => (r.onclick = () => { S.view[sym] = +r.dataset.rank; S.ticket[sym] = null; refreshStrat(sym); }));
   if ($(".show-ai", slot)) $(".show-ai", slot).onclick = (e) => { e.preventDefault(); S.view[sym] = "ai"; S.ticket[sym] = null; refreshStrat(sym); };
   if ($(".rank-refresh", slot)) $(".rank-refresh", slot).onclick = () => loadRank(sym);
   $(".strat-go", slot).onclick = () => startStrat(sym);
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
   if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
+  slot.querySelectorAll(".rank-take").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); takeRanked(sym, +b.dataset.take, b); }));
   if (S.ticket[sym]) renderTicket(sym);
 }
 
@@ -1263,6 +1265,7 @@ async function pollStrat(sym, job) {
     S.ticket[sym] = null; S.view[sym] = "ai";
   } catch { delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs)); S.strat[sym] = {}; }   // server restarted
   renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym);
+  if (S.strat[sym]?.result) loadRank(sym);
 }
 Object.entries(stratJobs).forEach(([sym, job]) => pollStrat(sym, job));   // a result survives a page reload
 
@@ -1476,6 +1479,17 @@ function renderTicket(sym) {
 // ---------- Trade Record: dummy trades taken from the AI strategist ----------
 // One lot each. Marked live from the NSE chain at the price each leg could be closed at; when the index reaches the
 // AI's target or stop the trade is flagged (never closed for you). Stored on this computer (reports/trade_record).
+S.takenRank = {};
+const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
+async function takeRanked(sym, i, btn) {
+  const c = S.rank[sym]?.data?.candidates?.[i]; if (!c || !S.ack[rankKey(sym)]) return;
+  btn.disabled = true;
+  try {
+    await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
+    S.takenRank[takeKey(c)] = true; renderStrat(sym); loaded.record = false;
+  } catch (e) { alert(e.message); btn.disabled = false; }
+}
+
 async function takeTrade(sym) {
   const res = curRes(sym); if (!res || !S.ack[stratKey(res, sym)]) return;
   const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
@@ -1636,16 +1650,17 @@ function rankHtml(sym) {
       <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
       <td class="num"><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
       <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
-      <td class="num">${c.ratio.toFixed(1)} : 1</td></tr>`;
+      <td class="num">${c.ratio.toFixed(1)} : 1</td>
+      <td>${S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" data-take="${i}">Take (dummy, 1 lot)</button>`}</td></tr>`;
   }).join("");
   return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades ${UNTESTED}</h4>
       <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
       The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge under the conditions tested. Tap a row for its orders, ticket and the Take button.
       Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.</div></div>
       <button class="btn small-btn rank-refresh" ${r.loading ? "disabled" : ""}>${r.loading ? "Updating…" : "Refresh"}</button></div>
-    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th></tr></thead>
+    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <div class="small muted">Premium targets and stops are estimates for ${esc(name)} reaching its target or stop today. One lot each; charges not included here (shown in the card). ${cap(COST_NOTE)}. Not a validated edge.</div>`;
+    <div class="small muted">Premium targets and stops are estimates for ${esc(name)} reaching its target or stop today. One lot each; charges not included here (shown in the card). ${cap(COST_NOTE)}. Not a validated edge. Take records the trade on the Trade Record tab at these prices; it places no real order.</div>`;
 }
 
 // ---------- start ----------
