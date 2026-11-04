@@ -453,7 +453,7 @@ def _structures(direction: str, strikes: list[float], atm: float) -> list[tuple[
     return out
 
 
-def rank(symbol: str, expiry: str | None = None, top: int = 8, built=None) -> dict:
+def rank(symbol: str, expiry: str | None = None, top: int = 10, built=None) -> dict:
     """Every candidate trade for both directions, priced at the bid / ask with index and premium levels, scored by
     the evidence and ranked best first. Ties go to the better profit-to-loss ratio at the levels."""
     ctx, ch = built or build_context(symbol, expiry)

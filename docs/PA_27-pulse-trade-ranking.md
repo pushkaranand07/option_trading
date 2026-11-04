@@ -44,7 +44,7 @@ The ranking is built from rules, with no LLM, in about 5 s:
   charges and warnings.
 - **Ranking.** By the PA-26 evidence score, then by profit-to-loss at the levels. Short reasoning is generated for
   each trade: the rule, the strikes' distance from the money, buying vs selling premium, and the exit plan.
-- **Endpoint:** `GET /api/rank/{symbol}?expiry=`. Returns the top 8, with how many candidates were considered.
+- **Endpoint:** `GET /api/rank/{symbol}?expiry=`. Returns the top 10, with how many candidates were considered.
 
 ### The AI strategist section
 
