@@ -1579,6 +1579,30 @@ function lotMoney(debit, perLot) {
   return debit ? { v: perLot, label: "you pay" } : { v: perLot, label: "≈ margin (Dhan sets exact)" };
 }
 
+// The trade in plain Hinglish (user's choice): which option to buy or sell, at what price, what one lot of each costs
+// or brings in, the total, when to enter and how to exit. Bought legs first, because that is the order to place them.
+function plainTradeHtml(c, sym) {
+  const a = c.plan, pr = c.priced, lot = pr.lot, name = NAMES[sym] || sym, lv = c.levels;
+  const legs = [...lv.legs].sort((x, y) => (x.action === y.action ? 0 : x.action === "BUY" ? -1 : 1));
+  const kind = (l) => (l.type === "CE" ? "CALL" : "PUT");
+  const lines = legs.map((l, i) => `<li>${i === 0 && legs.length > 1 ? "Pehle " : legs.length > 1 ? "Phir " : ""}<b>${esc(fmt0(l.strike).replace(/,/g, ""))} wala ${kind(l)} ${l.action === "BUY" ? "kharid (BUY)" : "bech (SELL)"}</b>
+      @ ₹${fmt(l.price)} → 1 lot (${lot}) ${l.action === "BUY" ? "ka" : "bechne pe"} <b>${rupee(l.price * lot)}</b> ${l.action === "BUY" ? "dega" : "milega"}</li>`).join("");
+  const total = pr.debit
+    ? `Kul milake tu <b>${rupee(pr.outlay_per_lot)} dega</b> (1 lot). Yahi tera max nuksaan hai.${pr.max_profit_per_lot != null ? ` Max fayda <b class="up">${rupee(pr.max_profit_per_lot)}</b>.` : ""}`
+    : `Kul milake tujhe <b>${rupee(pr.net_per_unit * lot)} milega</b> (1 lot), par Dhan lagbhag <b>${rupee(pr.outlay_per_lot)}</b> margin rok lega. Yahi tera max nuksaan hai. Max fayda <b class="up">${rupee(pr.max_profit_per_lot)}</b>.`;
+  const exit = legs.length === 1
+    ? `Dhan mein Super order laga: target <b class="up">₹${fmt(legs[0].premium_at_target)}</b>, stop loss <b class="down">₹${fmt(legs[0].premium_at_stop)}</b>.`
+    : CREDIT.includes(a.strategy)
+      ? `Super order (target + stop) sirf SELL wale pe laga; woh nikle to BUY wala turant bech de.`
+      : `Dhan ka Super order spread pe nahi chalta: dono saath haath se band kar. Pehle SELL wala wapas kharid, phir BUY wala bech.`;
+  return `<div class="plain-trade"><b>Dekh bhai:</b><ol>${lines}</ol>
+    <div>${total}</div>
+    <div>Lena tab jab ${esc(name)} <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b> ke beech ho.
+      ${esc(name)} <b class="up">${fmt0(a.underlying_target)}</b> pahunche to profit book kar (~<b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b>);
+      <b class="down">${fmt0(a.underlying_stop)}</b> aaye to nikal ja (~<b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b>). ${exit}
+      Expiry wale din 3:15 se pehle band kar.</div></div>`;
+}
+
 // One trade as a compact card that fits the page width: the summary line, each Dhan order with its entry,
 // target and stop, the NIFTY levels with the per-lot result, and the AI's reason (two lines; all of it when selected).
 function tradeCard(c, i, sym, on) {
@@ -1596,6 +1620,7 @@ function tradeCard(c, i, sym, on) {
     <div class="ai-top"><b class="rk">#${c.rank}</b> <b>${esc(STRAT_NAMES[a.strategy])}</b>
       <span class="badge ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</span><span class="small muted">AI confidence ${esc(a.confidence)}</span>
       <span class="ai-take"><span class="small">1 lot <b>${rupee(m.v)}</b> <span class="muted">${m.label}</span></span> ${takeCell(c, `data-take="${i}"`)}</span></div>
+    ${plainTradeHtml(c, sym)}
     <div class="ai-legs">${legs}</div>
     <div class="ai-nums"><span>${esc(name)} entry <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b></span>
       <span>target <b class="up">${fmt0(a.underlying_target)}</b></span><span>stop <b class="down">${fmt0(a.underlying_stop)}</b></span>
