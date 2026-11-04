@@ -83,3 +83,10 @@ def test_a_run_stays_fixed_until_the_next_run():
     assert "they change only when you run again" in _function("renderStrat")
     latest = APP[APP.index("async function loadLatestRun"):]
     assert '"/api/strategy/latest/"' in latest[:400] and "loadLatestRun(sym)" in APP
+
+
+@pytest.mark.unit
+def test_every_trade_shows_the_money_one_lot_needs():
+    assert "lotMoneyHtml(c.priced.debit, c.priced.outlay_per_lot)" in _function("tradeCells") and "Money for 1 lot" in _function("aiListHtml")
+    assert "Money for 1 lot" in _function("stratHtml") and "money in it" in _function("openTradeHtml")
+    assert '"≈ margin (Dhan sets exact)"' in _function("lotMoney")

@@ -1315,6 +1315,7 @@ function stratHtml(res, sym) {
         ? `Put the <b>Super order</b> (target + stop loss) on the <b>SELL</b> leg only. When it fills at its target or stop, <b>sell the BUY leg</b> straight away. Never put a stop loss on the BUY leg: if it fired alone, the sold leg would be left unprotected.`
         : `Dhan's Super order cannot manage this spread safely, so use plain Limit orders and close <b>both</b> legs by hand when ${esc(name)} reaches its target or stop (the spread is then worth about <b class="up">${rupee(sp.at_target)}</b> or <b class="down">${rupee(sp.at_stop)}</b>). Buy back the <b>SELL</b> leg first, then sell the BUY leg.`}</div>`;
   const econ = pr ? `<div class="levels">
+      <div class="lv"><span>Money for 1 lot</span><b>${rupee(pr.outlay_per_lot)}</b><small>${lotMoney(pr.debit, pr.outlay_per_lot).label} · ${pr.lot} qty</small></div>
       <div class="lv"><span>${pr.debit ? "You pay" : "You receive"}</span><b>${rupee(Math.abs(pr.net_per_unit))}</b><small>per unit · ${money(Math.abs(pr.net_per_unit) * pr.lot)} a lot</small></div>
       <div class="lv"><span>Worst case at expiry</span><b class="down">${money(pr.max_loss_per_lot)}</b><small>a lot, if you never exit</small></div>
       <div class="lv"><span>Best case at expiry</span><b class="up">${pr.max_profit_per_lot == null ? "open-ended" : money(pr.max_profit_per_lot)}</b><small>a lot${pr.reward_to_risk != null ? ` · ${pr.reward_to_risk.toFixed(2)}× the risk` : ""}</small></div>
@@ -1450,7 +1451,7 @@ async function loadRecord() {
   const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
   const summary = `<section class="card"><div class="card-head"><h2>Your trades — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE}</span></div>
     <div class="body">${RECORDED_NOTE}<div class="levels rec-stats">
-      ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}
+      ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}${stat("Money in open trades", money(d.open.reduce((a, t) => a + tradeMoney(t), 0)))}
       ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
       ${stat("Win rate", s.win_rate != null ? s.win_rate.toFixed(0) + "%" : "—")}${stat("Average a trade", money(s.avg), cls(s.avg))}
       ${stat("Best", money(s.best), "up")}${stat("Worst", money(s.worst), "down")}</div></div></section>`;
@@ -1528,6 +1529,8 @@ function recLevels(t, l) {        // target / stop cells of a recorded leg, by i
   return `<td class="num ref">(${fmt(l.target)})</td><td class="num ref">(${fmt(l.stop)})</td>`;
 }
 
+const tradeMoney = (t) => (t.debit ? -t.net_entry * t.lot * t.lots : t.max_loss_per_lot * t.lots);
+
 function openTradeHtml(t) {
   const v = t.live || {}, down = t.index_target < t.index_stop, name = NAMES[t.symbol] || t.symbol;
   const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])];
@@ -1542,7 +1545,7 @@ function openTradeHtml(t) {
   return `<section class="card rec-open"><div class="card-head"><h2>${esc(name)} · ${esc(STRAT_NAMES[t.strategy] || t.strategy)}</h2>
       <div class="rec-pnl ${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}<small>P&L now, before charges · ${COST_NOTE}</small></div></div>
     <div class="body">
-      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
+      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · money in it <b>${rupee(tradeMoney(t))}</b> (${lotMoney(t.debit).label}) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
         ${v.as_of ? ` · prices from NSE as of ${esc(v.as_of.slice(-8))}${nseAge(v.as_of)}` : ""}</div>
       ${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
       ${lad}
@@ -1570,6 +1573,13 @@ function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChar
 
 
 
+// What one lot ties up, as Dhan's order screen shows it: a bought option or debit spread costs its net premium
+// (exact); a credit spread blocks margin, about its worst case once the bought leg is placed first (Dhan sets the exact figure).
+function lotMoney(debit, perLot) {
+  return debit ? { v: perLot, label: "you pay" } : { v: perLot, label: "≈ margin (Dhan sets exact)" };
+}
+const lotMoneyHtml = (debit, perLot) => { const m = lotMoney(debit, perLot); return `<b>${rupee(m.v)}</b><div class="small muted">${m.label}</div>`; };
+
 // The cells every trade table shares: Dhan orders, entry / target / stop premiums, index levels, per-lot result.
 function tradeCells(c, sym) {
   const lv = c.levels, a = c.plan;
@@ -1583,7 +1593,8 @@ function tradeCells(c, sym) {
   return `<td class="rank-legs">${legs}</td>
       <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
       <td class="num nowrap"><span>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</span><br><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
-      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>`;
+      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
+      <td class="num">${lotMoneyHtml(c.priced.debit, c.priced.outlay_per_lot)}</td>`;
 }
 const takeCell = (c, attrs) => S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" ${attrs}>Take (dummy, 1 lot)</button>`;
 
@@ -1603,7 +1614,7 @@ function aiListHtml(sym, res) {
       <td>${takeCell(c, `data-take="${i}"`)}</td></tr>`).join("");
   return `<div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}</div></div>
     ${read}
-    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Why (AI)</th><th>Orders (Dhan)</th><th>Entry ₹ (limit)</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} entry zone / target / stop</th><th>Per lot at target / stop</th><th></th></tr></thead>
+    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Why (AI)</th><th>Orders (Dhan)</th><th>Entry ₹ (limit)</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} entry zone / target / stop</th><th>Per lot at target / stop</th><th>Money for 1 lot</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     <div class="small muted">Strongest first, by the whole analysis, not by profit size. Pulse priced each at the live bid / ask of the run and set its entry zone, target and stop by a fixed rule.
       Entry: place a Limit order at the entry price while ${esc(name)} is inside the entry zone. Tap a row for its orders and ticket. Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.
