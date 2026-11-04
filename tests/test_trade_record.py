@@ -168,9 +168,47 @@ def test_live_marks_carry_the_time_of_nses_snapshot():
     assert tr.overview(stamped)["open"][0]["live"]["as_of"] == "26-Oct-2026 11:44:29"
 
 
+CONDOR_LEGS = [{"action": "BUY", "type": "PE", "strike": 22400.0, "price": 20.0, "id": "P1"},
+               {"action": "SELL", "type": "PE", "strike": 22500.0, "price": 40.0, "id": "P2"},
+               {"action": "SELL", "type": "CE", "strike": 22600.0, "price": 132.45, "id": "A"},
+               {"action": "BUY", "type": "CE", "strike": 22700.0, "price": 89.95, "id": "B"}]
+CONDOR = RESULT | {"plan": RESULT["plan"] | {"strategy": "iron_condor", "bias": "neutral", "underlying_target": 22550, "underlying_stop": 22400},
+                   "priced": RESULT["priced"] | {"legs": CONDOR_LEGS}, "levels": {"legs": []}}
+
+
+def condor_chain(spot):
+    return lambda symbol, expiry: {"spot": spot, "rows": [
+        {"strike": 22400.0, "pe": _q(18, 17, 19)}, {"strike": 22500.0, "pe": _q(35, 34, 36)},
+        {"strike": 22600.0, "ce": _q(130, 129, 131)}, {"strike": 22700.0, "ce": _q(88, 87, 89)}]}
+
+
 @pytest.mark.unit
-def test_an_iron_condor_is_not_closed_by_a_directional_index_level():
-    condor = RESULT | {"plan": RESULT["plan"] | {"strategy": "iron_condor", "bias": "neutral", "underlying_target": 22550, "underlying_stop": 22400}}
-    tr.take(condor, source="ai")
-    o = tr.overview(chain(22600, _q(130, 129, 131), _q(88, 87, 89)))            # "above the target" for a bullish trade
+def test_an_iron_condor_is_held_inside_its_sold_strikes_and_closed_when_the_index_leaves_them():
+    t = tr.take(CONDOR, source="ai")
+    assert t["range"] == [22500.0, 22600.0] and t["index_target"] is None and t["index_stop"] is None
+    o = tr.overview(condor_chain(22560))                                         # above the AI's "target" 22,550: still open
     assert o["ai"]["open"] and o["ai"]["open"][0]["live"]["flags"] == []
+    o = tr.overview(condor_chain(22610))                                         # above the sold call: the range is broken
+    c = o["ai"]["closed"][0]
+    assert c["reason"] == "range broken" and [x["exit"] for x in c["legs"]] == [17, 36, 131, 87]
+
+
+@pytest.mark.unit
+def test_a_condor_closed_by_the_old_directional_rule_is_reopened_once():
+    import json
+
+    t = tr.take(CONDOR, source="ai")
+    rows = json.loads(tr.STORE.read_text(encoding="utf-8"))                     # as the old rule left it
+    for r in rows:
+        r.pop("range"); r.update(index_target=22550, index_stop=22400, status="closed", reason="target reached", closed_at="x", net_pnl=-275.0)
+        for leg in r["legs"]:
+            leg["exit"] = leg["entry"]
+    tr.STORE.write_text(json.dumps(rows), encoding="utf-8")
+    o = tr.overview(condor_chain(22560))
+    again = o["ai"]["open"][0]
+    assert again["id"] == t["id"] and again["range"] == [22500.0, 22600.0] and "net_pnl" not in again and "bug" in again["note"]
+    assert all("exit" not in x for x in again["legs"]) and o["ai"]["stats"]["closed"] == 0
+    rows = json.loads(tr.STORE.read_text(encoding="utf-8"))
+    rows[0].update(status="closed", reason="closed by you", closed_at="y", net_pnl=10.0)                   # a later, real exit is never undone
+    tr.STORE.write_text(json.dumps(rows), encoding="utf-8")
+    assert tr.overview(condor_chain(22560))["ai"]["stats"]["closed"] == 1

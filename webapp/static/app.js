@@ -1458,6 +1458,8 @@ async function takeTrade(sym) {
 }
 
 const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"] };
+// A range trade (iron condor) has a profit zone between its sold strikes, not one target and one stop.
+const levelsTxt = (t) => (t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}` : `${fmt0(t.index_target)} / ${fmt0(t.index_stop)}`);
 const legShort = (l) => `${l.action === "BUY" ? "B" : "S"} ${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
 
 async function loadRecord() {
@@ -1521,7 +1523,7 @@ function aiRecordHtml(ai) {
     const live = t.status === "open" ? t.live || {} : null;
     return `<tr><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
       <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
-      <td class="small">${legsTxt(t)}</td><td class="num small">${fmt0(t.index_target)} / ${fmt0(t.index_stop)}</td>
+      <td class="small">${legsTxt(t)}</td><td class="num small">${levelsTxt(t)}</td>
       <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
       <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
       <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
@@ -1564,7 +1566,7 @@ function openTradeHtml(t) {
     <div class="body">
       <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · money in it <b>${rupee(tradeMoney(t))}</b> (${lotMoney(t.debit).label}) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
         ${v.as_of ? ` · prices from NSE as of ${esc(v.as_of.slice(-8))}${nseAge(v.as_of)}` : ""}</div>
-      ${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
+      ${t.note ? `<div class="small warn-c">${esc(t.note)}</div>` : ""}${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
       ${lad}
       <table class="t legs"><thead><tr><th>Leg</th><th>Entry</th><th title="What you could close it at now: a bought option at the bid, a sold one at the ask — not the last traded price">Now (to close)</th><th>Target</th><th>Stop loss</th><th>P&L</th></tr></thead><tbody>
         ${t.legs.map((l, i) => {
@@ -1573,7 +1575,8 @@ function openTradeHtml(t) {
             <td class="num">${fmt(l.entry)}</td><td class="num"><b>${fmt(now)}</b></td>${recLevels(t, l)}
             <td class="num ${cls(p)}">${p != null ? money(p) : "—"}</td></tr>`;
         }).join("")}</tbody></table>
-      <div class="rec-actions"><span class="small muted">Book profit if ${esc(name)} reaches <b class="up">${fmt0(t.index_target)}</b> · exit if it reaches <b class="down">${fmt0(t.index_stop)}</b>.
+      <div class="rec-actions"><span class="small muted">${t.range ? `Range trade: it earns while ${esc(name)} stays between <b>${fmt0(t.range[0])}</b> and <b>${fmt0(t.range[1])}</b> until expiry; it closes itself if ${esc(name)} leaves that range.`
+          : `Book profit if ${esc(name)} reaches <b class="up">${fmt0(t.index_target)}</b> · exit if it reaches <b class="down">${fmt0(t.index_stop)}</b>.`}
         Worst case at expiry ${money(t.max_loss_per_lot)}.</span>
         <span><button class="btn primary small-btn rec-close" data-id="${t.id}">Close trade</button>
         <button class="btn small-btn rec-del" data-id="${t.id}">Remove</button></span></div>
