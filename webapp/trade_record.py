@@ -31,6 +31,17 @@ class TradeError(Exception):
     pass
 
 
+def _market_open() -> bool:
+    """NSE's regular session. Outside it the chain shows the last prices (NSE keeps refreshing them until about
+    15:40), which no order could get: no trade is entered, closed or settled at them, except at expiry."""
+    from webapp import signals
+
+    return signals.market_open()
+
+
+CLOSED_MSG = "Market band hai: abhi ke prices pe asli order nahi lag sakta. 9:15 ke baad karna."
+
+
 def _load() -> list[dict]:
     try:
         return json.loads(STORE.read_text(encoding="utf-8")) if STORE.exists() else []
@@ -73,6 +84,8 @@ def take(result: dict, source: str = "you") -> dict:
     plan, priced = result.get("plan") or {}, result.get("priced")
     if result.get("rejected") or not priced or plan.get("strategy") in (None, "no_trade"):
         raise TradeError("There is no trade to take in this suggestion.")
+    if not _market_open():
+        raise TradeError(CLOSED_MSG)
     lv = {(x["strike"], x["type"], x["action"]): x for x in (result.get("levels") or {}).get("legs", [])}
     legs = []
     for x in priced["legs"]:
@@ -95,9 +108,18 @@ def take(result: dict, source: str = "you") -> dict:
         _as_range_trade(trade)
     with _lock:
         trades = _load()
+        if source == "ai":                               # the same trade again (a re-run, same strikes): counted once
+            same = next((t for t in trades if t["status"] == "open" and t.get("source") == "ai" and _same(t, trade)), None)
+            if same:
+                return same
         trades.append(trade)
         _save(trades)
     return trade
+
+
+def _same(a: dict, b: dict) -> bool:
+    key = lambda t: (t["symbol"], t["expiry"], t["strategy"], sorted((x["action"], x["type"], x["strike"]) for x in t["legs"]))  # noqa: E731
+    return key(a) == key(b)
 
 
 def _expired(trade: dict, today: date | None = None) -> bool:
@@ -209,6 +231,7 @@ def _stats(closed: list[dict], open_: list[dict]) -> dict:
 def overview(chain_fn=None) -> dict:
     """Open trades with live marks (flags saved; every trade settled by the rules), closed trades, totals —
     yours and the AI's separately, the AI's also by evidence score."""
+    live = _market_open()
     with _lock:
         trades = _load()
         changed = _repair_range_trades(trades)
@@ -216,6 +239,11 @@ def overview(chain_fn=None) -> dict:
             if t["status"] != "open":
                 continue
             v = mark(t, chain_fn)
+            v["market_closed"] = not live
+            if not live and "expired" not in v["flags"]:
+                v["flags"] = []                          # last prices of a closed market: shown, never acted on
+                t["live"] = v
+                continue
             if v.get("spot") is not None and v["spot"] != t.get("last_spot"):
                 t["last_spot"] = v["spot"]
                 changed = True
@@ -296,6 +324,8 @@ def close(trade_id: str, chain_fn=None) -> dict:
             spot = t.get("last_spot") or t["spot_at_entry"]
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
             reason = "expired"
+        elif not _market_open():
+            raise TradeError(CLOSED_MSG)
         else:
             v = mark(t, chain_fn or oc.chain)
             if v["error"] or v["pnl"] is None:

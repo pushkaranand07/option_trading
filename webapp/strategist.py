@@ -720,12 +720,14 @@ def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
         try:
             res = ai_ranked(symbol, expiry, agents=(lambda s: research) if research else full_research, progress=stage)
             res["mode"] = mode
+            from webapp import signals
+            res["market_closed"] = not signals.market_open()   # last prices: an analysis, not a trade to record
             try:
                 save_run(res)
             except Exception:
                 logger.exception("the AI run was not saved")
             top = res["trades"][0] if res["trades"] else None
-            if top:                                    # the AI's #1 goes into the AI track record
+            if top and not res["market_closed"]:        # the AI's #1 goes into the AI track record
                 try:
                     from webapp import trade_record
                     res["ai_record"] = trade_record.take(top, source="ai")["id"]

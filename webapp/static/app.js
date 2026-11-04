@@ -1566,6 +1566,7 @@ function openTradeHtml(t) {
     <div class="body">
       <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · money in it <b>${rupee(tradeMoney(t))}</b> (${lotMoney(t.debit).label}) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
         ${v.as_of ? ` · prices from NSE as of ${esc(v.as_of.slice(-8))}${nseAge(v.as_of)}` : ""}</div>
+      ${v.market_closed ? `<div class="small warn-c">Market band hai: yeh last prices hain (NSE ~15:40 pe rok deta hai). P&L, target aur stop kal 9:15 se phir chalenge; band market mein trade na band hota hai na khulta.</div>` : ""}
       ${t.note ? `<div class="small warn-c">${esc(t.note)}</div>` : ""}${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
       ${lad}
       <table class="t legs"><thead><tr><th>Leg</th><th>Entry</th><th title="What you could close it at now: a bought option at the bid, a sold one at the ask — not the last traded price">Now (to close)</th><th>Target</th><th>Stop loss</th><th>P&L</th></tr></thead><tbody>
@@ -1625,7 +1626,7 @@ function plainTradeHtml(c, sym) {
 
 // One trade as a compact card that fits the page width: the summary line, each Dhan order with its entry,
 // target and stop, the NIFTY levels with the per-lot result, and the AI's reason (two lines; all of it when selected).
-function tradeCard(c, i, sym, on) {
+function tradeCard(c, i, sym, on, closed = false) {
   const lv = c.levels, a = c.plan, name = NAMES[sym] || sym;
   const legs = lv.legs.map((l) => {
     const role = legRole(a.strategy, lv.legs, l), dhan = role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop);
@@ -1639,7 +1640,7 @@ function tradeCard(c, i, sym, on) {
   return `<div class="ai-trade ${on ? "on" : ""}" data-ai="${i}">
     <div class="ai-top"><b class="rk">#${c.rank}</b> <b>${esc(STRAT_NAMES[a.strategy])}</b>
       <span class="badge ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</span><span class="small muted">AI confidence ${esc(a.confidence)}</span>
-      <span class="ai-take"><span class="small">1 lot <b>${rupee(m.v)}</b> <span class="muted">${m.label}</span></span> ${takeCell(c, `data-take="${i}"`)}</span></div>
+      <span class="ai-take"><span class="small">1 lot <b>${rupee(m.v)}</b> <span class="muted">${m.label}</span></span> ${closed ? `<span class="small muted">market band</span>` : takeCell(c, `data-take="${i}"`)}</span></div>
     ${plainTradeHtml(c, sym)}
     <div class="ai-legs">${legs}</div>
     <div class="ai-nums"><span>${esc(name)} entry <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b></span>
@@ -1656,10 +1657,11 @@ function aiListHtml(sym, res) {
     : `<div class="small muted">${res.mode === "quick" ? "Quick analysis" : "Complete analysis"} · research: ${esc(ag.source && ag.source !== "fresh" ? `${ag.source} at ${ag.at}` : "run fresh")} (${esc(ag.minutes ?? "—")} min)${ag.rating ? `, the agents' call <b>${esc(ag.rating)}</b>` : ""}. Then the AI ranked ${res.considered} live candidates.</div>`;
   const read = `<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
     ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
-  if (!res.trades.length) return `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
-  const cards = res.trades.map((c, i) => tradeCard(c, i, sym, v === i)).join("");
+  const closedNote = res.market_closed ? `<div class="notice">Yeh run market band hone pe hua: prices last close ke hain, in pe asli order nahi lagta. Take band hai, aur AI record mein nahi gaya. 9:15 ke baad Quick analysis chala.</div>` : "";
+  if (!res.trades.length) return closedNote + `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
+  const cards = res.trades.map((c, i) => tradeCard(c, i, sym, v === i, res.market_closed)).join("");
   return `<div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}</div></div>
-    ${read}
+    ${closedNote}${read}
     <div class="ai-trades">${cards}</div>
     <div class="small muted">Strongest first, by the whole analysis, not by profit size. Pulse priced each at the live bid / ask of the run and set its entry zone, target and stop by a fixed rule.
       Entry: place each Limit order at its price while ${esc(name)} is inside the entry zone. Tap a trade for its full card and ticket. Target / stop loss are Dhan Super-order prices; <span class="ref">grey</span> = expected price when ${esc(name)} hits its level, closed by hand.

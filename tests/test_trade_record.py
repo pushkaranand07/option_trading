@@ -29,6 +29,7 @@ def chain(spot, ce22600, ce22700):
 @pytest.fixture(autouse=True)
 def store(monkeypatch, tmp_path):
     monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
+    monkeypatch.setattr(tr, "_market_open", lambda: True)          # the session is open unless a test says not
 
 
 @pytest.mark.unit
@@ -212,3 +213,28 @@ def test_a_condor_closed_by_the_old_directional_rule_is_reopened_once():
     rows[0].update(status="closed", reason="closed by you", closed_at="y", net_pnl=10.0)                   # a later, real exit is never undone
     tr.STORE.write_text(json.dumps(rows), encoding="utf-8")
     assert tr.overview(condor_chain(22560))["ai"]["stats"]["closed"] == 1
+
+
+@pytest.mark.unit
+def test_a_closed_market_shows_the_last_prices_but_never_enters_closes_or_settles():
+    t = tr.take(RESULT)
+    tr._market_open = lambda: False                                              # restored by the fixture
+    o = tr.overview(chain(22750, _q(210, 209, 211), _q(145, 144, 146)))         # past the stop, after 15:30
+    v = o["open"][0]["live"]
+    assert o["stats"]["closed"] == 0 and v["market_closed"] and v["flags"] == [] and v["pnl"] is not None
+    with pytest.raises(tr.TradeError, match="Market band"):
+        tr.take(RESULT)
+    with pytest.raises(tr.TradeError, match="Market band"):
+        tr.close(t["id"], chain(22750, _q(210, 209, 211), _q(145, 144, 146)))
+    tr._market_open = lambda: True
+    assert tr.overview(chain(22750, _q(210, 209, 211), _q(145, 144, 146)))["closed"][0]["reason"] == "stop reached"
+
+
+@pytest.mark.unit
+def test_the_same_ai_trade_from_a_re_run_is_recorded_once_yours_are_not_merged():
+    a = tr.take(RESULT, source="ai")
+    assert tr.take(RESULT, source="ai")["id"] == a["id"]
+    tr.take(RESULT)
+    tr.take(RESULT)
+    o = tr.overview(chain(22600, _q(130, 129, 131), _q(88, 87, 89)))
+    assert len(o["ai"]["open"]) == 1 and len(o["you"]["open"]) == 2
