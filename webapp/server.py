@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-from fastapi import FastAPI, HTTPException, Request  # noqa: E402
+from fastapi import Body, FastAPI, HTTPException, Request  # noqa: E402
 from fastapi.concurrency import run_in_threadpool  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -245,8 +245,10 @@ def strategy_research(symbol: str):
 
 @app.get("/api/strategy/latest/{symbol}")
 def strategy_latest(symbol: str):
-    """The last AI run for the instrument, fixed until the next run (an empty object if none)."""
-    return strategist.latest_run(md.instrument(symbol)["symbol"]) or {}
+    """The last AI run for the instrument, fixed until the next run (an empty object if none). ``expired``: it is
+    from another day (or older than run ids), so it is shown read-only."""
+    run = strategist.latest_run(md.instrument(symbol)["symbol"])
+    return run | {"expired": strategist.run_expired(run)} if run else {}
 
 
 @app.get("/api/strategy/{job_id}")
@@ -305,12 +307,13 @@ async def trades():
 
 
 @app.post("/api/trades")
-async def trade_take(request: Request):
-    """Record the AI suggestion shown on the Plan tab (the strategist's result, as the page has it)."""
+def trade_take(body: dict = Body(...)):
+    """Take trade ``candidate`` of AI run ``run_id`` as a dummy one-lot trade, priced by the server from a fresh
+    chain now. Any price in the body is ignored."""
     try:
-        return trade_record.take(await request.json())
-    except (trade_record.TradeError, KeyError, TypeError) as exc:
-        raise HTTPException(400, f"Could not record the trade: {exc}") from exc
+        return trade_record.take_from_run(str(body.get("run_id") or ""), int(body.get("candidate")))
+    except (trade_record.TradeError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(400, f"Not taken: {exc}") from exc
 
 
 @app.post("/api/trades/{trade_id}/close")

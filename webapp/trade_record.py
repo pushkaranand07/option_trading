@@ -40,6 +40,7 @@ def _market_open() -> bool:
 
 
 CLOSED_MSG = "Market band hai: abhi ke prices pe asli order nahi lag sakta. 9:15 ke baad karna."
+EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
 
 
 def _load() -> list[dict]:
@@ -78,7 +79,47 @@ def _as_range_trade(t: dict) -> None:
         leg["target"] = leg["stop"] = None
 
 
-def take(result: dict, source: str = "you") -> dict:
+def take_from_run(run_id: str, candidate: int, chain_fn=None) -> dict:
+    """Your Take on candidate ``candidate`` of AI run ``run_id``, priced here and now: the run must be today's
+    (IST), the market open, the index inside the candidate's entry zone, and every leg quoted on both sides in a
+    fresh chain. The entry is that chain's ask for a bought leg and bid for a sold one; the run's price is kept
+    beside it. Nothing the page sends is used except the two ids."""
+    from webapp import option_chain as oc, signals, strategist as st
+
+    run = st.load_run(run_id or "")
+    if not run:
+        raise TradeError("This run is not on file: run the analysis again.")
+    if st.run_expired(run):
+        raise TradeError(EXPIRED_MSG)
+    if not _market_open():
+        raise TradeError(CLOSED_MSG)
+    trades = run.get("trades") or []
+    if not 0 <= candidate < len(trades):
+        raise TradeError(f"This run has no trade #{candidate + 1}.")
+    c = trades[candidate]
+    try:
+        ch = (chain_fn or oc.chain)(c["symbol"], c["expiry"])
+    except Exception as exc:                               # never fall back to the run's prices
+        raise TradeError(f"Live prices unavailable ({str(exc)[:160]}): not taken. Try again in a moment.") from exc
+    plan, spot = c["plan"], ch["spot"]
+    lo, hi = plan.get("underlying_entry_low"), plan.get("underlying_entry_high")
+    if lo is not None and hi is not None and not lo <= spot <= hi:
+        raise TradeError(f"{c['symbol']} is at {spot:,.2f}, outside this trade's entry zone {lo:,.0f}-{hi:,.0f}: not taken.")
+    rows = {r["strike"]: r for r in ch["rows"]}
+    for leg in plan["legs"]:
+        q = (rows.get(float(leg["strike"])) or {}).get(leg["option_type"].lower())
+        if not q or not q.get("bid") or not q.get("ask"):
+            raise TradeError(f"{leg['strike']:,.0f} {leg['option_type']} has no live bid / ask right now: not taken.")
+    sp = st.StrategyPlan(**plan)
+    priced = st.price(sp, ch)
+    days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - signals.now_ist().date()).days
+    fresh = c | {"spot": spot, "priced": priced, "levels": st.trade_levels(sp, priced, ch, days), "charges_per_lot": st.charges(priced, 1)}
+    shown = {(x["strike"], x["type"], x["action"]): x["price"] for x in c["priced"]["legs"]}
+    return take(fresh, source="you", provenance={"run_id": run_id, "candidate": candidate, "run_asked_at": run.get("asked_at"),
+                                                 "spot_at_run": c.get("spot")}, shown=shown)
+
+
+def take(result: dict, source: str = "you", provenance: dict | None = None, shown: dict | None = None) -> dict:
     """Record the strategist's proposal (``recommend``'s result) as an open one-lot paper trade.
     ``source``: "you" (taken on the Plan tab) or "ai" (every suggestion, recorded automatically)."""
     plan, priced = result.get("plan") or {}, result.get("priced")
@@ -91,7 +132,8 @@ def take(result: dict, source: str = "you") -> dict:
     for x in priced["legs"]:
         m = lv.get((x["strike"], x["type"], x["action"]), {})
         legs.append({"action": x["action"], "type": x["type"], "strike": x["strike"], "id": x.get("id"),
-                     "entry": x["price"], "target": m.get("premium_at_target"), "stop": m.get("premium_at_stop")})
+                     "entry": x["price"], "target": m.get("premium_at_target"), "stop": m.get("premium_at_stop")}
+                    | ({"shown_price": shown.get((x["strike"], x["type"], x["action"]))} if shown else {}))
     trade = {
         "id": uuid.uuid4().hex[:10], "taken_at": _now(), "status": "open", "lots": 1,
         "symbol": result["symbol"], "expiry": result["expiry"], "lot": priced["lot"],
@@ -104,10 +146,16 @@ def take(result: dict, source: str = "you") -> dict:
         "score": (result.get("evidence") or {}).get("score"), "score_label": (result.get("evidence") or {}).get("label"),
         "ai_confidence": plan.get("confidence"), "last_spot": result.get("spot"),
     }
+    trade |= provenance or {}
     if trade["strategy"] in RANGE:
         _as_range_trade(trade)
     with _lock:
         trades = _load()
+        if provenance:                                   # a double click on the same run's trade: one trade
+            again = next((t for t in trades if t.get("run_id") == provenance["run_id"]
+                          and t.get("candidate") == provenance["candidate"] and t.get("source") == source), None)
+            if again:
+                return again
         if source == "ai":                               # the same trade again (a re-run, same strikes): counted once
             same = next((t for t in trades if t["status"] == "open" and t.get("source") == "ai" and _same(t, trade)), None)
             if same:
