@@ -28,7 +28,9 @@ _lock = threading.Lock()
 
 
 class TradeError(Exception):
-    pass
+    def __init__(self, message: str = "", details: dict | None = None):
+        super().__init__(message)
+        self.details = details or {}      # what was known when it was refused (index at the Take, in the zone or not)
 
 
 def _market_open() -> bool:
@@ -128,23 +130,32 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
     except Exception as exc:                               # never fall back to the run's prices
         raise TradeError(f"Live prices unavailable ({str(exc)[:160]}): not taken. Try again in a moment.") from exc
     if why := _stale_quotes(ch, signals.now_ist()):
-        raise TradeError(f"NSE: {why}. Not taken; try again in a moment.")
+        raise TradeError(f"NSE: {why}. Not taken; try again in a moment.", {"spot_at_take": ch.get("spot"), "in_entry_zone": None})
     plan, spot = c["plan"], ch["spot"]
     lo, hi = plan.get("underlying_entry_low"), plan.get("underlying_entry_high")
-    if lo is not None and hi is not None and not lo <= spot <= hi:
-        raise TradeError(f"{c['symbol']} is at {spot:,.2f}, outside this trade's entry zone {lo:,.0f}-{hi:,.0f}: not taken.")
+    in_zone = None if lo is None or hi is None else lo <= spot <= hi
+    if in_zone is False:
+        raise TradeError(f"{c['symbol']} is at {spot:,.2f}, outside this trade's entry zone {lo:,.0f}-{hi:,.0f}: not taken.",
+                         {"spot_at_take": spot, "in_entry_zone": False})
     rows = {r["strike"]: r for r in ch["rows"]}
     for leg in plan["legs"]:
         q = (rows.get(float(leg["strike"])) or {}).get(leg["option_type"].lower())
         if not q or not q.get("bid") or not q.get("ask"):
-            raise TradeError(f"{leg['strike']:,.0f} {leg['option_type']} has no live bid / ask right now: not taken.")
+            raise TradeError(f"{leg['strike']:,.0f} {leg['option_type']} has no live bid / ask right now: not taken.",
+                             {"spot_at_take": spot, "in_entry_zone": in_zone})
     sp = st.StrategyPlan(**plan)
     priced = st.price(sp, ch)
     days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - signals.now_ist().date()).days
     fresh = c | {"spot": spot, "priced": priced, "levels": st.trade_levels(sp, priced, ch, days), "charges_per_lot": st.charges(priced, 1)}
     shown = {(x["strike"], x["type"], x["action"]): x["price"] for x in c["priced"]["legs"]}
-    return take(fresh, source=source, provenance={"run_id": run_id, "candidate": candidate, "run_asked_at": run.get("asked_at"),
-                                                  "spot_at_run": c.get("spot")}, shown=shown)
+    return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone}, shown=shown)
+
+
+def _provenance(run: dict, run_id: str, candidate: int) -> dict:
+    """Where a trade came from: the run (id, time, Complete or Quick, its research) and its place in the AI's list."""
+    c = run["trades"][candidate]
+    return {"run_id": run_id, "candidate": candidate, "run_day": run.get("day"), "run_asked_at": run.get("asked_at"), "spot_at_run": c.get("spot"),
+            "mode": run.get("mode"), "ai_rank": c.get("rank"), "research_source": (run.get("agents") or {}).get("source")}
 
 
 def record_ai_pick(run_id: str, chain_fn=None) -> dict:
@@ -156,7 +167,8 @@ def record_ai_pick(run_id: str, chain_fn=None) -> dict:
     try:
         return take_from_run(run_id, 0, chain_fn, source="ai")
     except TradeError as exc:
-        c = ((st.load_run(run_id) or {}).get("trades") or [None])[0]
+        run = st.load_run(run_id) or {}
+        c = (run.get("trades") or [None])[0]
         if c is None:
             raise
         plan = c["plan"]
@@ -164,7 +176,8 @@ def record_ai_pick(run_id: str, chain_fn=None) -> dict:
                "symbol": c["symbol"], "expiry": c["expiry"], "strategy": plan["strategy"], "bias": plan.get("bias"),
                "index_target": plan.get("underlying_target"), "index_stop": plan.get("underlying_stop"),
                "legs": [{"action": x["action"], "type": x["type"], "strike": x["strike"], "shown_price": x["price"]} for x in c["priced"]["legs"]],
-               "ai_confidence": plan.get("confidence"), "run_id": run_id, "candidate": 0, "spot_at_run": c.get("spot")}
+               "ai_confidence": plan.get("confidence"), **_provenance(run, run_id, 0),
+               "spot_at_take": exc.details.get("spot_at_take"), "in_entry_zone": exc.details.get("in_entry_zone")}
         with _lock:
             trades = _load()
             trades.append(row)
@@ -352,7 +365,7 @@ def overview(chain_fn=None) -> dict:
             changed |= _auto_settle(t, v)
             t["live"] = v
         if changed:
-            _save([{k: x for k, x in t.items() if k != "live"} for t in trades])
+            _save([{k: x for k, x in t.items() if k not in ("live", "v2")} for t in trades])
     out = {}
     for who in ("you", "ai"):
         mine = [t for t in trades if t.get("source", "you") == who]
@@ -360,10 +373,109 @@ def overview(chain_fn=None) -> dict:
         closed = sorted((t for t in mine if t["status"] == "closed"), key=lambda t: t["closed_at"], reverse=True)
         out[who] = {"open": open_, "closed": closed, "stats": _stats(closed, open_),
                     "not_taken": sorted((t for t in mine if t["status"] == "not_taken"), key=lambda t: t["taken_at"], reverse=True)}
+    days = _v2_days()
+    for t in out["ai"]["open"] + out["ai"]["closed"] + out["ai"]["not_taken"]:
+        t["v2"] = _v2_link(t, days)
+    out["ai"]["v2_stats"] = _stats([t for t in out["ai"]["closed"] if t["v2"]["counted"]], [t for t in out["ai"]["open"] if t["v2"]["counted"]])
     out["ai"]["by_score"] = {band: _stats([t for t in out["ai"]["closed"] if t.get("score_label") == band], [])
                              for band in ("Strong", "Moderate", "Weak")}
     # the page's original keys stay = your trades
     return out | {"open": out["you"]["open"], "closed": out["you"]["closed"], "stats": out["you"]["stats"]}
+
+
+# ---------------------------------------------------------------- the v2 link and the CSV
+
+V2_FIRST_SESSION = "2026-11-05"   # v2 counts from the first weekday session after its spec reached main (PR #95, 2026-11-04 13:03 IST)
+
+
+def _leg_key(legs: list[dict]) -> list:
+    return sorted((x["action"], x["type"], float(x["strike"])) for x in legs)
+
+
+def _legs_txt(legs: list[dict], key: str = "price") -> str:
+    return "; ".join(f"{'B' if x['action'] == 'BUY' else 'S'} {float(x['strike']):.0f} {x['type']} {x[key]:.2f}" for x in legs if x.get(key) is not None)
+
+
+def _v2_days() -> dict[str, dict]:
+    """v2's registry by session date: the structure it registered and its own entry."""
+    from tradingagents.research import registry
+    from webapp import ai_test
+
+    try:
+        rows = registry.read(ai_test.REGISTRY)
+    except (OSError, ValueError):
+        return {}
+    entries = {r["registration"]: r for r in rows if r.get("type") == "strategist_entry"}
+    out = {}
+    for r in rows:
+        if r.get("type") == "strategist":
+            e = entries.get(r.get("hash")) or {}
+            out[r["date"]] = {"structure": r.get("structure"), "legs": _leg_key(r.get("legs") or []), "outcome": r.get("outcome"),
+                              "status": e.get("status"), "entry": _legs_txt(e.get("legs") or []) or None}
+    return out
+
+
+def _v2_link(t: dict, days: dict) -> dict:
+    """For an AI #1 row: did v2 register that session, the same trade, and at what entry. Counted = v2 registered this
+    same trade on a session it counts."""
+    day = t.get("run_day") or (t.get("taken_at") or "")[:10]     # the run's IST session; old rows: the day taken
+    r = days.get(day)
+    out = {"registered_that_day": bool(r), "same_trade": False, "counted": False, "entry": None, "status": None}
+    if day < V2_FIRST_SESSION:                           # shown for comparison, never counted
+        return out | {"note": f"before v2 started ({V2_FIRST_SESSION})", "entry": r and r["entry"], "status": r and r["status"]}
+    if not r:
+        return out | {"note": "v2 registered nothing that day"}
+    same = r["structure"] == t.get("strategy") and r["legs"] == _leg_key(t.get("legs") or [])
+    return out | {"same_trade": same, "counted": same and r["outcome"] == "trade", "entry": r["entry"], "status": r["status"],
+                  "note": ("v2 counted this trade" if same else "v2 counted a different trade that day") if r["outcome"] == "trade"
+                  else f"v2 recorded {r['outcome']} that day"}
+
+
+CSV_HEADER = ["view", "source", "status", "taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "run_id", "candidate",
+              "ai_rank", "mode", "run_asked_at", "research_source", "spot_at_run", "spot_at_take", "in_entry_zone",
+              "index_target", "index_stop", "close_reason", "refusal_reason", "is_v2_counted", "v2_entry", "gross_pnl",
+              "charges", "net_pnl"]
+MODES = {"quick": "Quick", "full": "Complete"}
+
+
+def _cell(x) -> str:
+    if isinstance(x, bool):
+        return "yes" if x else "no"
+    if isinstance(x, float):
+        return str(int(x)) if x.is_integer() else f"{x:.2f}"
+    return "" if x is None else str(x)
+
+
+def _money(x) -> str:
+    return "" if x is None else f"{float(x):.2f}"
+
+
+def history_csv() -> str:
+    """Every trade, both views and every status, with where it came from. A field the trade never recorded is
+    "unknown" (trades before provenance); nothing is filled in by guess."""
+    import csv
+    import io
+
+    days = _v2_days()
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(CSV_HEADER)
+    for t in sorted(_load(), key=lambda t: t.get("taken_at") or ""):
+        ai = t.get("source") == "ai"
+        known = lambda k: _cell(t[k]) if k in t else "unknown"  # noqa: E731
+        legs = "; ".join(f"{'B' if x['action'] == 'BUY' else 'S'} {float(x['strike']):.0f} {x['type']} shown {_cell(x.get('shown_price')) if 'shown_price' in x else 'unknown'}"
+                         f" entry {_cell(x.get('entry'))} exit {_cell(x.get('exit'))}" for x in t["legs"])
+        link = _v2_link(t, days) if ai else None
+        w.writerow(["AI #1" if ai else "My picks", t.get("source") or "unknown", t["status"], t.get("taken_at"), _cell(t.get("closed_at")),
+                    t.get("symbol"), t.get("strategy"), t.get("expiry"), legs, known("run_id"), known("candidate"), known("ai_rank"),
+                    MODES.get(t["mode"], t["mode"] or "") if "mode" in t else "unknown", known("run_asked_at"), known("research_source"),
+                    known("spot_at_run"),
+                    (_cell(t["spot_at_take"]) if "spot_at_take" in t else _cell(t.get("spot_at_entry"))) if "run_id" in t else "unknown",
+                    known("in_entry_zone"), _cell(t.get("index_target")), _cell(t.get("index_stop")),
+                    _cell(t.get("reason")) if t["status"] == "closed" else "", _cell(t.get("reason")) if t["status"] == "not_taken" else "",
+                    _cell(bool(link and link["counted"])), _cell(link and link["entry"]),
+                    _money(t.get("gross_pnl")), _money(t.get("charges")) if t["status"] == "closed" else "", _money(t.get("net_pnl"))])
+    return buf.getvalue()
 
 
 def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dict:

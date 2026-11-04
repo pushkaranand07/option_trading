@@ -1465,6 +1465,14 @@ async function takeTrade(sym) {
   } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
+// Where a trade came from, or "source unknown" for one recorded before provenance (never guessed).
+function provTxt(t) {
+  if (!("run_id" in t)) return `<span class="small muted">source unknown (recorded before provenance)</span>`;
+  const mode = { quick: "Quick", full: "Complete" }[t.mode] || t.mode || "?";
+  return `<span class="small muted">run ${esc((t.run_asked_at || "").slice(-5))} · ${esc(mode)} · AI #${esc(t.ai_rank ?? "?")} · research ${esc(t.research_source || "?")}${t.in_entry_zone === false ? " · outside the entry zone" : ""}</span>`;
+}
+const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">v2: ${esc(t.v2.note)}${t.v2.entry ? ` · v2 entry ${esc(t.v2.entry)}` : ""}</span>` : "");
+
 const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"] };
 // A range trade (iron condor) has a profit zone between its sold strikes, not one target and one stop.
 const levelsTxt = (t) => (t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}` : `${fmt0(t.index_target)} / ${fmt0(t.index_stop)}`);
@@ -1476,7 +1484,7 @@ async function loadRecord() {
   try { d = await api("/api/trades"); } catch (e) { el.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
   const s = d.stats;
   const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
-  const summary = `<section class="card"><div class="card-head"><h2>Your trades — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE}</span></div>
+  const summary = `<section class="card"><div class="card-head"><h2>My picks — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE} · never mixed with AI #1</span></div>
     <div class="body">${RECORDED_NOTE}<div class="levels rec-stats">
       ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}${stat("Money in open trades", money(d.open.reduce((a, t) => a + tradeMoney(t), 0)))}
       ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
@@ -1487,13 +1495,12 @@ async function loadRecord() {
   const hist = !d.closed.length ? `<p class="muted pad">Closed trades appear here with their profit or loss.</p>`
     : `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Taken</th><th>Closed</th><th>Trade</th><th>Legs: entry → exit</th><th>NIFTY in → out</th><th>Why closed</th><th>Gross</th><th>Charges</th><th>Net P&L</th><th></th></tr></thead><tbody>
       ${d.closed.map((t) => `<tr><td>${esc(t.taken_at)}</td><td>${esc(t.closed_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
-        <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.entry)} → ${fmt(l.exit)}`).join("<br>")}</td>
+        <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.entry)} → ${fmt(l.exit)}`).join("<br>")}<br>${provTxt(t)}</td>
         <td class="num">${fmt0(t.spot_at_entry)} → ${fmt0(t.spot_at_exit)}</td><td class="small">${esc(t.reason)}</td>
         <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
         <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("")}</tbody></table></div>`;
-  el.innerHTML = summary + `<h3 class="sub-h rec-h">Your open trades</h3>` + open +
-    `<section class="card"><div class="card-head"><h2>Your history</h2>${d.closed.length ? `<button class="btn small-btn rec-csv">Download CSV</button>` : ""}</div>${hist}</section>` + aiRecordHtml(d.ai);
-  if ($(".rec-csv", el)) $(".rec-csv", el).onclick = () => downloadHistory(d.closed);
+  el.innerHTML = summary + `<h3 class="sub-h rec-h">My picks — open</h3>` + open +
+    `<section class="card"><div class="card-head"><h2>My picks — history</h2><a class="btn small-btn" href="/api/trades.csv" download>Download CSV (both views)</a></div>${hist}</section>` + aiRecordHtml(d.ai);
   el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
     if (!confirm("Close this dummy trade at the current prices?")) return;
     b.disabled = true;
@@ -1507,19 +1514,6 @@ async function loadRecord() {
   }));
 }
 
-// Your closed trades as a CSV file, one row per trade, for your own analysis.
-function downloadHistory(closed) {
-  const q = (x) => `"${String(x ?? "").replace(/"/g, '""')}"`;
-  const head = ["taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "index_at_entry", "index_at_exit",
-    "index_target", "index_stop", "reason", "gross_pnl", "charges", "net_pnl"];
-  const rows = closed.map((t) => [t.taken_at, t.closed_at, t.symbol, t.strategy, t.expiry,
-    t.legs.map((l) => `${legShort(l)} ${l.entry} -> ${l.exit}`).join("; "), t.spot_at_entry, t.spot_at_exit,
-    t.index_target, t.index_stop, t.reason, t.gross_pnl?.toFixed(2), t.charges?.toFixed(2), t.net_pnl?.toFixed(2)]);
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([[head, ...rows].map((r) => r.map(q).join(",")).join("\n")], { type: "text/csv" }));
-  a.download = `trade_history_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click(); URL.revokeObjectURL(a.href);
-}
 
 // Every AI suggestion, recorded automatically and settled by rule (target / stop / expiry).
 function aiRecordHtml(ai) {
@@ -1531,22 +1525,23 @@ function aiRecordHtml(ai) {
     const live = t.status === "open" ? t.live || {} : null;
     return `<tr><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
       <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
-      <td class="small">${legsTxt(t)}</td><td class="num small">${levelsTxt(t)}</td>
+      <td class="small">${legsTxt(t)}<br>${provTxt(t)}<br>${v2Txt(t)}</td><td class="num small">${levelsTxt(t)}</td>
       <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
       <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
       <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
   }).join("") + (ai.not_taken || []).map((t) => `<tr class="muted"><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
       <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
-      <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.shown_price)}`).join("<br>")}</td><td class="num small">${levelsTxt(t)}</td>
+      <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.shown_price)}`).join("<br>")}<br>${provTxt(t)}<br>${v2Txt(t)}</td><td class="num small">${levelsTxt(t)}</td>
       <td class="small"><b>not taken</b><br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
       <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("");
-  return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2> <span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE}</span></div>
+  return `<section class="card"><div class="card-head"><h2>AI #1 — track record</h2> <span class="small muted">the AI's #1 of each run, recorded by itself · 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE} · never mixed with My picks</span></div>
     <div class="body">${RECORDED_NOTE}
       <div class="levels rec-stats">
         <div class="lv"><span>Suggestions</span><b>${s.closed + s.open}</b><small>${s.open} still open</small></div>
         <div class="lv"><span>Won / lost</span><b>${s.wins} / ${s.losses}</b><small>${s.win_rate != null ? s.win_rate.toFixed(0) + "% won" : "none settled yet"}</small></div>
         <div class="lv"><span>Total P&L (settled)</span><b class="${cls(s.net)}">${money(s.net)}</b><small>average ${money(s.avg)}</small></div>
         <div class="lv"><span>Open now</span><b class="${cls(s.open_pnl)}">${money(s.open_pnl)}</b><small>before charges · ${COST_NOTE}</small></div></div>
+      <p class="small muted">Of these, the trades v2 counted (its own entry, held to expiry in v2): ${ai.v2_stats ? `${ai.v2_stats.closed + ai.v2_stats.open} (${ai.v2_stats.open} open), settled P&L here ${money(ai.v2_stats.net)}` : "—"}. Not-taken picks are listed but never counted.</p>
       <p class="small muted">A handful of trades proves nothing either way.</p>
     </div>
     ${all.length || ai.not_taken?.length ? `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Asked</th><th>Trade</th><th>AI confidence</th><th>Legs: entry → exit</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
