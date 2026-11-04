@@ -1,14 +1,15 @@
 """Trade Record: dummy (paper) trades taken from the AI strategist, monitored live, with a P&L history.
 
-Two kinds, kept apart: trades **you** took (button on the Plan tab; flagged at target / stop, closed by you) and
+Two kinds, kept apart: trades **you** took (Take buttons on the Plan tab) and
 **every AI suggestion**, recorded automatically and settled by the rules (at the target or stop when the index
 reaches it — the stop if both — or at expiry), so the record measures how good the AI's suggestions really are,
-by Pulse's evidence score.
+by Pulse's evidence score. Both kinds close themselves by the same rules (your trades since 2026-11-04, user's
+choice); you can still close one early by hand.
 
 One lot per trade. Entry prices are the ones the strategist priced (buy at the ask, sell at the bid). While a trade
 is open it is marked to market from the NSE option chain at the price it could be closed at now (a bought leg at the
-bid, a sold leg at the ask). When the index reaches the AI's target or stop, or the expiry passes, the trade is
-flagged — never closed automatically (user's choice); the user closes it. Charges for opening and closing every leg
+bid, a sold leg at the ask). When the index reaches the target or stop, the trade is closed at those close-out
+prices (the stop if both); after expiry it settles at intrinsic value. Charges for opening and closing every leg
 are subtracted. Stored in ``reports/trade_record/trades.json`` (git-ignored; stays on this computer).
 Paper trades only: nothing here places an order.
 """
@@ -162,7 +163,7 @@ def _stats(closed: list[dict], open_: list[dict]) -> dict:
 
 
 def overview(chain_fn=None) -> dict:
-    """Open trades with live marks (flags saved; AI suggestions settled by the rules), closed trades, totals —
+    """Open trades with live marks (flags saved; every trade settled by the rules), closed trades, totals —
     yours and the AI's separately, the AI's also by evidence score."""
     with _lock:
         trades = _load()
@@ -175,8 +176,7 @@ def overview(chain_fn=None) -> dict:
                 t["last_spot"] = v["spot"]
                 changed = True
             changed |= _remember_flags(t, v)
-            if t.get("source") == "ai":
-                changed |= _auto_settle(t, v)
+            changed |= _auto_settle(t, v)
             t["live"] = v
         if changed:
             _save([{k: x for k, x in t.items() if k != "live"} for t in trades])
@@ -203,7 +203,7 @@ def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dic
 
 
 def _auto_settle(t: dict, v: dict) -> bool:
-    """AI suggestions close by rule: the stop first if both are reached, then the target, else at expiry."""
+    """Close by rule: the stop first if both are reached, then the target, else at expiry."""
     if "expired" in v["flags"]:
         spot = t.get("last_spot") or t["spot_at_entry"]
         _settle(t, [_intrinsic(leg, spot) for leg in t["legs"]], spot, "expired")
@@ -270,7 +270,7 @@ _monitor_started = False
 
 def start_monitor(every_seconds: int = 60) -> None:
     """Check open trades once a minute while the market is open, so a target / stop reached while the page is
-    closed is still recorded with its time."""
+    closed still closes the trade at that minute's prices."""
     global _monitor_started
     if _monitor_started:
         return

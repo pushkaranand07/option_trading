@@ -1,5 +1,5 @@
-"""Trade Record: a dummy trade from the AI strategist is stored, marked at the close-out price, flagged (never
-auto-closed) at the index target / stop, and closed with charges into a P&L history."""
+"""Trade Record: a dummy trade from the AI strategist is stored, marked at the close-out price, closed by itself at
+the index target / stop (or by hand earlier) with charges into a P&L history."""
 
 import pytest
 
@@ -43,26 +43,28 @@ def test_take_records_one_lot_with_entry_and_premium_levels():
 
 
 @pytest.mark.unit
-def test_open_trade_is_marked_at_the_close_out_price_and_flagged_not_closed():
+def test_open_trade_is_marked_at_the_close_out_price_and_closes_itself_at_the_target():
     tr.take(RESULT)
-    # NIFTY at 22,470 (below the 22,480 target): buy back the sold call at the ask, sell the bought one at the bid
-    o = tr.overview(chain(22470, _q(80, 79, 81), _q(58, 57, 59)))
+    # between target and stop: still open, marked at the close-out price (sold call at the ask, bought one at the bid)
+    o = tr.overview(chain(22600, _q(130, 129, 131), _q(88, 87, 89)))
     t = o["open"][0]
-    assert t["live"]["pnl"] == pytest.approx(((132.45 - 81) + (57 - 89.95)) * 65)
-    assert t["live"]["flags"] == ["target"] and t["status"] == "open" and o["stats"]["closed"] == 0
-    again = tr.overview(chain(22600, _q(130, 129, 131), _q(88, 87, 89)))          # back up: the flag is remembered
-    assert [a["kind"] for a in again["open"][0]["alerts"]] == ["target"] and again["open"][0]["live"]["flags"] == []
+    assert t["live"]["pnl"] == pytest.approx(((132.45 - 131) + (87 - 89.95)) * 65) and t["live"]["flags"] == []
+    # NIFTY at 22,470 (below the 22,480 target): closed at those prices, into the history
+    o = tr.overview(chain(22470, _q(80, 79, 81), _q(58, 57, 59)))
+    assert o["open"] == [] and o["stats"]["closed"] == 1
+    c = o["closed"][0]
+    assert c["reason"] == "target reached" and [x["exit"] for x in c["legs"]] == [81, 57] and c["spot_at_exit"] == 22470
+    assert c["gross_pnl"] == pytest.approx(((132.45 - 81) + (57 - 89.95)) * 65) and c["net_pnl"] == pytest.approx(c["gross_pnl"] - c["charges"])
 
 
 @pytest.mark.unit
 def test_close_books_net_pnl_after_charges_and_updates_the_totals():
     t = tr.take(RESULT)
-    tr.overview(chain(22750, _q(210, 209, 211), _q(145, 144, 146)))               # stop reached
-    c = tr.close(t["id"], chain(22750, _q(210, 209, 211), _q(145, 144, 146)))
-    gross = ((132.45 - 211) + (144 - 89.95)) * 65
-    assert c["status"] == "closed" and c["gross_pnl"] == pytest.approx(gross) and c["reason"] == "stop reached"
+    c = tr.close(t["id"], chain(22650, _q(170, 169, 171), _q(115, 114, 116)))     # closed early by hand
+    gross = ((132.45 - 171) + (114 - 89.95)) * 65
+    assert c["status"] == "closed" and c["gross_pnl"] == pytest.approx(gross) and c["reason"] == "closed by you"
     assert c["charges"] > 4 * 20 and c["net_pnl"] == pytest.approx(gross - c["charges"])
-    assert [x["exit"] for x in c["legs"]] == [211, 144]
+    assert [x["exit"] for x in c["legs"]] == [171, 114]
     s = tr.overview()["stats"]
     assert (s["closed"], s["losses"], s["win_rate"]) == (1, 1, 0) and s["net"] == pytest.approx(c["net_pnl"])
     with pytest.raises(tr.TradeError):
@@ -70,11 +72,10 @@ def test_close_books_net_pnl_after_charges_and_updates_the_totals():
 
 
 @pytest.mark.unit
-def test_after_expiry_the_trade_is_flagged_and_settles_at_intrinsic_value():
-    t = tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650})
+def test_after_expiry_the_trade_settles_itself_at_intrinsic_value():
+    tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650})
     o = tr.overview(lambda *a: pytest.fail("no chain after expiry"))
-    assert o["open"][0]["live"]["flags"] == ["expired"]
-    c = tr.close(t["id"])
+    c = o["closed"][0]
     assert [x["exit"] for x in c["legs"]] == [50.0, 0.0] and c["reason"] == "expired"   # NIFTY 22,650 at expiry
 
 
@@ -92,11 +93,11 @@ def test_ai_suggestions_settle_by_rule_and_are_scored_apart_from_your_trades():
     scored = RESULT | {"evidence": {"score": 80, "label": "Strong"}}
     tr.take(scored, source="ai")
     mine = tr.take(RESULT)
-    # NIFTY at the target: the AI's suggestion settles itself; your trade is only flagged
+    # NIFTY at the target: both settle themselves, and are counted apart
     o = tr.overview(chain(22470, _q(80, 79, 81), _q(58, 57, 59)))
     assert o["ai"]["stats"]["closed"] == 1 and o["ai"]["closed"][0]["reason"] == "target reached"
     assert o["ai"]["closed"][0]["net_pnl"] > 0 and o["ai"]["by_score"]["Strong"]["wins"] == 1
-    assert o["you"]["open"][0]["id"] == mine["id"] and o["stats"]["closed"] == 0           # page keys = your trades
+    assert o["you"]["closed"][0]["id"] == mine["id"] and o["stats"]["closed"] == 1           # page keys = your trades
 
 
 @pytest.mark.unit
@@ -108,6 +109,23 @@ def test_ai_suggestion_settles_at_the_stop_and_at_expiry():
     tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650}, source="ai")
     o = tr.overview()
     assert any(t["reason"] == "expired" for t in o["ai"]["closed"])
+
+
+@pytest.mark.unit
+def test_your_trade_closes_itself_at_the_stop():
+    tr.take(RESULT)
+    o = tr.overview(chain(22750, _q(210, 209, 211), _q(145, 144, 146)))         # above the 22,720 stop
+    c = o["closed"][0]
+    assert c["reason"] == "stop reached" and [x["exit"] for x in c["legs"]] == [211, 144] and c["net_pnl"] < 0
+
+
+@pytest.mark.unit
+def test_no_live_price_keeps_the_trade_open_until_there_is_one():
+    tr.take(RESULT)
+    o = tr.overview(chain(22750, None, _q(145, 144, 146)))                     # stop reached, a leg has no quote
+    assert o["open"][0]["live"]["flags"] == ["stop"] and o["stats"]["closed"] == 0
+    o = tr.overview(chain(22750, _q(210, 209, 211), _q(145, 144, 146)))
+    assert o["closed"][0]["reason"] == "stop reached"
 
 
 @pytest.mark.unit

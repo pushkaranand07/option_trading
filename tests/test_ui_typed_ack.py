@@ -99,3 +99,13 @@ def test_the_glossary_has_no_win_rate_entry():
 @pytest.mark.unit
 def test_ranked_plans_show_na_and_ai_plans_keep_their_confidence_badge():
     assert '${res.source === "pulse" ? "n/a" : `AI confidence ${esc(a.confidence)}`}' in _function("stratHtml")
+
+
+@pytest.mark.unit
+def test_ranked_trades_follow_the_ai_answer_and_each_can_be_recorded_behind_the_acknowledgement():
+    render, ranked = _function("renderStrat"), _function("rankHtml")
+    assert 'st.result ? aiHead + (cand ? "" : detail) + rankHtml(sym)' in render and "takeRanked(sym" in render
+    assert ranked.index("S.ack[rankKey(sym)]") < ranked.index("rank-take")
+    take = _function("takeRanked")
+    assert "S.ack[rankKey(sym)]) return" in take and '"/api/trades"' in take
+    assert "it places no real order" in ranked and "Take (dummy, 1 lot)" in ranked

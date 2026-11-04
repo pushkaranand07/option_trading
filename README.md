@@ -21,7 +21,7 @@ view, and a strict research layer tests every trading idea on years of NSE data 
 | **Risk & volatility** | Calm / choppy / stress regime, expected move for 5 / 10 / 21 days in % and ₹, whether options are cheap or expensive |
 | **Options** | Live option chain, and what each strike really costs to trade (bid-ask spreads measured from NSE every evening) |
 | **AI analysis** | A team of LLM agents — analysts, bull and bear researchers, trader, risk team, portfolio manager — debates one instrument and gives a rating (Buy, Overweight, Hold, Underweight or Sell) with reasons |
-| **Trade Record** | Take the AI's suggested trade as a dummy 1-lot trade; it is monitored live, flagged when it reaches its target or stop, and kept in a profit-and-loss history |
+| **Trade Record** | Take the AI's suggested trade as a dummy 1-lot trade; it is monitored live, closes itself when the index reaches its target or stop, and is kept in a profit-and-loss history |
 | **Market Map 2021 → today** | Every SEBI / NSE / RBI / Budget change and market event since 2021, with its measured impact on NIFTY, India VIX and options trading |
 | **Research** | Every trading idea tested, with a plain-English verdict: what works, what failed, and why |
 | **My Trades** | Add your Dhan tradebook and see what actually makes or loses money in your own trades — by holding period, buying vs selling, stock, entry time and reason |

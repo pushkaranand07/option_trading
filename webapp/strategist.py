@@ -453,7 +453,7 @@ def _structures(direction: str, strikes: list[float], atm: float) -> list[tuple[
     return out
 
 
-def rank(symbol: str, expiry: str | None = None, top: int = 8, built=None) -> dict:
+def rank(symbol: str, expiry: str | None = None, top: int = 10, built=None) -> dict:
     """Every candidate trade for both directions, priced at the bid / ask with index and premium levels, scored by
     the evidence and ranked best first. Ties go to the better profit-to-loss ratio at the levels."""
     ctx, ch = built or build_context(symbol, expiry)
@@ -504,8 +504,12 @@ def rank(symbol: str, expiry: str | None = None, top: int = 8, built=None) -> di
     out.sort(key=lambda c: (c["evidence"]["score"], c["ratio"]), reverse=True)
     for n, c in enumerate(out, 1):
         c["rank"] = n
+    sm = ch.get("summary") or {}
     return {"symbol": symbol, "expiry": ch["expiry"], "spot": spot, "reach": reach, "candidates": out[:top],
-            "considered": len(out), "built_at": datetime.now().strftime("%H:%M:%S")}
+            "considered": len(out), "built_at": datetime.now().strftime("%H:%M:%S"),
+            # the game plan: above the call wall buy a call, below the put wall buy a put, in between no trade
+            "walls": {"call": sm.get("resistance"), "put": sm.get("support")},
+            "best": {s: next((c for c in out if c["plan"]["strategy"] == s), None) for s in ("long_call", "long_put")}}
 
 
 # ---------------------------------------------------------------- background jobs (the LLM takes a minute or two)
