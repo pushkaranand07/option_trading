@@ -726,7 +726,6 @@ function callHtml(sym, p, ph) {
     return `<div class="call stop"><b>No trade right now.</b> no trade signal today
       <div class="small muted">Checked again every 15 seconds until 15:15. Not trading is a position too.</div></div>`;
   }
-  if (!S.ack[callKey(sym, p)]) return `<div class="call idle"><div class="ask">Take this trade</div>${ackGate(callKey(sym, p), sym)}</div>`;
   const up = s.side === "BUY", z = perLot(p);
   if (!leg) {
     const sz = `<div class="small">Each share loses about <b>${rupee(z.perShare)}</b> at the stop — pick the quantity so the total is a loss you accept.</div>`;
@@ -1094,14 +1093,14 @@ function drawPlanChartLines(sym) {
   }
   if (pcOn("trade")) {
     const p = S.live[sym];
-    if (p?.verdict?.safe && p.signal?.side !== "WAIT" && S.ack[callKey(sym, p)]) {
+    if (p?.verdict?.safe && p.signal?.side !== "WAIT") {
       level(p.signal.entry, col.text, `Entry ${fmt0(p.signal.entry)}`, "solid");
       axis(p.signal.target, col.up, "Target"); axis(p.signal.stop_loss, col.down, "Stop");
       position(p.signal.entry, p.signal.target, p.signal.stop_loss);
     }
     const r = curRes(sym), a = r?.plan;
-    if (a && a.strategy !== "no_trade" && S.ack[stratKey(r, sym)]) {
-      const who = r.source === "pulse" ? `#${r.rank}` : "AI", lo = a.underlying_entry_low, hi = a.underlying_entry_high;
+    if (a && a.strategy !== "no_trade") {
+      const who = `AI #${r.rank}`, lo = a.underlying_entry_low, hi = a.underlying_entry_high;
       if (lo && hi) {
         bands.push({ from: lo, to: hi, color: hexA(col.text, 0.07) });
         level(hi, col.text, `${who} entry ${fmt0(lo)} – ${fmt0(hi)}`, "dot"); level(lo, col.text, null, "dot");
@@ -1226,20 +1225,20 @@ function renderNseChain(sym) {
   if (atm && slot.dataset.centered !== c.expiry) { sc.scrollTop = atm.offsetTop - sc.clientHeight / 2; slot.dataset.centered = c.expiry; }
 }
 
+const STAGE = { agents: "Step 1 of 2: the research agents are reading the news, the market and sentiment, and debating bull vs bear (several minutes)",
+  ranking: "Step 2 of 2: the AI is ranking the live trades by the whole analysis" };
 function renderStrat(sym) {
   const slot = $(`.plan-card[data-sym="${sym}"] .strat-slot`); if (!slot) return;
-  const st = S.strat[sym] || {};
-  const ask = `<div class="strat-ask"><button class="btn primary strat-go" ${st.running ? "disabled" : ""}>${st.running ? "Analysing…" : st.result ? "Ask again" : `Analyse ${esc(NAMES[sym] || nameOf(sym))} with AI`}</button>
-    <span class="small muted">${st.running ? `<span class="spinner"></span> Reading the chart, trend, volatility, option chain and news view (about a minute) — started ${esc(st.started || "")}`
-      : `Uses expiry <b>${esc(S.nseExp[sym] || "nearest")}</b> (pick another in the chain below). Figures are per lot; you choose how many.`}</span></div>`;
-  const v = S.view[sym], cand = typeof v === "number" ? S.rank[sym]?.data?.candidates?.[v] : null;
-  const detail = cand ? stratHtml(cand, sym) : st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result, sym) : "";
-  const aiHead = `<h4 class="mini-h">Second opinion from the AI</h4>` + ask
-    + (cand && st.result ? `<div class="small"><a href="#" class="show-ai">Show the AI's suggestion instead</a></div>` : "");
-  slot.innerHTML = st.result ? aiHead + (cand ? "" : detail) + rankHtml(sym) + (cand ? detail : "") : rankHtml(sym) + aiHead + detail;
-  slot.querySelectorAll("[data-rank]").forEach((r) => (r.onclick = () => { S.view[sym] = +r.dataset.rank; S.ticket[sym] = null; refreshStrat(sym); }));
-  if ($(".show-ai", slot)) $(".show-ai", slot).onclick = (e) => { e.preventDefault(); S.view[sym] = "ai"; S.ticket[sym] = null; refreshStrat(sym); };
-  if ($(".rank-refresh", slot)) $(".rank-refresh", slot).onclick = () => loadRank(sym);
+  const st = S.strat[sym] || {}, res = st.result;
+  const ask = `<div class="strat-ask"><button class="btn primary strat-go" ${st.running ? "disabled" : ""}>${st.running ? "Running…" : res ? "Run AI strategy again" : "Run AI strategy"}</button>
+    <span class="small muted">${st.running ? `<span class="spinner"></span> ${esc(STAGE[st.stage] || "Starting…")} — started ${esc(st.started || "")}`
+      : `Runs the full research (news, market, sentiment, bull / bear debate), then ranks the 8 best trades for expiry <b>${esc(S.nseExp[sym] || "nearest")}</b>. Takes several minutes. Figures are per lot.`}</span></div>`;
+  const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
+  slot.innerHTML = `<h4 class="mini-h">AI strategy</h4>` + ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
+    + (res ? aiListHtml(sym, res) : "") + (cand ? stratHtml(cand, sym) : "") + rulesHtml(sym);
+  slot.querySelectorAll("[data-ai]").forEach((r) => r.tagName === "TR" && (r.onclick = () => { S.view[sym] = S.view[sym] === +r.dataset.ai ? null : +r.dataset.ai; S.ticket[sym] = null; refreshStrat(sym); }));
+  $(".rules", slot).ontoggle = (e) => { S.rulesOpen[sym] = e.target.open; };
+  if ($(".rank-refresh", slot)) $(".rank-refresh", slot).onclick = (e) => { e.preventDefault(); loadRank(sym); };
   $(".strat-go", slot).onclick = () => startStrat(sym);
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
   if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
@@ -1248,7 +1247,7 @@ function renderStrat(sym) {
 }
 
 async function startStrat(sym) {
-  S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; S.view[sym] = "ai"; renderStrat(sym);
+  S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; S.view[sym] = null; renderStrat(sym);
   try {
     const { job } = await api("/api/strategy", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol: sym, expiry: S.nseExp[sym] || null }) });
@@ -1260,9 +1259,9 @@ async function startStrat(sym) {
 async function pollStrat(sym, job) {
   try {
     const j = await api("/api/strategy/" + job);
-    if (j.status === "running") { S.strat[sym] = { running: true, started: j.started }; renderStrat(sym); setTimeout(() => pollStrat(sym, job), 3000); return; }
-    S.strat[sym] = j.status === "done" ? { result: j.result } : { error: j.error };
-    S.ticket[sym] = null; S.view[sym] = "ai";
+    if (j.status === "running") { S.strat[sym] = { running: true, started: j.started, stage: j.stage }; renderStrat(sym); setTimeout(() => pollStrat(sym, job), 3000); return; }
+    S.strat[sym] = j.status === "done" && j.result?.trades ? { result: j.result } : j.status === "done" ? {} : { error: j.error };   // {}: an answer from before this version
+    S.ticket[sym] = null; S.view[sym] = S.strat[sym].result?.trades?.length ? 0 : null;
   } catch { delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs)); S.strat[sym] = {}; }   // server restarted
   renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym);
   if (S.strat[sym]?.result) loadRank(sym);
@@ -1305,25 +1304,6 @@ const pnl = (x) => (x == null ? "—" : `<span class="${cls(x)}">${x > 0 ? "+" :
 const UNTESTED = `<span class="badge untested">UNTESTED, no evidence of edge</span>`;
 const COST_NOTE = "cost model unverified";
 const RECORDED_NOTE = `<p class="small muted">recorded trades, not a test (not registered before entry); ${COST_NOTE}</p>`;
-// A typed word before an untested trade's orders, target and stop show. Held in memory: a reload asks again.
-const ACK_WORD = "UNTESTED";
-S.ack = {};
-const stratKey = (res, sym) => `strat|${sym}|${res.source === "pulse" ? `rank${res.rank}` : res.asked_at}|${res.expiry}`;
-const callKey = (sym, p) => `call|${sym}|${p.signal?.side}`;
-const rankKey = (sym) => `rank|${sym}`;
-function ackGate(key, sym) {
-  return `<div class="ack-gate">${UNTESTED}<p class="small">Orders, target and stop are hidden until you acknowledge that this trade is untested.</p>
-    <button class="btn ack-untested" data-key="${esc(key)}" data-sym="${esc(sym)}">Type ${ACK_WORD} to show this trade</button></div>`;
-}
-document.addEventListener("click", (e) => {
-  const b = e.target.closest?.(".ack-untested"); if (!b) return;
-  const typed = window.prompt(`This trade is UNTESTED, with no evidence of edge. Type ${ACK_WORD} to show its orders, target and stop.`);
-  if ((typed || "").trim().toUpperCase() !== ACK_WORD) return;
-  S.ack[b.dataset.key] = true;
-  const sym = b.dataset.sym, slot = $(`.plan-card[data-sym="${sym}"] .call-slot`);
-  if (slot && S.morning) slot.innerHTML = callHtml(sym, S.live[sym], phase(S.morning.session));
-  renderStrat(sym); drawPlanChartLines(sym);
-});
 function evidenceHtml(e) {
   if (!e) return "";
   return `<details class="evidence"><summary>Inputs looked at</summary>
@@ -1334,16 +1314,15 @@ function evidenceHtml(e) {
 function stratHtml(res, sym) {
   const a = res.plan, pr = res.priced, lv = res.levels;
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
-  const head = `<div class="strat-head"><div><div class="ask">${res.source === "pulse" ? `Pulse ranked trade #${res.rank}` : "AI suggestion"} · expiry ${esc(res.expiry)}</div>
+  const head = `<div class="strat-head"><div><div class="ask">AI's trade #${res.rank} · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
-    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">${res.source === "pulse" ? "n/a" : `AI confidence ${esc(a.confidence)}`}</span> ${UNTESTED}</div></div>
+    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span> ${UNTESTED}</div></div>
     ${evidenceHtml(res.evidence)}
     ${res.retried ? `<div class="small muted">The AI's first answer was refused (${esc(res.retried.join("; "))}); this is its corrected answer.</div>` : ""}
     ${res.ai_record ? `<div class="small muted">Saved to the AI track record on the <a href="#record">Trade Record</a> tab, which settles it at its target, stop or expiry.</div>` : ""}`;
-  const read = `<p>${esc(a.market_read)}</p>`;
+  const read = res.ai_why ? `<p><b>Why the AI ranks it #${res.rank}:</b> ${esc(res.ai_why)}</p>` : `<p>${esc(a.market_read)}</p>`;
   if (res.rejected) return `<div class="call stop">${head}<b>The proposal was refused by the safety checks:</b><ul>${res.rejected.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     <div class="small">Pulse only shows defined-risk trades (no naked option selling). Ask again, or skip.</div></div>${read}`;
-  if (pr && a.strategy !== "no_trade" && !S.ack[stratKey(res, sym)]) return `<div class="call idle">${head}${read}${ackGate(stratKey(res, sym), sym)}</div>`;
   const name = NAMES[sym] || sym, down = a.underlying_target != null && a.underlying_stop != null && a.underlying_target < a.underlying_stop;
   const story = a.strategy === "no_trade" ? "" : `<div class="story">
       <div class="story-line"><b>${down ? `You make money if ${esc(name)} falls` : a.bias === "neutral" ? `You make money if ${esc(name)} stays in a range` : `You make money if ${esc(name)} rises`}.</b>
@@ -1396,7 +1375,7 @@ function stratHtml(res, sym) {
       ${kl ? `<tr><th>Key levels</th><td><ul class="plain">${kl}</ul></td></tr>` : ""}
       ${a.risks?.length ? `<tr><th>Risks</th><td><ul class="plain">${a.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></td></tr>` : ""}
     </table>
-    <p class="small muted">${res.source === "pulse" ? "Built by Pulse's rules from the live option chain and" : `GPT-5 analysis (${res.seconds}s) checked and`} priced by Pulse at the live bid / ask. Not a validated edge and not advice — no strategy here has passed the project's tests.</p>`;
+    <p class="small muted">Chosen by the AI from Pulse's candidates, built by Pulse's rules from the live option chain and priced by Pulse at the live bid / ask. Not a validated edge and not advice — no strategy here has passed the project's tests.</p>`;
 }
 
 // NIFTY levels from low to high, so "target below, stop above" (or the reverse) is visible at a glance.
@@ -1482,8 +1461,8 @@ function renderTicket(sym) {
 S.takenRank = {};
 const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
 async function takeRanked(sym, i, btn) {
-  const d = S.rank[sym]?.data, c = btn.dataset.best ? d?.best?.[btn.dataset.best] : d?.candidates?.[i];
-  if (!c || !S.ack[rankKey(sym)]) return;
+  const d = S.rank[sym]?.data, c = btn.dataset.ai ? S.strat[sym]?.result?.trades?.[i] : btn.dataset.best ? d?.best?.[btn.dataset.best] : d?.candidates?.[i];
+  if (!c) return;
   btn.disabled = true;
   try {
     await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
@@ -1492,11 +1471,11 @@ async function takeRanked(sym, i, btn) {
 }
 
 async function takeTrade(sym) {
-  const res = curRes(sym); if (!res || !S.ack[stratKey(res, sym)]) return;
+  const res = curRes(sym); if (!res) return;
   const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
   try {
     const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(res) });
-    res._taken = t.id; renderStrat(sym); loaded.record = false;
+    res._taken = t.id; S.takenRank[takeKey(res)] = true; renderStrat(sym); loaded.record = false;
   } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
@@ -1623,10 +1602,9 @@ function openTradeHtml(t) {
 
 // ---------- Pulse trade ranking: concrete trades with strikes, entry, target and stop, best first ----------
 S.rank = {}; S.view = {};
-function curRes(sym) {          // the trade shown in the detail card: a ranked one, or the AI's suggestion
+function curRes(sym) {          // the trade shown in the detail card: one of the AI's ranked trades
   const v = S.view[sym];
-  if (typeof v === "number") return S.rank[sym]?.data?.candidates?.[v] || null;
-  return S.strat[sym]?.result || null;
+  return typeof v === "number" ? S.strat[sym]?.result?.trades?.[v] || null : null;
 }
 function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym); }
 
@@ -1635,8 +1613,6 @@ async function loadRank(sym) {
   r.loading = true; renderStrat(sym);
   try {
     r.data = await api(`/api/rank/${encodeURIComponent(sym)}${S.nseExp[sym] ? "?expiry=" + encodeURIComponent(S.nseExp[sym]) : ""}`); r.error = null;
-    if (S.view[sym] === undefined && r.data.candidates.length && !S.strat[sym]?.result) S.view[sym] = 0;   // show #1 by default
-    if (typeof S.view[sym] === "number" && S.view[sym] >= r.data.candidates.length) S.view[sym] = 0;
   } catch (e) { r.error = e.message; }
   r.loading = false;
   if (!S.ticket[sym]) refreshStrat(sym); else renderStrat(sym);
@@ -1650,7 +1626,6 @@ function gamePlanHtml(sym) {
   const q = S.quotes[sym], spot = d.spot, zone = spot > w.call ? "call" : spot < w.put ? "put" : "mid";
   const trade = (c) => {
     if (!c) return `<div class="small muted">Abhi is taraf ka koi tradable option nahi mila (live bid / ask nahi hai).</div>`;
-    if (!S.ack[rankKey(sym)]) return `<div class="small muted">Trade dekhne ke liye neeche "Ranked trades" mein ${ACK_WORD} type kar.</div>`;
     const lv = c.levels, l = lv.legs[0], a = c.plan;
     return `<div class="gp-trade"><span class="leg-tag buy">BUY</span> <b>${esc(contractName(sym, c.expiry, l))}</b> @ ${fmt(l.price)}
       <div class="small">Target <b class="up">${fmt(l.premium_at_target)}</b> (${esc(name)} ${fmt0(a.underlying_target)}) · Stop loss <b class="down">${fmt(l.premium_at_stop)}</b> (${esc(name)} ${fmt0(a.underlying_stop)})
@@ -1672,36 +1647,68 @@ function gamePlanHtml(sym) {
       Yeh rule test nahi hua hai, koi edge ka saboot nahi. ${cap(COST_NOTE)}.</div></div>`;
 }
 
+// The cells every trade table shares: Dhan orders, entry / target / stop premiums, index levels, per-lot result.
+function tradeCells(c, sym) {
+  const lv = c.levels, a = c.plan;
+  const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
+  const prem = (k) => lv.legs.map((l) => {
+    const role = legRole(a.strategy, lv.legs, l);
+    if (k === "price") return `<div>${fmt(l.price)}</div>`;
+    if (role === "hedge") return `<div class="muted">none</div>`;
+    return role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop) ? `<div>${fmt(l[k])}</div>` : `<div class="ref">(${fmt(l[k])})</div>`;
+  }).join("");
+  return `<td class="rank-legs">${legs}</td>
+      <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
+      <td class="num"><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
+      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>`;
+}
+const takeCell = (c, attrs) => S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" ${attrs}>Take (dummy, 1 lot)</button>`;
+
+// The AI's ranked trades: the research's read of the market, then up to 8 trades best first, each with the AI's reason.
+function aiListHtml(sym, res) {
+  const name = NAMES[sym] || sym, v = S.view[sym], ag = res.agents || {};
+  const research = ag.error ? `<div class="notice">The research agents failed (${esc(ag.error)}), so this ranking used the live data only, with no news.</div>`
+    : `<div class="small muted">Research: the agents ran fresh (${esc(ag.minutes ?? "—")} min)${ag.rating ? `, their call <b>${esc(ag.rating)}</b>` : ""}. Then the AI ranked ${res.considered} live candidates.</div>`;
+  const read = `<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
+    ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
+  if (!res.trades.length) return `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
+  const rows = res.trades.map((c, i) => `<tr data-ai="${i}" class="${v === i ? "on" : ""}">
+      <td class="num"><b>#${c.rank}</b></td>
+      <td><b>${esc(STRAT_NAMES[c.plan.strategy])}</b><div class="small ${c.plan.bias === "bearish" ? "down" : "up"}">${esc(c.plan.bias)}</div><div class="small muted">AI confidence ${esc(c.plan.confidence)}</div></td>
+      <td class="small ai-why">${esc(c.ai_why)}</td>
+      ${tradeCells(c, sym)}
+      <td>${takeCell(c, `data-take="${i}" data-ai="1"`)}</td></tr>`).join("");
+  return `<div class="rank-head"><div><h4 class="mini-h">The AI's best trades · ${esc(res.asked_at)} · expiry ${esc(res.expiry)} ${UNTESTED}</h4>${research}</div></div>
+    ${read}
+    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Why (AI)</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="small muted">The AI chose and ordered these by the whole analysis, not by profit size. Pulse built and priced each at the live bid / ask and set its target and stop by a fixed rule.
+      Tap a row for its orders and ticket. Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.
+      Premiums at target and stop are estimates for today. One lot each; charges in the card. ${cap(COST_NOTE)}. #1 is the forward test's trade. Take records it on the Trade Record tab; no real order.</div>`;
+}
+
+// Rule-based views kept for reference, folded away so they do not compete with the AI's list.
+S.rulesOpen = {};
+function rulesHtml(sym) {
+  return `<details class="rules" ${S.rulesOpen[sym] ? "open" : ""}><summary>Rule-based views, not the AI: the OI-wall game plan and Pulse's rule ranking</summary>
+    ${gamePlanHtml(sym)}${rankHtml(sym)}</details>`;
+}
+
 function rankHtml(sym) {
   const r = S.rank[sym];
   if (!r || (r.loading && !r.data)) return `<div class="loading"><span class="spinner"></span>Ranking trades from the live chain…</div>`;
   if (r.error && !r.data) return `<div class="notice">Ranking unavailable: ${esc(r.error)}</div>`;
   const d = r.data, name = NAMES[sym] || sym;
-  if (!d.candidates.length) return gamePlanHtml(sym) + `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
-  if (!S.ack[rankKey(sym)]) return gamePlanHtml(sym) + `<div class="rank-head"><div><h4 class="mini-h">Ranked trades</h4>${ackGate(rankKey(sym), sym)}</div></div>`;
-  const v = S.view[sym];
-  const rows = d.candidates.map((c, i) => {
-    const lv = c.levels, a = c.plan;
-    const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
-    const prem = (k) => lv.legs.map((l) => {
-      const role = legRole(a.strategy, lv.legs, l);
-      if (k === "price") return `<div>${fmt(l.price)}</div>`;
-      if (role === "hedge") return `<div class="muted">none</div>`;
-      return role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop) ? `<div>${fmt(l[k])}</div>` : `<div class="ref">(${fmt(l[k])})</div>`;
-    }).join("");
-    return `<tr data-rank="${i}" class="${v === i ? "on" : ""}">
+  if (!d.candidates.length) return `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
+  const rows = d.candidates.map((c, i) => `<tr>
       <td class="num"><b>#${c.rank}</b></td>
-      <td><b>${esc(STRAT_NAMES[a.strategy])}</b><div class="small ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</div><div class="small warn">UNTESTED</div></td>
-      <td class="rank-legs">${legs}</td>
-      <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
-      <td class="num"><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
-      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
+      <td><b>${esc(STRAT_NAMES[c.plan.strategy])}</b><div class="small ${c.plan.bias === "bearish" ? "down" : "up"}">${esc(c.plan.bias)}</div></td>
+      ${tradeCells(c, sym)}
       <td class="num">${c.ratio.toFixed(1)} : 1</td>
-      <td>${S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" data-take="${i}">Take (dummy, 1 lot)</button>`}</td></tr>`;
-  }).join("");
-  return gamePlanHtml(sym) + `<div class="rank-head"><div><h4 class="mini-h">Ranked trades ${UNTESTED}</h4>
+      <td>${takeCell(c, `data-take="${i}"`)}</td></tr>`).join("");
+  return `<div class="rank-head"><div><h4 class="mini-h">Pulse's rule ranking</h4>
       <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
-      The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge under the conditions tested. Tap a row for its orders, ticket and the Take button.
+      The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge under the conditions tested. It is the forward test's rule baseline, not the AI.
       Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.</div></div>
       <button class="btn small-btn rank-refresh" ${r.loading ? "disabled" : ""}>${r.loading ? "Updating…" : "Refresh"}</button></div>
     <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th><th></th></tr></thead>

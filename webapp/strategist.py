@@ -512,7 +512,116 @@ def rank(symbol: str, expiry: str | None = None, top: int = 10, built=None) -> d
             "best": {s: next((c for c in out if c["plan"]["strategy"] == s), None) for s in ("long_call", "long_put")}}
 
 
-# ---------------------------------------------------------------- background jobs (the LLM takes a minute or two)
+# ---------------------------------------------------------------- the AI's ranked trades (docs/PA_52)
+# One click: a fresh multi-agent run (news, market, bull / bear debate), the live context above, then one LLM call
+# that ranks Pulse's priced candidates, best first, by the whole analysis. The code builds and prices every candidate,
+# so the AI cannot invent a strike or a price; it only chooses and orders them. Forward test v2 counts its #1.
+
+TOP_AI = 8
+
+
+class RankedPick(BaseModel):
+    candidate: int = Field(description="the candidate's number n from the list")
+    why: str = Field(description="1-2 plain sentences: why this trade, tied to the data and the agents' research")
+    confidence: Literal["low", "medium", "high"]
+
+
+class RankedAnswer(BaseModel):
+    market_read: str = Field(description="3-5 plain sentences on the instrument right now, using the research and the live data")
+    news_read: str = Field(description="1-3 sentences on what the agents' news and debate say; say so if there was no research")
+    bias: Literal["bullish", "bearish", "neutral", "unclear"]
+    picks: list[RankedPick] = Field(description="up to 8 candidates, best first; fewer or none if the evidence does not support them")
+    risks: list[str] = []
+
+
+RANK_SYSTEM = """You are a careful options strategist for Indian markets (NSE). You get, for ONE instrument: today's
+multi-agent research (news, market report, the bull / bear debate and its final decision), the live data (trend,
+intraday rule, expected move, regime, implied vol vs forecast, option chain with OI walls and PCR, FII positioning),
+and a numbered list of candidate trades. The app built and priced each candidate at the live bid / ask (buy at the
+ask, sell at the bid) and set its index target and stop by a fixed rule; you cannot change them.
+
+Rank up to 8 candidates, best first, by how well the WHOLE analysis supports each one:
+- direction: what most of the evidence agrees on (the agents' decision and news, trend, today's intraday rule, OI
+  walls, FII positioning);
+- buying vs selling options: implied vol vs the forecast, days to expiry, time decay;
+- strikes: distance from spot vs the expected move; whether the target is reachable and the stop sits beyond a key level.
+Do NOT rank by the profit-to-loss figures alone: a large ratio whose target the evidence does not support is a worse
+trade than a smaller one it does. Use each candidate at most once, only numbers from the list. Rank fewer, or none,
+when the evidence conflicts or does not support them: an empty list means "no trade". Only directional structures are
+offered; if the evidence says the market will stay in a range, say so and rank fewer.
+Report confidence honestly: high only when most of the evidence agrees. No strategy in this system has a proven edge;
+say so plainly where relevant. Be specific to these numbers. Plain English, no hype."""
+
+
+def agents_view(symbol: str, day: date | None = None) -> dict:
+    """A fresh multi-agent run for the instrument (several minutes): its final decision, news and reports."""
+    from webapp import morning
+
+    return morning.ai_view(morning.INDICES.get(symbol, f"{symbol}.NS"), day or date.today())
+
+
+def candidates_for_ai(pool: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(the candidates as the AI sees them, the same candidates in that order). Numbered in strategy and strike order,
+    not the rule's order, so the list does not suggest a ranking of its own."""
+    def row(n, c):
+        p, pr, lv = c["plan"], c["priced"], c["levels"]
+        return {"n": n, "strategy": p["strategy"], "direction": p["bias"],
+                "legs": [{k: x[k] for k in ("action", "type", "strike", "price")} for x in pr["legs"]],
+                "index_target": p["underlying_target"], "index_stop": p["underlying_stop"],
+                "pnl_at_target_per_lot": round(lv["pnl_target_per_lot"]), "pnl_at_stop_per_lot": round(lv["pnl_stop_per_lot"]),
+                "max_loss_per_lot": round(pr["max_loss_per_lot"]), "breakevens": [round(b) for b in pr.get("breakevens") or []]}
+    order = sorted(pool, key=lambda c: (c["plan"]["strategy"], [x["strike"] for x in c["priced"]["legs"]]))
+    return [row(n, c) for n, c in enumerate(order, 1)], order
+
+
+def ask_rank_llm(ctx: dict, candidates: list[dict]) -> RankedAnswer:
+    from tradingagents.default_config import build_default_config
+    from tradingagents.llm_clients import create_tier_client
+
+    llm = create_tier_client(build_default_config(), "deep").get_llm().with_structured_output(RankedAnswer)
+    user = (f"DATA:\n{json.dumps(ctx, default=str)}\n\nCANDIDATES (per lot; the app sizes nothing):\n"
+            f"{json.dumps(candidates, default=str)}")
+    return llm.invoke([("system", RANK_SYSTEM), ("user", user)])
+
+
+def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, built=None, progress=None) -> dict:
+    """The research, then the AI's ranked trades: each a full priced candidate with the AI's reason and confidence."""
+    started = datetime.now()
+    say = progress or (lambda stage: None)
+    say("agents")
+    try:
+        research = (agents or agents_view)(symbol)
+        agents_out = {"rating": research.get("rating"), "minutes": research.get("minutes")}
+    except Exception as exc:                                     # the ranking still runs, without the research
+        research, agents_out = {}, {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
+    say("ranking")
+    ctx, ch = built or build_context(symbol, expiry)
+    ctx.pop("morning_ai_view", None)                            # replaced by this run's research
+    ctx["agents_research_now"] = {"rating": research.get("rating"), "final_decision": (research.get("decision") or "")[:3000],
+                                  "news_report": (research.get("news") or "")[:3000], "market_report": (research.get("market") or "")[:1500],
+                                  "investment_plan": (research.get("plan") or "")[:1500]} if research else {"error": agents_out.get("error")}
+    pool = rank(symbol, expiry, top=10 ** 6, built=(ctx, ch))["candidates"]
+    shown, order = candidates_for_ai(pool)
+    answer = (llm or ask_rank_llm)(ctx, shown) if order else RankedAnswer(
+        market_read="No candidate trade has a live two-sided quote right now.", news_read="", bias="unclear", picks=[])
+    trades, seen = [], set()
+    for pick in answer.picks:
+        if not 1 <= pick.candidate <= len(order) or pick.candidate in seen:
+            continue                                            # an unknown or repeated number is dropped
+        seen.add(pick.candidate)
+        c = json.loads(json.dumps(order[pick.candidate - 1], default=str))
+        c["plan"]["confidence"] = pick.confidence
+        c.update(source="ai", ai_why=pick.why, rank=len(trades) + 1)
+        trades.append(c)
+        if len(trades) == TOP_AI:
+            break
+    return {"symbol": symbol, "expiry": ch["expiry"], "spot": ch["spot"], "lot": ch["lot"], "agents": agents_out,
+            "market_read": answer.market_read, "news_read": answer.news_read, "bias": answer.bias, "risks": answer.risks,
+            "trades": trades, "considered": len(order), "chain_summary": ch["summary"],
+            "seconds": (datetime.now() - started).seconds, "asked_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
+
+
+# ---------------------------------------------------------------- background jobs (the agents take several minutes)
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
@@ -523,18 +632,23 @@ def start(symbol: str, expiry: str | None = None) -> str:
     with _jobs_lock:
         _jobs[job_id] = {"status": "running", "symbol": symbol, "started": datetime.now().strftime("%H:%M:%S")}
 
+    def stage(name):
+        with _jobs_lock:
+            _jobs[job_id]["stage"] = name
+
     def run():
         try:
-            res = recommend(symbol, expiry)
-            if res.get("priced"):                      # every valid suggestion goes into the AI track record
+            res = ai_ranked(symbol, expiry, progress=stage)
+            top = res["trades"][0] if res["trades"] else None
+            if top:                                    # the AI's #1 goes into the AI track record
                 try:
                     from webapp import trade_record
-                    res["ai_record"] = trade_record.take(res, source="ai")["id"]
+                    res["ai_record"] = trade_record.take(top, source="ai")["id"]
                 except Exception:
                     pass
-            try:                                       # the forward test counts the first NIFTY answer of a session
+            try:                                       # forward test v2 counts the #1 of the first NIFTY answer of a session
                 from webapp import ai_test
-                ai_test.record(res)
+                ai_test.record(top or {"symbol": symbol, "expiry": res["expiry"], "plan": {"strategy": "no_trade"}})
             except Exception:
                 logger.exception("the forward-test registry did not record this answer")
             result = {"status": "done", "result": res}

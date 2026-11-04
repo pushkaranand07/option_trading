@@ -172,6 +172,43 @@ def test_evidence_score_rewards_agreement_and_marks_each_check():
 
 
 @pytest.mark.unit
+def test_ai_ranked_keeps_the_ais_order_drops_unknown_or_repeated_numbers_and_caps_the_count(monkeypatch):
+    monkeypatch.setattr(st, "TOP_AI", 5)                  # the test chain has 8 candidates
+    chain = CHAIN | {"summary": {"atm_iv": 14.0, "resistance": 23000, "support": 22000}, "expiry": "27-Oct-2099"}
+    ctx = {"spot": 22600, "days_to_expiry": 2, "trend": {"tone": "down", "label": "Downtrend"}, "intraday_rule": {"side": "SELL"},
+           "implied_vol_vs_forecast": {"minus_garch21": 0.03}, "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": chain["summary"]},
+           "morning_ai_view": {"rating": "old"}}
+    seen = {}
+
+    def llm(c, shown):
+        seen["ctx"], seen["shown"] = c, shown
+        n = len(shown)
+        return st.RankedAnswer(market_read="m", news_read="n", bias="bearish", picks=[
+            st.RankedPick(candidate=k, why=f"w{k}", confidence="low") for k in [n, 99, n, *range(1, n)]])
+
+    r = st.ai_ranked("NIFTY", llm=llm, agents=lambda s: {"rating": "Sell", "minutes": 4.0, "decision": "d", "news": "headlines"}, built=(dict(ctx), chain))
+    shown = seen["shown"]
+    assert [x["n"] for x in shown] == list(range(1, len(shown) + 1)) and r["considered"] == len(shown) > 5
+    assert [x["strategy"] for x in shown] == sorted(x["strategy"] for x in shown)            # not the rule's order
+    assert "morning_ai_view" not in seen["ctx"] and seen["ctx"]["agents_research_now"]["news_report"] == "headlines"
+    assert [t["ai_why"] for t in r["trades"]] == [f"w{len(shown)}", *[f"w{k}" for k in range(1, 5)]]   # 99 and the repeat dropped
+    assert [t["rank"] for t in r["trades"]] == list(range(1, 6)) and all(t["plan"]["confidence"] == "low" for t in r["trades"])
+    assert all(t["priced"]["legs"] and t["levels"] for t in r["trades"]) and r["agents"] == {"rating": "Sell", "minutes": 4.0}
+
+
+@pytest.mark.unit
+def test_ai_ranked_runs_without_the_research_and_says_so():
+    chain = CHAIN | {"summary": {"atm_iv": 14.0, "resistance": 23000, "support": 22000}, "expiry": "27-Oct-2099"}
+    ctx = {"spot": 22600, "days_to_expiry": 2, "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": chain["summary"]}}
+
+    def broken(symbol):
+        raise RuntimeError("no news API key")
+
+    r = st.ai_ranked("NIFTY", llm=lambda c, s: st.RankedAnswer(market_read="m", news_read="", bias="unclear", picks=[]), agents=broken, built=(ctx, chain))
+    assert "no news API key" in r["agents"]["error"] and r["trades"] == []
+
+
+@pytest.mark.unit
 def test_rank_builds_tradable_defined_risk_trades_best_first():
     chain = CHAIN | {"summary": {"atm_iv": 14.0, "resistance": 23000, "support": 22000}, "expiry": "27-Oct-2099"}
     ctx = {"spot": 22600, "days_to_expiry": 2, "trend": {"tone": "down", "label": "Downtrend"},
