@@ -119,6 +119,39 @@ def test_your_trade_closes_itself_at_the_stop():
     assert c["reason"] == "stop reached" and [x["exit"] for x in c["legs"]] == [211, 144] and c["net_pnl"] < 0
 
 
+LONG_CALL = {
+    "symbol": "NIFTY", "expiry": "27-Oct-2099", "spot": 23800, "strategy_text": "x", "charges_per_lot": 45.0,
+    "plan": {"strategy": "long_call", "bias": "bullish", "underlying_target": 24250, "underlying_stop": 23610},
+    "priced": {"lot": 65, "net_per_unit": 140, "debit": True, "max_loss_per_lot": 9100, "max_profit_per_lot": None,
+               "legs": [{"action": "BUY", "type": "CE", "strike": 23900.0, "price": 140.0, "id": "C"}]},
+    "levels": {"legs": [{"action": "BUY", "type": "CE", "strike": 23900.0, "premium_at_target": 410, "premium_at_stop": 64}]},
+}
+
+
+def call_chain(spot, q):
+    return lambda symbol, expiry: {"spot": spot, "rows": [{"strike": 23900.0, "ce": q}]}
+
+
+@pytest.mark.unit
+def test_premium_stop_closes_before_the_index_stop_like_a_dhan_super_order():
+    tr.take(LONG_CALL)
+    o = tr.overview(call_chain(23750, _q(70, 69, 71)))                          # index above its stop, premium above 64
+    assert o["open"][0]["live"]["flags"] == []
+    o = tr.overview(call_chain(23750, _q(63.5, 63, 64)))                         # time decay: premium at the stop
+    c = o["closed"][0]
+    assert c["reason"] == "stop reached" and c["legs"][0]["exit"] == 63 and c["spot_at_exit"] == 23750
+    t = tr.take(LONG_CALL)
+    o = tr.overview(call_chain(24000, _q(412, 411, 413)))                        # premium target before the index target
+    assert next(x for x in o["closed"] if x["id"] == t["id"])["reason"] == "target reached"
+
+
+@pytest.mark.unit
+def test_debit_spread_has_no_premium_trigger_only_the_index():
+    t = tr.take(RESULT | {"plan": RESULT["plan"] | {"strategy": "bear_put_spread"}})
+    assert tr._super_legs(t) == []
+    assert tr._super_legs(tr.take(RESULT)) == [0]                               # bear call spread: the sold leg
+
+
 @pytest.mark.unit
 def test_no_live_price_keeps_the_trade_open_until_there_is_one():
     tr.take(RESULT)
