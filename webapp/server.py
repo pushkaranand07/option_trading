@@ -308,6 +308,17 @@ async def trades():
     return await _call(trade_record.overview)
 
 
+@app.get("/api/trades.csv")
+def trades_csv():
+    """Every trade of both views with where it came from (download)."""
+    from datetime import date as _date
+
+    from fastapi.responses import Response
+
+    return Response(trade_record.history_csv(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="trade_history_{_date.today()}.csv"'})
+
+
 @app.post("/api/trades")
 def trade_take(body: dict = Body(...)):
     """Take trade ``candidate`` of AI run ``run_id`` as a dummy one-lot trade, priced by the server from a fresh
