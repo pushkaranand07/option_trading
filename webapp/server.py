@@ -231,6 +231,12 @@ def strategy_start(req: StrategyRequest):
     return {"job": strategist.start(sym, req.expiry)}
 
 
+@app.get("/api/strategy/latest/{symbol}")
+def strategy_latest(symbol: str):
+    """The last AI run for the instrument, fixed until the next run (an empty object if none)."""
+    return strategist.latest_run(md.instrument(symbol)["symbol"]) or {}
+
+
 @app.get("/api/strategy/{job_id}")
 def strategy_status(job_id: str):
     job = strategist.job(job_id)

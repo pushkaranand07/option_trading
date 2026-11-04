@@ -8,8 +8,8 @@ choice); you can still close one early by hand.
 
 One lot per trade. Entry prices are the ones the strategist priced (buy at the ask, sell at the bid). While a trade
 is open it is marked to market from the NSE option chain at the price it could be closed at now (a bought leg at the
-bid, a sold leg at the ask). When the index reaches the target or stop, the trade is closed at those close-out
-prices (the stop if both); after expiry it settles at intrinsic value. Charges for opening and closing every leg
+bid, a sold leg at the ask). When the index reaches the target or stop, or a Super-order leg's premium reaches its
+own (whichever first), the trade is closed at those close-out prices (the stop if both); after expiry it settles at intrinsic value. Charges for opening and closing every leg
 are subtracted. Stored in ``reports/trade_record/trades.json`` (git-ignored; stays on this computer).
 Paper trades only: nothing here places an order.
 """
@@ -104,17 +104,38 @@ def _pnl(trade: dict, exits: list[float]) -> float:
                for leg, x in zip(trade["legs"], exits, strict=True)) * trade["lot"] * trade["lots"]
 
 
-def _flags(trade: dict, spot: float | None) -> list[str]:
-    """Which of target / stop the index has reached now (bearish: target below, stop above)."""
+CREDIT = ("bear_call_spread", "bull_put_spread")
+
+
+def _super_legs(trade: dict) -> list[int]:
+    """Legs that carry a Dhan Super order (target + stop on the premium): a single leg, or a credit spread's sold leg.
+    Debit spreads and condors are closed by hand on the index level, so they have none."""
+    legs = trade["legs"]
+    if len(legs) == 1:
+        return [0]
+    return [i for i, x in enumerate(legs) if x["action"] == "SELL"] if trade.get("strategy") in CREDIT else []
+
+
+def _flags(trade: dict, spot: float | None, ltps: list[float | None] | None = None) -> list[str]:
+    """Which of target / stop is reached now, whichever comes first (user's choice, 2026-11-04): the index level
+    (bearish: target below, stop above), or a Super-order leg's premium at its last traded price, as Dhan triggers."""
     out, tgt, stop = [], trade.get("index_target"), trade.get("index_stop")
-    if spot is None or tgt is None or stop is None:
-        return out
-    down = tgt < stop
-    if (spot <= tgt) if down else (spot >= tgt):
-        out.append("target")
-    if (spot >= stop) if down else (spot <= stop):
-        out.append("stop")
-    return out
+    if spot is not None and tgt is not None and stop is not None:
+        down = tgt < stop
+        if (spot <= tgt) if down else (spot >= tgt):
+            out.append("target")
+        if (spot >= stop) if down else (spot <= stop):
+            out.append("stop")
+    for i in _super_legs(trade) if ltps else []:
+        leg, px = trade["legs"][i], ltps[i]
+        if px is None or leg.get("target") is None or leg.get("stop") is None:
+            continue
+        buy = leg["action"] == "BUY"                     # a sold leg gains when its premium falls
+        if (px >= leg["target"]) if buy else (px <= leg["target"]):
+            out.append("target")
+        if (px <= leg["stop"]) if buy else (px >= leg["stop"]):
+            out.append("stop")
+    return list(dict.fromkeys(out))
 
 
 def mark(trade: dict, chain_fn=None) -> dict:
@@ -141,7 +162,7 @@ def mark(trade: dict, chain_fn=None) -> dict:
     view["spot"], view["as_of"] = ch["spot"], ch.get("timestamp")
     if None not in exits:
         view["pnl"] = _pnl(trade, exits)
-    view["flags"] = _flags(trade, ch["spot"])
+    view["flags"] = _flags(trade, ch["spot"], [x["ltp"] for x in view["legs"]])
     return view
 
 

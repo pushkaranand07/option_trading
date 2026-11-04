@@ -1,6 +1,9 @@
-"""The AI strategist's forward test: write each trade to the registry before entry (docs/ai_strategist_test_v1_1.json, docs/PA_51).
+"""The AI strategist's forward test, version 2: write each trade to the registry before entry (docs/ai_strategist_test_v2.json, docs/PA_52).
 
-One NIFTY question per session counts: the first asked in the window. Order: the LLM answers; the structure is registered; only then is a
+Version 1.1 (one suggestion a question) was closed by the user on 2026-11-04 with one trade registered; its spec and registry stay on file,
+unedited, and are not settled or reported. Version 2 counts the AI's #1 of its ranked trades.
+
+One NIFTY question per session counts: the #1 of the first asked in the window. Order: the LLM answers; the structure is registered; only then is a
 fresh chain fetched, and the entry is that chain's bid and ask, so no entry price is older than its registration. The rule-based pick is
 built from the same fresh chain, and the chain is saved for the random baseline. A changed prompt or model refuses to count: that is a
 new test. Nothing here runs by itself: it only acts when the user asks for a suggestion. This is a test of a paper entry, not of real fills.
@@ -22,10 +25,10 @@ from tradingagents.research import registry
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
-SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v1_1.json"
-SPEC_SHA256 = "4a7c59bb62dc60703b6acd0926a8c3fa1bf3e39e43b542754874cc038f986dc9"
-REGISTRY = ROOT / "reports" / "ai_test" / "registry.jsonl"
-CHAINS = ROOT / "reports" / "ai_test" / "chains"
+SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v2.json"
+SPEC_SHA256 = "8b433a60e8f8991d3cb31f0d51f7ffb0d60fb8fb50ce3dc8a858d4fb40ec5236"
+REGISTRY = ROOT / "reports" / "ai_test" / "v2" / "registry.jsonl"     # version 1.1's stays at reports/ai_test/registry.jsonl
+CHAINS = ROOT / "reports" / "ai_test" / "v2" / "chains"
 IST = pytz.timezone("Asia/Kolkata")
 SYMBOL = "NIFTY"
 WINDOW = (time(9, 30), time(15, 0))
@@ -35,19 +38,22 @@ def read_spec(path: Path | None = None) -> dict:
     spec = json.loads((path or SPEC_FILE).read_text(encoding="utf-8"))
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != SPEC_SHA256:
-        raise ValueError("ai_strategist_test_v1_1.json changed after it was frozen")
+        raise ValueError("ai_strategist_test_v2.json changed after it was frozen")
     return spec
 
 
 def prompt_fingerprint() -> str:
-    """Hash of what the LLM is told: the system prompt, the answer schema, the strategy menu, and the code that builds the question."""
-    from webapp import strategist as st
+    """Hash of what the ranking LLM is told and how its list is built: the system prompt, the answer schema, the strategy menu, and the
+    code that runs the research, builds the context and the candidates, and asks. The research agents' own prompts are not covered."""
+    from webapp import morning, strategist as st
 
     def lf(text: str) -> str:
         return text.replace("\r\n", "\n")
 
-    parts = {"system": lf(st.SYSTEM), "schema": st.StrategyPlan.model_json_schema(), "strategies": {k: v[0] for k, v in st.STRATEGIES.items()},
-             "ask_llm": lf(inspect.getsource(st.ask_llm)), "build_context": lf(inspect.getsource(st.build_context))}
+    code = (st.ask_rank_llm, st.ai_ranked, st.candidates_for_ai, st.today_moves, st.agents_view, st.build_context, st.rank, st._structures,
+            st._index_levels, st.trade_levels, st.price, st.check_structure, morning.ai_view)
+    parts = {"system": lf(st.RANK_SYSTEM), "schema": st.RankedAnswer.model_json_schema(), "strategies": {k: v[0] for k, v in st.STRATEGIES.items()},
+             "top": st.TOP_AI, "code": {f.__name__: lf(inspect.getsource(f)) for f in code}}
     return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -55,7 +61,8 @@ def model_settings() -> dict:
     from tradingagents.default_config import build_default_config
 
     c = build_default_config()
-    return {"provider": c.get("llm_provider"), "model": c.get("deep_think_llm"), "reasoning_effort": os.environ.get("TRADINGAGENTS_OPENAI_REASONING_EFFORT")}
+    return {"provider": c.get("llm_provider"), "model": c.get("deep_think_llm"), "quick_model": c.get("quick_think_llm"),
+            "reasoning_effort": os.environ.get("TRADINGAGENTS_OPENAI_REASONING_EFFORT")}
 
 
 def _weekdays_between(a: date, b: date) -> list[date]:
@@ -64,7 +71,8 @@ def _weekdays_between(a: date, b: date) -> list[date]:
 
 
 def record(result: dict, path: Path | None = None, chains: Path | None = None, now: datetime | None = None, built=None, spec: dict | None = None, clock=None) -> dict | None:
-    """Register the first NIFTY answer of a session. Returns the registry row, or None if this answer does not count."""
+    """Register the first NIFTY answer of a session: ``result`` is its #1 trade (a no_trade plan when the AI ranked none).
+    Returns the registry row, or None if this answer does not count."""
     from webapp import strategist as st
 
     path, chains = path or REGISTRY, chains or CHAINS

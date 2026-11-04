@@ -1,4 +1,4 @@
-"""The AI strategist's forward test and the plain labels (docs/ai_strategist_test_v1_1.json, docs/PA_49, PA_51)."""
+"""The AI strategist's forward test and the plain labels (docs/ai_strategist_test_v2.json, docs/PA_49, PA_51, PA_52)."""
 
 import json
 from datetime import date, datetime, timedelta
@@ -143,7 +143,7 @@ def test_the_spec_is_frozen_and_pins_the_prompt_in_use(tmp_path):
 
 @pytest.mark.unit
 def test_the_plan_tab_labels_and_no_score_number():
-    assert "UNTESTED, no evidence of edge" in APP and "cost model unverified" in APP
+    assert "UNTESTED" not in APP and "cost model unverified" in APP              # the label went on 2026-11-04 (user's choice)
     for gone in ("Pulse score", "By Pulse score", "score-${", "e.score", "/100", "<th>Score</th>", "by_score", "Why the score"):
         assert gone not in APP, gone
 
@@ -167,11 +167,16 @@ def test_power_table_in_the_spec_is_complete():
 
 
 @pytest.mark.unit
-def test_version_1_1_pins_the_same_prompt_and_adds_the_stop_and_interim_check():
+def test_version_2_supersedes_1_1_and_keeps_its_stop_and_interim_check():
+    import hashlib
+
     spec = ai_test.read_spec()
-    old = json.loads((ai_test.ROOT / "docs" / "ai_strategist_test_v1.json").read_text(encoding="utf-8"))
-    assert spec["version"] == old["version"] and spec["supersedes"]["trades_counted_under_it"] == 0
-    assert spec["stop"]["date"] == "2027-11-01" and spec["interim_check"]["date"] == "2027-05-01"
+    old = json.loads((ai_test.ROOT / "docs" / "ai_strategist_test_v1_1.json").read_text(encoding="utf-8"))
+    old_sha = hashlib.sha256(json.dumps(old, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+    assert old_sha == spec["supersedes"]["sha256"] == "4a7c59bb62dc60703b6acd0926a8c3fa1bf3e39e43b542754874cc038f986dc9"   # 1.1 unedited
+    assert spec["supersedes"]["trades_counted_under_it"] == 1 and spec["version"]["prompt_sha256"] != old["version"]["prompt_sha256"]
+    assert spec["stop"] == old["stop"] and spec["interim_check"] == old["interim_check"] and spec["power"]["pass_rate_by_edge"] == old["power"]["pass_rate_by_edge"]
+    assert ai_test.REGISTRY.parent.name == "v2" and "#1" in spec["forward_test"]["frequency"]
     assert "no large edge detected" in spec["stop"]["if_lower_bound_is_below_0"] and "in writing" in spec["stop"]["if_above_0_and_under_500_trades"]
 
 

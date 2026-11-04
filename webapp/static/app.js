@@ -708,45 +708,6 @@ function planEntries() {
   return null;
 }
 
-// One lot (or one share): what it costs and what it loses at the stop. You choose how many.
-function perLot(p) {
-  const leg = p.option, s = p.signal;
-  if (!leg) return { perShare: Math.abs(s.entry - s.stop_loss) };
-  const perUnit = leg.premium && leg.stop_loss ? leg.premium - leg.stop_loss : leg.move_sl;   // premium lost at the stop
-  return { loss: perUnit * leg.lot, approx: !leg.premium, cost: leg.premium ? leg.premium * leg.lot : null };
-}
-
-function callHtml(sym, p, ph) {
-  if (ph.key === "closed" || ph.key === "after" || ph.key === "stale") return `<div class="call idle"><b>No trading now.</b> ${esc(ph.text)}</div>`;
-  if (ph.key === "pre" || ph.key === "preopen" || ph.key === "wait")
-    return `<div class="call idle"><b>Wait.</b> The trade decision is made live from ${esc(S.morning.session.first_signal)}, using this morning's view and the first half hour of trading. This card updates by itself.</div>`;
-  if (!p) return `<div class="call idle"><span class="spinner"></span> Checking the live signal…</div>`;
-  const v = p.verdict, s = p.signal, leg = p.option;
-  if (!(v.safe && s.side !== "WAIT")) {
-    return `<div class="call stop"><b>No trade right now.</b> no trade signal today
-      <div class="small muted">Checked again every 15 seconds until 15:15. Not trading is a position too.</div></div>`;
-  }
-  if (!S.ack[callKey(sym, p)]) return `<div class="call idle"><div class="ask">Take this trade</div>${ackGate(callKey(sym, p), sym)}</div>`;
-  const up = s.side === "BUY", z = perLot(p);
-  if (!leg) {
-    const sz = `<div class="small">Each share loses about <b>${rupee(z.perShare)}</b> at the stop — pick the quantity so the total is a loss you accept.</div>`;
-    return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade ${UNTESTED}</div>
-      <div class="what"><b>${up ? "Buy" : "Short-sell"} ${esc(nameOf(sym))}</b> · intraday, exit by 15:15</div>
-      <div class="levels"><div class="lv"><span>Entry</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss</span><b class="down">${fmt(s.stop_loss)}</b></div>
-        <div class="lv"><span>Target</span><b class="up">${fmt(s.target)}</b></div></div>${sz}
-      <div class="small muted"><b>no edge evidence</b> · ${COST_NOTE}. One trade a day.</div></div>`;
-  }
-  const sizing = `<div class="levels"><div class="lv"><span>One lot</span><b>${leg.lot}</b><small>units</small></div>
-        <div class="lv"><span>Loss at stop, a lot</span><b class="down">${z.approx ? "≈ " : ""}${money(z.loss)}</b><small>before charges · ${COST_NOTE}</small></div>
-        <div class="lv"><span>Money needed, a lot</span><b>${z.cost != null ? money(z.cost) : "premium × lot"}</b><small>option premium paid</small></div></div>`;
-  return `<div class="call ${up ? "go-up" : "go-down"}"><div class="ask">Take this trade ${UNTESTED}</div>
-    <div class="what"><b>Buy ${esc(NAMES[sym] || nameOf(sym))} ${fmt0(leg.strike)} ${leg.kind}</b>${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}</div>
-    <div class="levels"><div class="lv"><span>Entry (index)</span><b>${fmt(s.entry)}</b></div><div class="lv"><span>Stop loss (index)</span><b class="down">${fmt(s.stop_loss)}</b></div>
-      <div class="lv"><span>Target (index)</span><b class="up">${fmt(s.target)}</b></div>${leg.premium ? `<div class="lv"><span>Premium now</span><b>${rupee(leg.premium)}</b><small>stop ${rupee(leg.stop_loss)} · target ${rupee(leg.target)}</small></div>` : ""}</div>
-    ${sizing}
-    <div class="small muted"><b>no edge evidence</b> · ${COST_NOTE}. Exit by 15:15. One trade a day.</div></div>`;
-}
-
 function plainPcr(x) { return x > 1.2 ? "many more puts than calls open (heavy hedging)" : x < 0.8 ? "more calls than puts open" : "calls and puts roughly balanced"; }
 function morningHtml(sym, e) {
   const c = e.context, ai = e.ai, em = c.expected_move, t = c.trend, g = c.regime;
@@ -772,7 +733,6 @@ function morningHtml(sym, e) {
 
 function renderPlanCards() {
   const m = S.morning; if (!m) return;
-  const ph = phase(m.session);
   const entries = planEntries();
   if (!entries) { $("#planBody").dataset.key = ""; $("#planBody").innerHTML = `<div class="loading"><span class="spinner"></span>Building the plan for ${esc(nameOf(S.sym))}…</div>`; return; }
   // The card is built once per plan and instrument (its chart lives in it); later updates only refill the slots.
@@ -781,20 +741,18 @@ function renderPlanCards() {
     $("#planBody").dataset.key = key;
     $("#planBody").innerHTML = entries.map(([sym, e]) => `<section class="card plan-card" data-sym="${esc(sym)}">
       <div class="card-head"><h2>${esc(NAMES[sym] || nameOf(sym))}</h2>${e.context.trend ? `<span class="badge ${e.context.trend.tone}">${esc(e.context.trend.label)}</span>` : ""}</div>
-      <div class="body"><h3 class="sub-h">Today's call</h3><div class="call-slot"></div>
-        <h3 class="sub-h">Price chart <span class="small muted chart-note"></span></h3>
+      <div class="body"><h3 class="sub-h">Price chart <span class="small muted chart-note"></span></h3>
         <div class="pc-bar"></div><div class="pc-info small"><span class="pc-readout"></span><span class="pc-hint"></span></div>
         <div class="pc-wrap"><div class="plan-chart"></div></div>
-        <h3 class="sub-h">AI strategist</h3><div class="strat-slot"></div>
+        <h3 class="sub-h">AI strategy</h3><div class="strat-slot"></div>
         <h3 class="sub-h">Option chain <span class="small muted chain-note"></span></h3><div class="chain-slot"></div>
         <h3 class="sub-h">Morning view</h3><div class="morning-slot"></div></div></section>`).join("");
     planCharts.clear();
     loadPlanCharts();
-    for (const [sym] of entries) { renderStrat(sym); loadNseChain(sym).then(() => loadRank(sym)); }
+    for (const [sym] of entries) { renderStrat(sym); loadNseChain(sym); loadLatestRun(sym); }
   }
   for (const [sym, e] of entries) {
     const card = $(`.plan-card[data-sym="${sym}"]`);
-    $(".call-slot", card).innerHTML = callHtml(sym, S.live[sym], ph);
     $(".morning-slot", card).innerHTML = morningHtml(sym, e);
     drawPlanChartLines(sym);
   }
@@ -1093,15 +1051,9 @@ function drawPlanChartLines(sym) {
     level(dl.close, col.day, `Prev close ${fmt0(dl.close)}`); level(dl.open, col.day, `Open ${fmt0(dl.open)}`);
   }
   if (pcOn("trade")) {
-    const p = S.live[sym];
-    if (p?.verdict?.safe && p.signal?.side !== "WAIT" && S.ack[callKey(sym, p)]) {
-      level(p.signal.entry, col.text, `Entry ${fmt0(p.signal.entry)}`, "solid");
-      axis(p.signal.target, col.up, "Target"); axis(p.signal.stop_loss, col.down, "Stop");
-      position(p.signal.entry, p.signal.target, p.signal.stop_loss);
-    }
     const r = curRes(sym), a = r?.plan;
-    if (a && a.strategy !== "no_trade" && S.ack[stratKey(r, sym)]) {
-      const who = r.source === "pulse" ? `#${r.rank}` : "AI", lo = a.underlying_entry_low, hi = a.underlying_entry_high;
+    if (a && a.strategy !== "no_trade") {
+      const who = `AI #${r.rank}`, lo = a.underlying_entry_low, hi = a.underlying_entry_high;
       if (lo && hi) {
         bands.push({ from: lo, to: hi, color: hexA(col.text, 0.07) });
         level(hi, col.text, `${who} entry ${fmt0(lo)} – ${fmt0(hi)}`, "dot"); level(lo, col.text, null, "dot");
@@ -1219,27 +1171,26 @@ function renderNseChain(sym) {
       <tbody>${rows}</tbody></table></div>
     <p class="small muted">Biggest call OI above the price acts as a ceiling (call wall), biggest put OI below as a floor (put wall). Shaded cells are in the money. ${c.fetched ? `Fetched ${esc(c.fetched)}.` : ""}
       <button class="btn small-btn chain-refresh">Refresh</button></p>`;
-  slot.querySelectorAll("[data-exp]").forEach((b) => (b.onclick = () => loadNseChain(sym, b.dataset.exp).then(() => loadRank(sym))));
+  slot.querySelectorAll("[data-exp]").forEach((b) => (b.onclick = () => loadNseChain(sym, b.dataset.exp)));
   slot.querySelectorAll("[data-view]").forEach((b) => (b.onclick = () => { S.nseView = b.dataset.view; store("nseView", S.nseView); renderNseChain(sym); }));
   $(".chain-refresh", slot).onclick = () => loadNseChain(sym);
   const sc = $(".plan-oc", slot), atm = $("tr.spot-row", sc) || $("tr.atm", sc);
   if (atm && slot.dataset.centered !== c.expiry) { sc.scrollTop = atm.offsetTop - sc.clientHeight / 2; slot.dataset.centered = c.expiry; }
 }
 
+const STAGE = { agents: "Step 1 of 2: the research agents are reading the news, the market and sentiment, and debating bull vs bear (several minutes)",
+  ranking: "Step 2 of 2: the AI is ranking the live trades by the whole analysis" };
 function renderStrat(sym) {
   const slot = $(`.plan-card[data-sym="${sym}"] .strat-slot`); if (!slot) return;
-  const st = S.strat[sym] || {};
-  const ask = `<div class="strat-ask"><button class="btn primary strat-go" ${st.running ? "disabled" : ""}>${st.running ? "Analysing…" : st.result ? "Ask again" : `Analyse ${esc(NAMES[sym] || nameOf(sym))} with AI`}</button>
-    <span class="small muted">${st.running ? `<span class="spinner"></span> Reading the chart, trend, volatility, option chain and news view (about a minute) — started ${esc(st.started || "")}`
-      : `Uses expiry <b>${esc(S.nseExp[sym] || "nearest")}</b> (pick another in the chain below). Figures are per lot; you choose how many.`}</span></div>`;
-  const v = S.view[sym], cand = typeof v === "number" ? S.rank[sym]?.data?.candidates?.[v] : null;
-  const detail = cand ? stratHtml(cand, sym) : st.error ? `<div class="notice">${esc(st.error)}</div>` : st.result ? stratHtml(st.result, sym) : "";
-  const aiHead = `<h4 class="mini-h">Second opinion from the AI</h4>` + ask
-    + (cand && st.result ? `<div class="small"><a href="#" class="show-ai">Show the AI's suggestion instead</a></div>` : "");
-  slot.innerHTML = st.result ? aiHead + (cand ? "" : detail) + rankHtml(sym) + (cand ? detail : "") : rankHtml(sym) + aiHead + detail;
-  slot.querySelectorAll("[data-rank]").forEach((r) => (r.onclick = () => { S.view[sym] = +r.dataset.rank; S.ticket[sym] = null; refreshStrat(sym); }));
-  if ($(".show-ai", slot)) $(".show-ai", slot).onclick = (e) => { e.preventDefault(); S.view[sym] = "ai"; S.ticket[sym] = null; refreshStrat(sym); };
-  if ($(".rank-refresh", slot)) $(".rank-refresh", slot).onclick = () => loadRank(sym);
+  const st = S.strat[sym] || {}, res = st.result;
+  const ask = `<div class="strat-ask"><button class="btn primary strat-go" ${st.running ? "disabled" : ""}>${st.running ? "Running…" : res ? "Run again" : "Run AI strategy"}</button>
+    <span class="small muted">${st.running ? `<span class="spinner"></span> ${esc(STAGE[st.stage] || "Starting…")} — started ${esc(st.started || "")}`
+      : res ? `The 8 trades below are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.`
+      : `Reads the news, sentiment, the bull / bear debate, today's moves, trend, volatility and the option chain, then gives the 8 strongest trades for expiry <b>${esc(S.nseExp[sym] || "nearest")}</b>. Takes several minutes.`}</span></div>`;
+  const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
+  slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
+    + (res ? aiListHtml(sym, res) : "") + (cand ? stratHtml(cand, sym) : "");
+  slot.querySelectorAll("[data-ai]").forEach((r) => r.tagName === "TR" && (r.onclick = () => { S.view[sym] = S.view[sym] === +r.dataset.ai ? null : +r.dataset.ai; S.ticket[sym] = null; refreshStrat(sym); }));
   $(".strat-go", slot).onclick = () => startStrat(sym);
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
   if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
@@ -1248,7 +1199,7 @@ function renderStrat(sym) {
 }
 
 async function startStrat(sym) {
-  S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; S.view[sym] = "ai"; renderStrat(sym);
+  S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; S.view[sym] = null; renderStrat(sym);
   try {
     const { job } = await api("/api/strategy", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol: sym, expiry: S.nseExp[sym] || null }) });
@@ -1260,14 +1211,23 @@ async function startStrat(sym) {
 async function pollStrat(sym, job) {
   try {
     const j = await api("/api/strategy/" + job);
-    if (j.status === "running") { S.strat[sym] = { running: true, started: j.started }; renderStrat(sym); setTimeout(() => pollStrat(sym, job), 3000); return; }
-    S.strat[sym] = j.status === "done" ? { result: j.result } : { error: j.error };
-    S.ticket[sym] = null; S.view[sym] = "ai";
+    if (j.status === "running") { S.strat[sym] = { running: true, started: j.started, stage: j.stage }; renderStrat(sym); setTimeout(() => pollStrat(sym, job), 3000); return; }
+    S.strat[sym] = j.status === "done" && j.result?.trades ? { result: j.result } : j.status === "done" ? {} : { error: j.error };   // {}: an answer from before this version
+    S.ticket[sym] = null; S.view[sym] = S.strat[sym].result?.trades?.length ? 0 : null;
   } catch { delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs)); S.strat[sym] = {}; }   // server restarted
   renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym);
-  if (S.strat[sym]?.result) loadRank(sym);
 }
 Object.entries(stratJobs).forEach(([sym, job]) => pollStrat(sym, job));   // a result survives a page reload
+
+// The last run, saved on the server: its trades stay the same until the next run (reloads, restarts).
+async function loadLatestRun(sym) {
+  if (S.strat[sym]?.result || S.strat[sym]?.running || stratJobs[sym]) return;
+  try {
+    const res = await api("/api/strategy/latest/" + encodeURIComponent(sym));
+    if (!res.trades || S.strat[sym]?.result || S.strat[sym]?.running) return;
+    S.strat[sym] = { result: res }; S.view[sym] = res.trades.length ? 0 : null; refreshStrat(sym);
+  } catch { /* no saved run */ }
+}
 
 // How each leg goes into Dhan, so every number labelled Target / Stop loss can be typed into a Super order
 // (Dhan: a BUY needs target > entry > stop, a SELL needs target < entry < stop).
@@ -1302,28 +1262,8 @@ function contractName(sym, expiry, l) {
 const pnl = (x) => (x == null ? "—" : `<span class="${cls(x)}">${x > 0 ? "+" : x < 0 ? "−" : ""}₹${fmt0(Math.abs(x))}</span>`);
 
 // No score: its inputs (trend, PCR, OI) showed no edge under the tested conditions in the LightGBM test (same-day AUC 0.502) and model suite v1 (docs/data_catalog.md).
-const UNTESTED = `<span class="badge untested">UNTESTED, no evidence of edge</span>`;
 const COST_NOTE = "cost model unverified";
 const RECORDED_NOTE = `<p class="small muted">recorded trades, not a test (not registered before entry); ${COST_NOTE}</p>`;
-// A typed word before an untested trade's orders, target and stop show. Held in memory: a reload asks again.
-const ACK_WORD = "UNTESTED";
-S.ack = {};
-const stratKey = (res, sym) => `strat|${sym}|${res.source === "pulse" ? `rank${res.rank}` : res.asked_at}|${res.expiry}`;
-const callKey = (sym, p) => `call|${sym}|${p.signal?.side}`;
-const rankKey = (sym) => `rank|${sym}`;
-function ackGate(key, sym) {
-  return `<div class="ack-gate">${UNTESTED}<p class="small">Orders, target and stop are hidden until you acknowledge that this trade is untested.</p>
-    <button class="btn ack-untested" data-key="${esc(key)}" data-sym="${esc(sym)}">Type ${ACK_WORD} to show this trade</button></div>`;
-}
-document.addEventListener("click", (e) => {
-  const b = e.target.closest?.(".ack-untested"); if (!b) return;
-  const typed = window.prompt(`This trade is UNTESTED, with no evidence of edge. Type ${ACK_WORD} to show its orders, target and stop.`);
-  if ((typed || "").trim().toUpperCase() !== ACK_WORD) return;
-  S.ack[b.dataset.key] = true;
-  const sym = b.dataset.sym, slot = $(`.plan-card[data-sym="${sym}"] .call-slot`);
-  if (slot && S.morning) slot.innerHTML = callHtml(sym, S.live[sym], phase(S.morning.session));
-  renderStrat(sym); drawPlanChartLines(sym);
-});
 function evidenceHtml(e) {
   if (!e) return "";
   return `<details class="evidence"><summary>Inputs looked at</summary>
@@ -1334,16 +1274,15 @@ function evidenceHtml(e) {
 function stratHtml(res, sym) {
   const a = res.plan, pr = res.priced, lv = res.levels;
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
-  const head = `<div class="strat-head"><div><div class="ask">${res.source === "pulse" ? `Pulse ranked trade #${res.rank}` : "AI suggestion"} · expiry ${esc(res.expiry)}</div>
+  const head = `<div class="strat-head"><div><div class="ask">AI's trade #${res.rank} · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
-    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">${res.source === "pulse" ? "n/a" : `AI confidence ${esc(a.confidence)}`}</span> ${UNTESTED}</div></div>
+    <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span></div></div>
     ${evidenceHtml(res.evidence)}
     ${res.retried ? `<div class="small muted">The AI's first answer was refused (${esc(res.retried.join("; "))}); this is its corrected answer.</div>` : ""}
     ${res.ai_record ? `<div class="small muted">Saved to the AI track record on the <a href="#record">Trade Record</a> tab, which settles it at its target, stop or expiry.</div>` : ""}`;
-  const read = `<p>${esc(a.market_read)}</p>`;
+  const read = res.ai_why ? `<p><b>Why the AI ranks it #${res.rank}:</b> ${esc(res.ai_why)}</p>` : `<p>${esc(a.market_read)}</p>`;
   if (res.rejected) return `<div class="call stop">${head}<b>The proposal was refused by the safety checks:</b><ul>${res.rejected.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     <div class="small">Pulse only shows defined-risk trades (no naked option selling). Ask again, or skip.</div></div>${read}`;
-  if (pr && a.strategy !== "no_trade" && !S.ack[stratKey(res, sym)]) return `<div class="call idle">${head}${read}${ackGate(stratKey(res, sym), sym)}</div>`;
   const name = NAMES[sym] || sym, down = a.underlying_target != null && a.underlying_stop != null && a.underlying_target < a.underlying_stop;
   const story = a.strategy === "no_trade" ? "" : `<div class="story">
       <div class="story-line"><b>${down ? `You make money if ${esc(name)} falls` : a.bias === "neutral" ? `You make money if ${esc(name)} stays in a range` : `You make money if ${esc(name)} rises`}.</b>
@@ -1376,6 +1315,7 @@ function stratHtml(res, sym) {
         ? `Put the <b>Super order</b> (target + stop loss) on the <b>SELL</b> leg only. When it fills at its target or stop, <b>sell the BUY leg</b> straight away. Never put a stop loss on the BUY leg: if it fired alone, the sold leg would be left unprotected.`
         : `Dhan's Super order cannot manage this spread safely, so use plain Limit orders and close <b>both</b> legs by hand when ${esc(name)} reaches its target or stop (the spread is then worth about <b class="up">${rupee(sp.at_target)}</b> or <b class="down">${rupee(sp.at_stop)}</b>). Buy back the <b>SELL</b> leg first, then sell the BUY leg.`}</div>`;
   const econ = pr ? `<div class="levels">
+      <div class="lv"><span>Money for 1 lot</span><b>${rupee(pr.outlay_per_lot)}</b><small>${lotMoney(pr.debit, pr.outlay_per_lot).label} · ${pr.lot} qty</small></div>
       <div class="lv"><span>${pr.debit ? "You pay" : "You receive"}</span><b>${rupee(Math.abs(pr.net_per_unit))}</b><small>per unit · ${money(Math.abs(pr.net_per_unit) * pr.lot)} a lot</small></div>
       <div class="lv"><span>Worst case at expiry</span><b class="down">${money(pr.max_loss_per_lot)}</b><small>a lot, if you never exit</small></div>
       <div class="lv"><span>Best case at expiry</span><b class="up">${pr.max_profit_per_lot == null ? "open-ended" : money(pr.max_profit_per_lot)}</b><small>a lot${pr.reward_to_risk != null ? ` · ${pr.reward_to_risk.toFixed(2)}× the risk` : ""}</small></div>
@@ -1396,7 +1336,7 @@ function stratHtml(res, sym) {
       ${kl ? `<tr><th>Key levels</th><td><ul class="plain">${kl}</ul></td></tr>` : ""}
       ${a.risks?.length ? `<tr><th>Risks</th><td><ul class="plain">${a.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></td></tr>` : ""}
     </table>
-    <p class="small muted">${res.source === "pulse" ? "Built by Pulse's rules from the live option chain and" : `GPT-5 analysis (${res.seconds}s) checked and`} priced by Pulse at the live bid / ask. Not a validated edge and not advice — no strategy here has passed the project's tests.</p>`;
+    <p class="small muted">Chosen by the AI from Pulse's candidates, built by Pulse's rules from the live option chain and priced by Pulse at the live bid / ask. Not advice.</p>`;
 }
 
 // NIFTY levels from low to high, so "target below, stop above" (or the reverse) is visible at a glance.
@@ -1482,8 +1422,8 @@ function renderTicket(sym) {
 S.takenRank = {};
 const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
 async function takeRanked(sym, i, btn) {
-  const d = S.rank[sym]?.data, c = btn.dataset.best ? d?.best?.[btn.dataset.best] : d?.candidates?.[i];
-  if (!c || !S.ack[rankKey(sym)]) return;
+  const c = S.strat[sym]?.result?.trades?.[i];
+  if (!c) return;
   btn.disabled = true;
   try {
     await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
@@ -1492,11 +1432,11 @@ async function takeRanked(sym, i, btn) {
 }
 
 async function takeTrade(sym) {
-  const res = curRes(sym); if (!res || !S.ack[stratKey(res, sym)]) return;
+  const res = curRes(sym); if (!res) return;
   const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
   try {
     const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(res) });
-    res._taken = t.id; renderStrat(sym); loaded.record = false;
+    res._taken = t.id; S.takenRank[takeKey(res)] = true; renderStrat(sym); loaded.record = false;
   } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
@@ -1511,7 +1451,7 @@ async function loadRecord() {
   const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
   const summary = `<section class="card"><div class="card-head"><h2>Your trades — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE}</span></div>
     <div class="body">${RECORDED_NOTE}<div class="levels rec-stats">
-      ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}
+      ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}${stat("Money in open trades", money(d.open.reduce((a, t) => a + tradeMoney(t), 0)))}
       ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
       ${stat("Win rate", s.win_rate != null ? s.win_rate.toFixed(0) + "%" : "—")}${stat("Average a trade", money(s.avg), cls(s.avg))}
       ${stat("Best", money(s.best), "up")}${stat("Worst", money(s.worst), "down")}</div></div></section>`;
@@ -1569,7 +1509,7 @@ function aiRecordHtml(ai) {
       <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
       <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
   }).join("");
-  return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2> ${UNTESTED} <span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE}</span></div>
+  return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2> <span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE}</span></div>
     <div class="body">${RECORDED_NOTE}
       <div class="levels rec-stats">
         <div class="lv"><span>Suggestions</span><b>${s.closed + s.open}</b><small>${s.open} still open</small></div>
@@ -1589,6 +1529,8 @@ function recLevels(t, l) {        // target / stop cells of a recorded leg, by i
   return `<td class="num ref">(${fmt(l.target)})</td><td class="num ref">(${fmt(l.stop)})</td>`;
 }
 
+const tradeMoney = (t) => (t.debit ? -t.net_entry * t.lot * t.lots : t.max_loss_per_lot * t.lots);
+
 function openTradeHtml(t) {
   const v = t.live || {}, down = t.index_target < t.index_stop, name = NAMES[t.symbol] || t.symbol;
   const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])];
@@ -1603,7 +1545,7 @@ function openTradeHtml(t) {
   return `<section class="card rec-open"><div class="card-head"><h2>${esc(name)} · ${esc(STRAT_NAMES[t.strategy] || t.strategy)}</h2>
       <div class="rec-pnl ${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}<small>P&L now, before charges · ${COST_NOTE}</small></div></div>
     <div class="body">
-      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
+      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · money in it <b>${rupee(tradeMoney(t))}</b> (${lotMoney(t.debit).label}) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
         ${v.as_of ? ` · prices from NSE as of ${esc(v.as_of.slice(-8))}${nseAge(v.as_of)}` : ""}</div>
       ${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
       ${lad}
@@ -1621,93 +1563,65 @@ function openTradeHtml(t) {
     </div></section>`;
 }
 
-// ---------- Pulse trade ranking: concrete trades with strikes, entry, target and stop, best first ----------
-S.rank = {}; S.view = {};
-function curRes(sym) {          // the trade shown in the detail card: a ranked one, or the AI's suggestion
+// ---------- the AI's ranked trades: which one the detail card shows ----------
+S.view = {};
+function curRes(sym) {          // the trade shown in the detail card: one of the AI's ranked trades
   const v = S.view[sym];
-  if (typeof v === "number") return S.rank[sym]?.data?.candidates?.[v] || null;
-  return S.strat[sym]?.result || null;
+  return typeof v === "number" ? S.strat[sym]?.result?.trades?.[v] || null : null;
 }
 function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym); }
 
-async function loadRank(sym) {
-  const r = S.rank[sym] = S.rank[sym] || {};
-  r.loading = true; renderStrat(sym);
-  try {
-    r.data = await api(`/api/rank/${encodeURIComponent(sym)}${S.nseExp[sym] ? "?expiry=" + encodeURIComponent(S.nseExp[sym]) : ""}`); r.error = null;
-    if (S.view[sym] === undefined && r.data.candidates.length && !S.strat[sym]?.result) S.view[sym] = 0;   // show #1 by default
-    if (typeof S.view[sym] === "number" && S.view[sym] >= r.data.candidates.length) S.view[sym] = 0;
-  } catch (e) { r.error = e.message; }
-  r.loading = false;
-  if (!S.ticket[sym]) refreshStrat(sym); else renderStrat(sym);
-}
 
-// The game plan, in Hinglish (user's choice): above the call wall buy a call, below the put wall buy a put, in between
-// no trade. Only the zone NIFTY is in now shows a trade; the others say what to wait for.
-function gamePlanHtml(sym) {
-  const d = S.rank[sym]?.data, w = d?.walls, name = NAMES[sym] || sym;
-  if (!d || w?.call == null || w?.put == null || w.call <= w.put) return "";
-  const q = S.quotes[sym], spot = d.spot, zone = spot > w.call ? "call" : spot < w.put ? "put" : "mid";
-  const trade = (c) => {
-    if (!c) return `<div class="small muted">Abhi is taraf ka koi tradable option nahi mila (live bid / ask nahi hai).</div>`;
-    if (!S.ack[rankKey(sym)]) return `<div class="small muted">Trade dekhne ke liye neeche "Ranked trades" mein ${ACK_WORD} type kar.</div>`;
-    const lv = c.levels, l = lv.legs[0], a = c.plan;
-    return `<div class="gp-trade"><span class="leg-tag buy">BUY</span> <b>${esc(contractName(sym, c.expiry, l))}</b> @ ${fmt(l.price)}
-      <div class="small">Target <b class="up">${fmt(l.premium_at_target)}</b> (${esc(name)} ${fmt0(a.underlying_target)}) · Stop loss <b class="down">${fmt(l.premium_at_stop)}</b> (${esc(name)} ${fmt0(a.underlying_stop)})
-        · ek lot pe <b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b> / <b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b> · paisa lagega ${money(l.price * c.lot)}</div>
-      ${S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" data-take="-1" data-best="${a.strategy}">Take (dummy, 1 lot)</button>`}</div>`;
-  };
-  const row = (key, cond, what, body) => `<li class="gp-zone ${zone === key ? "gp-now" : "muted"}">${zone === key ? `<span class="badge warn">abhi yahan</span> ` : ""}<b>${cond}</b> → ${what}
-    ${zone === key ? body : `<div class="small">Jab ${esc(name)} is zone mein aayega, yahan us waqt ke price se trade dikhega.</div>`}</li>`;
-  const gap = zone === "mid" ? `${esc(name)} call wall se ${fmt0(w.call - spot)} points neeche aur put wall se ${fmt0(spot - w.put)} points upar hai.`
-    : zone === "call" ? `${esc(name)} call wall ${fmt0(w.call)} ke ${fmt0(spot - w.call)} points upar nikal gaya hai.`
-    : `${esc(name)} put wall ${fmt0(w.put)} ke ${fmt0(w.put - spot)} points neeche aa gaya hai.`;
-  return `<div class="game-plan"><h4 class="mini-h">Aaj ka game plan ${UNTESTED}</h4>
-    <div class="small"><b>Market abhi:</b> ${esc(name)} <b>${fmt0(spot)}</b>${q ? ` <span class="${cls(q.change)}">(${pct(q.change_pct)} aaj)</span>` : ""} · call wall ${fmt0(w.call)} · put wall ${fmt0(w.put)} (sabse zyada OI, ${esc(d.expiry)} expiry) · ${esc(d.built_at)} tak. ${gap}</div>
-    <ol class="gp-zones">
-      ${row("call", `${esc(name)} ${fmt0(w.call)} ke upar`, "<b>Call le</b> (buy call)", trade(d.best?.long_call))}
-      ${row("mid", `${fmt0(w.put)} se ${fmt0(w.call)} ke beech`, "<b>Koi trade nahi.</b> Ruk, wait kar.", `<div class="small">Market wall ke beech atka hai. Option kharida to time decay roz paisa khaayega.</div>`)}
-      ${row("put", `${esc(name)} ${fmt0(w.put)} ke neeche`, "<b>Put le</b> (buy put)", trade(d.best?.long_put))}</ol>
-    <div class="small muted">Har minute update hota hai jab market khula ho. Walls OI se aate hain aur din mein badal sakte hain. Prices abhi ke hain; trade lene se pehle Dhan pe dobara dekh.
-      Yeh rule test nahi hua hai, koi edge ka saboot nahi. ${cap(COST_NOTE)}.</div></div>`;
-}
 
-function rankHtml(sym) {
-  const r = S.rank[sym];
-  if (!r || (r.loading && !r.data)) return `<div class="loading"><span class="spinner"></span>Ranking trades from the live chain…</div>`;
-  if (r.error && !r.data) return `<div class="notice">Ranking unavailable: ${esc(r.error)}</div>`;
-  const d = r.data, name = NAMES[sym] || sym;
-  if (!d.candidates.length) return gamePlanHtml(sym) + `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
-  if (!S.ack[rankKey(sym)]) return gamePlanHtml(sym) + `<div class="rank-head"><div><h4 class="mini-h">Ranked trades</h4>${ackGate(rankKey(sym), sym)}</div></div>`;
-  const v = S.view[sym];
-  const rows = d.candidates.map((c, i) => {
-    const lv = c.levels, a = c.plan;
-    const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
-    const prem = (k) => lv.legs.map((l) => {
-      const role = legRole(a.strategy, lv.legs, l);
-      if (k === "price") return `<div>${fmt(l.price)}</div>`;
-      if (role === "hedge") return `<div class="muted">none</div>`;
-      return role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop) ? `<div>${fmt(l[k])}</div>` : `<div class="ref">(${fmt(l[k])})</div>`;
-    }).join("");
-    return `<tr data-rank="${i}" class="${v === i ? "on" : ""}">
-      <td class="num"><b>#${c.rank}</b></td>
-      <td><b>${esc(STRAT_NAMES[a.strategy])}</b><div class="small ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</div><div class="small warn">UNTESTED</div></td>
-      <td class="rank-legs">${legs}</td>
-      <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
-      <td class="num"><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
-      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
-      <td class="num">${c.ratio.toFixed(1)} : 1</td>
-      <td>${S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" data-take="${i}">Take (dummy, 1 lot)</button>`}</td></tr>`;
+// What one lot ties up, as Dhan's order screen shows it: a bought option or debit spread costs its net premium
+// (exact); a credit spread blocks margin, about its worst case once the bought leg is placed first (Dhan sets the exact figure).
+function lotMoney(debit, perLot) {
+  return debit ? { v: perLot, label: "you pay" } : { v: perLot, label: "≈ margin (Dhan sets exact)" };
+}
+const lotMoneyHtml = (debit, perLot) => { const m = lotMoney(debit, perLot); return `<b>${rupee(m.v)}</b><div class="small muted">${m.label}</div>`; };
+
+// The cells every trade table shares: Dhan orders, entry / target / stop premiums, index levels, per-lot result.
+function tradeCells(c, sym) {
+  const lv = c.levels, a = c.plan;
+  const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
+  const prem = (k) => lv.legs.map((l) => {
+    const role = legRole(a.strategy, lv.legs, l);
+    if (k === "price") return `<div>${fmt(l.price)}</div>`;
+    if (role === "hedge") return `<div class="muted">none</div>`;
+    return role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop) ? `<div>${fmt(l[k])}</div>` : `<div class="ref">(${fmt(l[k])})</div>`;
   }).join("");
-  return gamePlanHtml(sym) + `<div class="rank-head"><div><h4 class="mini-h">Ranked trades ${UNTESTED}</h4>
-      <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
-      The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge under the conditions tested. Tap a row for its orders, ticket and the Take button.
-      Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.</div></div>
-      <button class="btn small-btn rank-refresh" ${r.loading ? "disabled" : ""}>${r.loading ? "Updating…" : "Refresh"}</button></div>
-    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Orders (Dhan)</th><th>Entry ₹</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} target / stop</th><th>Per lot at target / stop</th><th>Profit : loss</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
-    <div class="small muted">Premium targets and stops are estimates for ${esc(name)} reaching its target or stop today. One lot each; charges not included here (shown in the card). ${cap(COST_NOTE)}. Not a validated edge. Take records the trade on the Trade Record tab at these prices; it places no real order.</div>`;
+  return `<td class="rank-legs">${legs}</td>
+      <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
+      <td class="num nowrap"><span>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</span><br><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
+      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
+      <td class="num">${lotMoneyHtml(c.priced.debit, c.priced.outlay_per_lot)}</td>`;
 }
+const takeCell = (c, attrs) => S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" ${attrs}>Take (dummy, 1 lot)</button>`;
+
+// The AI's ranked trades: the research's read of the market, then up to 8 trades best first, each with the AI's reason.
+function aiListHtml(sym, res) {
+  const name = NAMES[sym] || sym, v = S.view[sym], ag = res.agents || {};
+  const research = ag.error ? `<div class="notice">The research agents failed (${esc(ag.error)}), so this ranking used the live data only, with no news.</div>`
+    : `<div class="small muted">Research: the agents ran fresh (${esc(ag.minutes ?? "—")} min)${ag.rating ? `, their call <b>${esc(ag.rating)}</b>` : ""}. Then the AI ranked ${res.considered} live candidates.</div>`;
+  const read = `<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
+    ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
+  if (!res.trades.length) return `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
+  const rows = res.trades.map((c, i) => `<tr data-ai="${i}" class="${v === i ? "on" : ""}">
+      <td class="num"><b>#${c.rank}</b></td>
+      <td><b>${esc(STRAT_NAMES[c.plan.strategy])}</b><div class="small ${c.plan.bias === "bearish" ? "down" : "up"}">${esc(c.plan.bias)}</div><div class="small muted">AI confidence ${esc(c.plan.confidence)}</div></td>
+      <td class="small ai-why">${esc(c.ai_why)}</td>
+      ${tradeCells(c, sym)}
+      <td>${takeCell(c, `data-take="${i}"`)}</td></tr>`).join("");
+  return `<div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}</div></div>
+    ${read}
+    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Why (AI)</th><th>Orders (Dhan)</th><th>Entry ₹ (limit)</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} entry zone / target / stop</th><th>Per lot at target / stop</th><th>Money for 1 lot</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="small muted">Strongest first, by the whole analysis, not by profit size. Pulse priced each at the live bid / ask of the run and set its entry zone, target and stop by a fixed rule.
+      Entry: place a Limit order at the entry price while ${esc(name)} is inside the entry zone. Tap a row for its orders and ticket. Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.
+      Premiums at target and stop are estimates for today. One lot each; charges in the card. ${cap(COST_NOTE)}. #1 is the forward test's trade. Take records it on the Trade Record tab; no real order.</div>`;
+}
+
+
 
 // ---------- start ----------
 (async function init() {
@@ -1721,7 +1635,6 @@ function rankHtml(sym) {
   setInterval(loadPlan, 15000);
   setInterval(() => { if (S.tab === "options") loadChain(); }, 4000);
   setInterval(loadStatus, 60000);
-  setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => { if (!S.ticket[sym]) loadRank(sym); }); }, 60000);
   setInterval(() => { if (S.tab === "record") loadRecord(); }, 15000);
   setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
   setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym)); }, 15000);
