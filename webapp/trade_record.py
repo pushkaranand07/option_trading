@@ -49,6 +49,24 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
+RANGE = ("iron_condor",)        # range trades: profit while the index stays between the sold strikes
+
+
+def _range(legs: list[dict]) -> list[float]:
+    """A range trade's profit zone: from its sold put to its sold call."""
+    return [min(x["strike"] for x in legs if x["action"] == "SELL" and x["type"] == "PE"),
+            max(x["strike"] for x in legs if x["action"] == "SELL" and x["type"] == "CE")]
+
+
+def _as_range_trade(t: dict) -> None:
+    """A range trade has no single index target or stop (the strategist's one-target model does not fit it): it is
+    held while the index stays inside the sold strikes and closed when the index leaves them, or at expiry."""
+    t["range"] = _range(t["legs"])
+    t["index_target"] = t["index_stop"] = None
+    for leg in t["legs"]:                                # premiums "at the target / stop" of levels that do not apply
+        leg["target"] = leg["stop"] = None
+
+
 def take(result: dict, source: str = "you") -> dict:
     """Record the strategist's proposal (``recommend``'s result) as an open one-lot paper trade.
     ``source``: "you" (taken on the Plan tab) or "ai" (every suggestion, recorded automatically)."""
@@ -73,6 +91,8 @@ def take(result: dict, source: str = "you") -> dict:
         "score": (result.get("evidence") or {}).get("score"), "score_label": (result.get("evidence") or {}).get("label"),
         "ai_confidence": plan.get("confidence"), "last_spot": result.get("spot"),
     }
+    if trade["strategy"] in RANGE:
+        _as_range_trade(trade)
     with _lock:
         trades = _load()
         trades.append(trade)
@@ -120,6 +140,9 @@ def _flags(trade: dict, spot: float | None, ltps: list[float | None] | None = No
     """Which of target / stop is reached now, whichever comes first (user's choice, 2026-11-04): the index level
     (bearish: target below, stop above), or a Super-order leg's premium at its last traded price, as Dhan triggers."""
     out, tgt, stop = [], trade.get("index_target"), trade.get("index_stop")
+    if trade.get("range"):                               # a range trade: the stop is the index leaving its sold strikes
+        lo, hi = trade["range"]
+        return ["stop"] if spot is not None and not lo < spot < hi else []
     if spot is not None and tgt is not None and stop is not None:
         down = tgt < stop
         if (spot <= tgt) if down else (spot >= tgt):
@@ -188,7 +211,7 @@ def overview(chain_fn=None) -> dict:
     yours and the AI's separately, the AI's also by evidence score."""
     with _lock:
         trades = _load()
-        changed = False
+        changed = _repair_range_trades(trades)
         for t in trades:
             if t["status"] != "open":
                 continue
@@ -231,9 +254,31 @@ def _auto_settle(t: dict, v: dict) -> bool:
         return True
     hit = "stop" if "stop" in v["flags"] else "target" if "target" in v["flags"] else None
     if hit and v["pnl"] is not None:
-        _settle(t, [x["now"] for x in v["legs"]], v["spot"], f"{hit} reached")
+        _settle(t, [x["now"] for x in v["legs"]], v["spot"], "range broken" if t.get("range") else f"{hit} reached")
         return True
     return False
+
+
+BUG_NOTE = ("reopened 2026-11-04: it had been closed by a bug that read this range trade's single index target / stop "
+            "as a directional trade's")
+
+
+def _repair_range_trades(trades: list[dict]) -> bool:
+    """Range trades recorded before the range rule: give them their range, and reopen any that the old rule closed
+    by an index target or stop (it was never a real exit). Runs once per trade: afterwards each carries a range."""
+    changed = False
+    for t in trades:
+        if t.get("strategy") not in RANGE or t.get("range"):
+            continue
+        _as_range_trade(t)
+        if t["status"] == "closed" and t.get("reason") in ("target reached", "stop reached"):
+            for k in ("closed_at", "spot_at_exit", "reason", "gross_pnl", "net_pnl"):
+                t.pop(k, None)
+            for leg in t["legs"]:
+                leg.pop("exit", None)
+            t.update(status="open", alerts=[], note=BUG_NOTE)
+        changed = True
+    return changed
 
 
 def close(trade_id: str, chain_fn=None) -> dict:
