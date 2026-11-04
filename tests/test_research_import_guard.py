@@ -55,6 +55,7 @@ ALLOWED = {
     "tradingagents/analytics/quant_report.py": LIVE,
     # vendor and app caches
     "tradingagents/dataflows/vendors/nse/client.py": CACHE,
+    "tradingagents/dataflows/vendors/nse/calendar.py": CACHE,     # the last good holiday list, beside the HTTP cache
     "tradingagents/dataflows/vendors/nse/derivatives.py": CACHE,
     "tradingagents/dataflows/vendors/nse/flows.py": CACHE,
     "tradingagents/dataflows/vendors/nse/indices.py": CACHE,

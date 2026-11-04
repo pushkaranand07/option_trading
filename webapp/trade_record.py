@@ -40,6 +40,32 @@ def _market_open() -> bool:
 
 
 CLOSED_MSG = "Market band hai: abhi ke prices pe asli order nahi lag sakta. 9:15 ke baad karna."
+MAX_QUOTE_AGE = 60               # seconds: an older chain snapshot is not a price you could trade at now
+MAX_CLOCK_AHEAD = 30             # seconds NSE's stamp may run ahead of this computer's clock
+
+
+def _stale_quotes(ch: dict, now: datetime) -> str | None:
+    """Why the chain's quotes cannot be traded at now, or None. NSE stamps the whole chain (``records.timestamp``,
+    IST); the quotes carry no time of their own."""
+    import pytz
+
+    ts = ch.get("timestamp")
+    if not ts:
+        return "the chain has no timestamp, so its quotes may be old"
+    try:
+        when = pytz.timezone("Asia/Kolkata").localize(datetime.strptime(ts, "%d-%b-%Y %H:%M:%S"))
+    except ValueError:
+        return f"the chain's timestamp {ts!r} could not be read"
+    if when.date() != now.date():
+        return f"the quotes are from {ts[:11]}, not today"
+    age = (now - when).total_seconds()
+    if age < -MAX_CLOCK_AHEAD:
+        return f"NSE's time ({ts[-8:]}) is {-age:.0f} s ahead of this computer's clock: check the clock"
+    if age > MAX_QUOTE_AGE:
+        return f"the quotes are {age:.0f} s old (limit {MAX_QUOTE_AGE} s)"
+    return None
+
+
 EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
 
 
@@ -101,6 +127,8 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None) -> dict:
         ch = (chain_fn or oc.chain)(c["symbol"], c["expiry"])
     except Exception as exc:                               # never fall back to the run's prices
         raise TradeError(f"Live prices unavailable ({str(exc)[:160]}): not taken. Try again in a moment.") from exc
+    if why := _stale_quotes(ch, signals.now_ist()):
+        raise TradeError(f"NSE: {why}. Not taken; try again in a moment.")
     plan, spot = c["plan"], ch["spot"]
     lo, hi = plan.get("underlying_entry_low"), plan.get("underlying_entry_high")
     if lo is not None and hi is not None and not lo <= spot <= hi:

@@ -43,7 +43,8 @@ def world(tmp_path, monkeypatch):
     def fetch(symbol, expiry):
         if isinstance(live["chain"], Exception):
             raise live["chain"]
-        return live["chain"]
+        ch = live["chain"]                               # NSE stamps each chain; a test that sets none gets "now"
+        return ch if "timestamp" in ch else ch | {"timestamp": clock["now"].strftime("%d-%b-%Y %H:%M:%S")}
 
     monkeypatch.setattr(oc, "chain", fetch)
     ctx = {"spot": 22600, "days_to_expiry": 22, "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": chain()["summary"]}}
