@@ -63,7 +63,7 @@ def test_the_glossary_has_no_win_rate_entry():
 
 @pytest.mark.unit
 def test_the_ai_trades_keep_their_confidence_badge():
-    assert "AI confidence ${esc(a.confidence)}" in _function("stratHtml") and "AI confidence ${esc(c.plan.confidence)}" in _function("aiListHtml")
+    assert "AI confidence ${esc(a.confidence)}" in _function("stratHtml") and "AI confidence ${esc(a.confidence)}" in _function("tradeCard")
 
 
 @pytest.mark.unit
@@ -72,8 +72,9 @@ def test_the_plan_tab_has_one_ai_list_and_no_other_trade_card():
     assert "aiListHtml(sym, res)" in render and "Second opinion" not in APP
     for gone in ("rankHtml", "gamePlanHtml", "rulesHtml", "callHtml", "call-slot", "loadRank"):
         assert gone not in APP, gone
-    assert "not by profit size" in ai and "takeCell(c" in ai and "c.ai_why" in ai and "no real order" in ai
-    assert "underlying_entry_low" in _function("tradeCells") and "Entry ₹ (limit)" in ai
+    assert "not by profit size" in ai and "tradeCard(c, i, sym" in ai and "no real order" in ai and "<table" not in ai     # cards, not a wide table
+    card = _function("tradeCard")
+    assert "c.ai_why" in card and "takeCell(c" in card and "underlying_entry_low" in card and "limit <b>${fmt(l.price)}</b>" in card
     take = _function("takeRanked")
     assert "S.strat[sym]?.result?.trades?.[i]" in take and '"/api/trades"' in take
 
@@ -87,6 +88,6 @@ def test_a_run_stays_fixed_until_the_next_run():
 
 @pytest.mark.unit
 def test_every_trade_shows_the_money_one_lot_needs():
-    assert "lotMoneyHtml(c.priced.debit, c.priced.outlay_per_lot)" in _function("tradeCells") and "Money for 1 lot" in _function("aiListHtml")
+    assert "lotMoney(c.priced.debit, c.priced.outlay_per_lot)" in _function("tradeCard") and "1 lot <b>${rupee(m.v)}</b>" in _function("tradeCard")
     assert "Money for 1 lot" in _function("stratHtml") and "money in it" in _function("openTradeHtml")
     assert '"≈ margin (Dhan sets exact)"' in _function("lotMoney")
