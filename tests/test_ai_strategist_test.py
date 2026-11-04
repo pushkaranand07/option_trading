@@ -143,7 +143,7 @@ def test_the_spec_is_frozen_and_pins_the_prompt_in_use(tmp_path):
 
 @pytest.mark.unit
 def test_the_plan_tab_labels_and_no_score_number():
-    assert "UNTESTED, no evidence of edge" in APP and "cost model unverified" in APP
+    assert "UNTESTED" not in APP and "cost model unverified" in APP              # the label went on 2026-11-04 (user's choice)
     for gone in ("Pulse score", "By Pulse score", "score-${", "e.score", "/100", "<th>Score</th>", "by_score", "Why the score"):
         assert gone not in APP, gone
 

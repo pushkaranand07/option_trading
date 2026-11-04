@@ -19,22 +19,25 @@ The Plan tab showed two answers that could contradict each other: the AI's singl
 |---|---|
 | Forward test v1.1 | **Close it** and start v2, whose #1 is the trade that counts |
 | What the AI reads | A **fresh full multi-agent run** on every click (news, market, sentiment, bull / bear debate) |
-| The UNTESTED label | **One small badge.** No typed word, no hidden numbers |
+| The UNTESTED label | **None.** First one badge, then removed entirely the same day, before any trade counted under v2. Results still say "cost model unverified" |
+| How many trades | **Exactly 8**, strongest first |
+| The Plan tab | Chart, then **one** button and **one** list. The "Today's call" card, the rule ranking and the OI-wall game plan left the Plan tab |
+| When the trades change | **Only on the next run.** Each run is saved (`reports/ai_runs/<symbol>.json`) and shown again after a reload or restart |
 | When a taken trade closes | **Whichever comes first:** the index level, or a Super-order leg's premium |
 
 ## How it works
 
 1. **Research:** `morning.ai_view` runs the TradingAgents graph for the instrument, which takes several minutes. If it fails, the ranking still runs on the live data and the page says there was no news.
-2. **Context:** `build_context` builds it as before. This run's research replaces the 8:30 view.
+2. **Context:** `build_context` builds it as before, plus today's intraday moves (`today_moves`: open, high, low, the biggest dip and rally, each half hour from 9:15). This run's research replaces the 8:30 view.
 3. **Candidates:** `rank` builds every directional defined-risk structure with a live two-sided quote, priced at the bid / ask, with the index target and stop set by its rule. The AI sees them numbered in strategy and strike order, so the list does not suggest a ranking of its own.
-4. **Ranking:** one LLM call (`RANK_SYSTEM`) returns up to 8 numbers, best first, each with a reason and a confidence. The code drops unknown or repeated numbers. The AI cannot change a strike, a price, a target or a stop.
+4. **Ranking:** one LLM call (`RANK_SYSTEM`) returns exactly 8 numbers, strongest first, each with a reason and a confidence. The code drops unknown or repeated numbers. The AI cannot change a strike, a price, a target or a stop.
 5. The #1 goes into the AI track record and into forward test v2.
 
-The rule ranking and the OI-wall game plan are still on the page, folded under "Rule-based views, not the AI". The rule ranking's #1 is v2's rule baseline.
+Each trade shows its exact entry: a Limit price per leg (the bid / ask at the run) and the NIFTY entry zone, with the target and stop in premium and in NIFTY points. The rule ranking (`/api/rank`) still runs on the server, because its #1 is v2's rule baseline, but it is no longer shown.
 
 ## Known limits
 
-- **It can rank fewer than 8.** The prompt allows that when the evidence does not support more. The live test on 2026-11-04 (research skipped) ranked 4 of 16.
+- **The weaker of the 8 are weak by design.** When the evidence supports only a few trades, the rest are ranked lower with low confidence. Version 1 of this prompt allowed fewer, and ranked 4 of 16 in the live test.
 - **Bullish and bearish trades can sit in one list** when the AI reads a range: for example a bull put spread below support and a bear call spread under the call wall.
 - **No iron condors in the candidates.** Only directional structures are built.
 - **The research agents' own prompts and the news they fetch are not in the prompt hash** (UNVERIFIED in the spec).

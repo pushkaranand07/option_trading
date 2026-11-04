@@ -186,11 +186,13 @@ def test_ai_ranked_keeps_the_ais_order_drops_unknown_or_repeated_numbers_and_cap
         return st.RankedAnswer(market_read="m", news_read="n", bias="bearish", picks=[
             st.RankedPick(candidate=k, why=f"w{k}", confidence="low") for k in [n, 99, n, *range(1, n)]])
 
-    r = st.ai_ranked("NIFTY", llm=llm, agents=lambda s: {"rating": "Sell", "minutes": 4.0, "decision": "d", "news": "headlines"}, built=(dict(ctx), chain))
+    r = st.ai_ranked("NIFTY", llm=llm, agents=lambda s: {"rating": "Sell", "minutes": 4.0, "decision": "d", "news": "headlines"}, built=(dict(ctx), chain),
+                     moves=lambda s: {"high": 22700, "low": 22500})
     shown = seen["shown"]
     assert [x["n"] for x in shown] == list(range(1, len(shown) + 1)) and r["considered"] == len(shown) > 5
     assert [x["strategy"] for x in shown] == sorted(x["strategy"] for x in shown)            # not the rule's order
     assert "morning_ai_view" not in seen["ctx"] and seen["ctx"]["agents_research_now"]["news_report"] == "headlines"
+    assert seen["ctx"]["today_intraday"] == {"high": 22700, "low": 22500} and all(len(x["index_entry_zone"]) == 2 for x in shown)
     assert [t["ai_why"] for t in r["trades"]] == [f"w{len(shown)}", *[f"w{k}" for k in range(1, 5)]]   # 99 and the repeat dropped
     assert [t["rank"] for t in r["trades"]] == list(range(1, 6)) and all(t["plan"]["confidence"] == "low" for t in r["trades"])
     assert all(t["priced"]["legs"] and t["levels"] for t in r["trades"]) and r["agents"] == {"rating": "Sell", "minutes": 4.0}
@@ -204,8 +206,27 @@ def test_ai_ranked_runs_without_the_research_and_says_so():
     def broken(symbol):
         raise RuntimeError("no news API key")
 
-    r = st.ai_ranked("NIFTY", llm=lambda c, s: st.RankedAnswer(market_read="m", news_read="", bias="unclear", picks=[]), agents=broken, built=(ctx, chain))
-    assert "no news API key" in r["agents"]["error"] and r["trades"] == []
+    def no_bars(symbol):
+        raise RuntimeError("no bars")
+
+    r = st.ai_ranked("NIFTY", llm=lambda c, s: st.RankedAnswer(market_read="m", news_read="", bias="unclear", picks=[]), agents=broken, built=(ctx, chain),
+                     moves=no_bars)
+    assert "no news API key" in r["agents"]["error"] and r["trades"] == [] and ctx["today_intraday"] == {"error": "no bars"}
+
+
+@pytest.mark.unit
+def test_a_run_is_saved_and_read_back_until_the_next_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(st, "_runs_dir", lambda: tmp_path)
+    assert st.latest_run("NIFTY") is None
+    st.save_run({"symbol": "NIFTY", "trades": [{"rank": 1}], "asked_at": "2026-11-04 09:20"})
+    st.save_run({"symbol": "NIFTY", "trades": [{"rank": 1}, {"rank": 2}], "asked_at": "2026-11-04 11:00"})
+    assert st.latest_run("NIFTY")["asked_at"] == "2026-11-04 11:00" and st.latest_run("BANKNIFTY") is None
+
+
+@pytest.mark.unit
+def test_the_prompt_asks_for_exactly_8_ranked_by_analysis_not_profit():
+    assert st.TOP_AI == 8 and "Rank exactly 8" in st.RANK_SYSTEM and "Do NOT rank by the profit-to-loss" in st.RANK_SYSTEM
+    assert "today's intraday moves" in st.RANK_SYSTEM
 
 
 @pytest.mark.unit

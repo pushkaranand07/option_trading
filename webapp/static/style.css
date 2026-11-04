@@ -372,13 +372,7 @@ table.depth { width: 100%; border-collapse: collapse; font-variant-numeric: tabu
 
 /* Pulse trade ranking */
 .rank-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
-.game-plan { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 10px 0 14px; background: var(--panel); }
-.gp-zones { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; }
-.gp-zone { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
-.gp-zone.gp-now { border-color: var(--warn); background: var(--warn-soft); color: var(--text); }
-.gp-trade { margin-top: 6px; display: grid; gap: 4px; justify-items: start; }
-details.rules { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 10px; }
-details.rules > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+table.rank td.nowrap { white-space: nowrap; }
 table.rank td.ai-why { min-width: 220px; max-width: 320px; white-space: normal; }
 .rank-scroll { max-height: 520px; border: 1px solid var(--border); border-radius: 10px; margin: 8px 0 4px; }
 table.rank { width: 100%; font-size: 13px; }

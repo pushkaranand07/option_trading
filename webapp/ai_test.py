@@ -26,7 +26,7 @@ from tradingagents.research import registry
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v2.json"
-SPEC_SHA256 = "5e4f1c95378430d3e69815ea22eb49857974415c7e39c284b6e0a2582c19b854"
+SPEC_SHA256 = "8b433a60e8f8991d3cb31f0d51f7ffb0d60fb8fb50ce3dc8a858d4fb40ec5236"
 REGISTRY = ROOT / "reports" / "ai_test" / "v2" / "registry.jsonl"     # version 1.1's stays at reports/ai_test/registry.jsonl
 CHAINS = ROOT / "reports" / "ai_test" / "v2" / "chains"
 IST = pytz.timezone("Asia/Kolkata")
@@ -50,7 +50,7 @@ def prompt_fingerprint() -> str:
     def lf(text: str) -> str:
         return text.replace("\r\n", "\n")
 
-    code = (st.ask_rank_llm, st.ai_ranked, st.candidates_for_ai, st.agents_view, st.build_context, st.rank, st._structures,
+    code = (st.ask_rank_llm, st.ai_ranked, st.candidates_for_ai, st.today_moves, st.agents_view, st.build_context, st.rank, st._structures,
             st._index_levels, st.trade_levels, st.price, st.check_structure, morning.ai_view)
     parts = {"system": lf(st.RANK_SYSTEM), "schema": st.RankedAnswer.model_json_schema(), "strategies": {k: v[0] for k, v in st.STRATEGIES.items()},
              "top": st.TOP_AI, "code": {f.__name__: lf(inspect.getsource(f)) for f in code}}

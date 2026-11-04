@@ -2,10 +2,10 @@
  "version_number": "2",
  "written": "2026-11-04",
  "written_before_any_trade_counts": true,
- "what_this_tests": "whether the AI strategist's #1 ranked NIFTY trade earns a net return, against baselines on the same sessions, going forward. Each question runs the multi-agent research fresh, then one LLM call ranks up to 8 of the app's priced candidates",
+ "what_this_tests": "whether the AI strategist's #1 ranked NIFTY trade earns a net return, against baselines on the same sessions, going forward. Each question runs the multi-agent research fresh, then one LLM call ranks exactly 8 of the app's priced candidates, strongest first",
  "version": {
-  "prompt_sha256": "919831c5ad0d3a668a8363c38b307c06f92ddf4a831f8b73981423aa8b7ffced",
-  "prompt_covers": "the ranking system prompt, answer schema, strategy menu, the number ranked (8), and the source of ask_rank_llm, ai_ranked, candidates_for_ai, agents_view, build_context, rank, _structures, _index_levels, trade_levels, price, check_structure and morning.ai_view",
+  "prompt_sha256": "606cad0a970550c2a9aefbc310f940e198181f9e88b2da9c244d33fab6823d81",
+  "prompt_covers": "the ranking system prompt, answer schema, strategy menu, the number ranked (8), and the source of ask_rank_llm, ai_ranked, candidates_for_ai, today_moves, agents_view, build_context, rank, _structures, _index_levels, trade_levels, price, check_structure and morning.ai_view",
   "model": {
    "provider": "azure",
    "model": "gpt-5",
@@ -51,7 +51,7 @@
   "pass": "at exactly the verdict count, once, which is only reachable if the user extends the test: mean net % of max risk above 0, with the 2.5th percentile bound of a bootstrap by expiry week above 0, above the 97.5th percentile of the random-direction draws' means, and above the rule-based pick's mean",
   "otherwise": "fail. No extension and no second look at the same version",
   "backtest_of_the_llm": "not allowed: training-data leakage",
-  "ui_until_verdict": "every AI trade and ranked ticket stays labelled UNTESTED, no evidence of edge: one badge on the list, no typed word (user's choice, 2026-11-04)",
+  "ui_until_verdict": "no UNTESTED label and no typed word: the user removed both on 2026-11-04, before any trade counted under this version. Results stay 'cost model unverified'",
   "no_performance_before_the_stop": "no performance figure is read before the stop date. This replaces version 1's reporting between 50 and 500"
  },
  "power": {

@@ -1,5 +1,5 @@
-"""Untested trades carry the UNTESTED label; the typed word of docs/root_cause_v1.md item 4 was removed by the user on 2026-11-04
-(docs/PA_52, spec v2 ui_until_verdict). Reads the page source; not a browser test."""
+"""The Plan tab's trades and labels. The typed word of docs/root_cause_v1.md item 4 and the UNTESTED label were removed by the
+user on 2026-11-04 (docs/PA_52, spec v2 ui_until_verdict). Reads the page source; not a browser test."""
 
 import re
 from pathlib import Path
@@ -15,18 +15,9 @@ def _function(name: str) -> str:
 
 
 @pytest.mark.unit
-def test_no_typed_word_anywhere_the_label_stays_on_every_trade_surface():
-    for gone in ("ackGate", "S.ack", "ACK_WORD", "ack-untested", "window.prompt("):
+def test_no_typed_word_and_no_untested_label_anywhere():
+    for gone in ("ackGate", "S.ack", "ACK_WORD", "ack-untested", "window.prompt(", "UNTESTED"):
         assert gone not in APP, gone
-    for name in ("stratHtml", "aiListHtml"):
-        assert "${UNTESTED}" in _function(name), name
-
-
-@pytest.mark.unit
-def test_the_intraday_card_has_the_label_and_no_past_win_rate():
-    body = _function("callHtml")
-    assert body.count("Take this trade ${UNTESTED}") == 2 and body.count("no edge evidence") == 2
-    assert not re.search(r"win_rate|similar trades|avg_r", body)
 
 
 @pytest.mark.unit
@@ -58,12 +49,6 @@ def test_recorded_trade_summaries_keep_their_numbers_and_carry_the_line():
 
 
 @pytest.mark.unit
-def test_the_no_trade_card_shows_no_server_reason():
-    body = _function("callHtml")
-    assert "<b>No trade right now.</b> no trade signal today" in body and "blockers" not in body
-
-
-@pytest.mark.unit
 def test_recent_trades_show_no_won_lost_count_or_boxes():
     record = _function("renderRecord")
     for gone in (" won, ", "chips", 'class="trades"', "r.last"):
@@ -82,10 +67,19 @@ def test_the_ai_trades_keep_their_confidence_badge():
 
 
 @pytest.mark.unit
-def test_one_ai_list_with_take_buttons_and_the_rule_views_folded_away():
+def test_the_plan_tab_has_one_ai_list_and_no_other_trade_card():
     render, ai = _function("renderStrat"), _function("aiListHtml")
-    assert "aiListHtml(sym, res)" in render and "rulesHtml(sym)" in render and "Second opinion" not in APP
-    assert '<details class="rules"' in _function("rulesHtml") and "rankHtml(sym)" in _function("rulesHtml")
+    assert "aiListHtml(sym, res)" in render and "Second opinion" not in APP
+    for gone in ("rankHtml", "gamePlanHtml", "rulesHtml", "callHtml", "call-slot", "loadRank"):
+        assert gone not in APP, gone
     assert "not by profit size" in ai and "takeCell(c" in ai and "c.ai_why" in ai and "no real order" in ai
+    assert "underlying_entry_low" in _function("tradeCells") and "Entry ₹ (limit)" in ai
     take = _function("takeRanked")
-    assert "btn.dataset.ai ? S.strat[sym]?.result?.trades?.[i]" in take and '"/api/trades"' in take
+    assert "S.strat[sym]?.result?.trades?.[i]" in take and '"/api/trades"' in take
+
+
+@pytest.mark.unit
+def test_a_run_stays_fixed_until_the_next_run():
+    assert "they change only when you run again" in _function("renderStrat")
+    latest = APP[APP.index("async function loadLatestRun"):]
+    assert '"/api/strategy/latest/"' in latest[:400] and "loadLatestRun(sym)" in APP

@@ -513,9 +513,10 @@ def rank(symbol: str, expiry: str | None = None, top: int = 10, built=None) -> d
 
 
 # ---------------------------------------------------------------- the AI's ranked trades (docs/PA_52)
-# One click: a fresh multi-agent run (news, market, bull / bear debate), the live context above, then one LLM call
-# that ranks Pulse's priced candidates, best first, by the whole analysis. The code builds and prices every candidate,
-# so the AI cannot invent a strike or a price; it only chooses and orders them. Forward test v2 counts its #1.
+# One click: a fresh multi-agent run (news, market, bull / bear debate), the live context above plus today's intraday
+# moves, then one LLM call that ranks 8 of Pulse's priced candidates, strongest first, by the whole analysis. The code
+# builds and prices every candidate, so the AI cannot invent a strike or a price; it only chooses and orders them.
+# The run is saved and stays fixed until the next run. Forward test v2 counts its #1.
 
 TOP_AI = 8
 
@@ -530,27 +531,29 @@ class RankedAnswer(BaseModel):
     market_read: str = Field(description="3-5 plain sentences on the instrument right now, using the research and the live data")
     news_read: str = Field(description="1-3 sentences on what the agents' news and debate say; say so if there was no research")
     bias: Literal["bullish", "bearish", "neutral", "unclear"]
-    picks: list[RankedPick] = Field(description="up to 8 candidates, best first; fewer or none if the evidence does not support them")
+    picks: list[RankedPick] = Field(description="exactly 8 candidates (all of them if fewer are offered), strongest first")
     risks: list[str] = []
 
 
 RANK_SYSTEM = """You are a careful options strategist for Indian markets (NSE). You get, for ONE instrument: today's
-multi-agent research (news, market report, the bull / bear debate and its final decision), the live data (trend,
-intraday rule, expected move, regime, implied vol vs forecast, option chain with OI walls and PCR, FII positioning),
-and a numbered list of candidate trades. The app built and priced each candidate at the live bid / ask (buy at the
-ask, sell at the bid) and set its index target and stop by a fixed rule; you cannot change them.
+multi-agent research (news, sentiment, market report, the bull / bear debate and its final decision), the live data
+(trend, recent sessions, today's intraday moves: open, high, low, dips and rallies by half hour; the intraday rule,
+expected move, regime, implied vol vs forecast, option chain with OI walls and PCR, FII positioning), and a numbered
+list of candidate trades. The app built and priced each candidate at the live bid / ask (buy at the ask, sell at the
+bid) and set its index entry zone, target and stop by a fixed rule; you cannot change them.
 
-Rank up to 8 candidates, best first, by how well the WHOLE analysis supports each one:
-- direction: what most of the evidence agrees on (the agents' decision and news, trend, today's intraday rule, OI
-  walls, FII positioning);
+Rank exactly 8 candidates (all of them if fewer are offered), strongest first, by how well the WHOLE analysis supports
+each one:
+- direction: what most of the evidence agrees on (the agents' decision, news and sentiment, the trend, how the market
+  has moved today, today's intraday rule, OI walls, FII positioning);
 - buying vs selling options: implied vol vs the forecast, days to expiry, time decay;
 - strikes: distance from spot vs the expected move; whether the target is reachable and the stop sits beyond a key level.
-Do NOT rank by the profit-to-loss figures alone: a large ratio whose target the evidence does not support is a worse
-trade than a smaller one it does. Use each candidate at most once, only numbers from the list. Rank fewer, or none,
-when the evidence conflicts or does not support them: an empty list means "no trade". Only directional structures are
-offered; if the evidence says the market will stay in a range, say so and rank fewer.
-Report confidence honestly: high only when most of the evidence agrees. No strategy in this system has a proven edge;
-say so plainly where relevant. Be specific to these numbers. Plain English, no hype."""
+Do NOT rank by the profit-to-loss figures: a large ratio whose target the evidence does not support is a weaker trade
+than a smaller one it does. Use each candidate once, only numbers from the list. The weaker trades go lower, with low
+confidence; if the evidence conflicts, say so in the market read. Only directional structures are offered; if the
+evidence says the market will stay in a range, say so and rank the trades that suit a range (credit spreads beyond the
+OI walls) first. Report confidence honestly: high only when most of the evidence agrees. Be specific to these numbers.
+Plain English, no hype."""
 
 
 def agents_view(symbol: str, day: date | None = None) -> dict:
@@ -560,6 +563,24 @@ def agents_view(symbol: str, day: date | None = None) -> dict:
     return morning.ai_view(morning.INDICES.get(symbol, f"{symbol}.NS"), day or date.today())
 
 
+def today_moves(symbol: str) -> dict:
+    """Today's session from 5-minute bars: open, high, low, last, the biggest dip from a high and rally from a low,
+    and each half hour's open / high / low / close."""
+    from webapp import market_data as md
+
+    df, _ = md.candles(symbol, "5m")
+    day = df[df.index.date == df.index[-1].date()]
+    if day.empty:
+        return {}
+    run_high, run_low = day["high"].cummax(), day["low"].cummin()
+    halves = day.resample("30min", origin=day.index[0]).agg({"open": "first", "high": "max", "low": "min", "close": "last"}).dropna()
+    return {"date": str(day.index[-1].date()), "as_of": day.index[-1].strftime("%H:%M"), "open": _num(day["open"].iloc[0]),
+            "high": _num(day["high"].max()), "high_at": day["high"].idxmax().strftime("%H:%M"), "low": _num(day["low"].min()),
+            "low_at": day["low"].idxmin().strftime("%H:%M"), "last": _num(day["close"].iloc[-1]),
+            "biggest_dip_from_a_high": _num((run_high - day["low"]).max()), "biggest_rally_from_a_low": _num((day["high"] - run_low).max()),
+            "half_hours": [{"from": ts.strftime("%H:%M"), **{k: _num(r[k]) for k in ("open", "high", "low", "close")}} for ts, r in halves.iterrows()]}
+
+
 def candidates_for_ai(pool: list[dict]) -> tuple[list[dict], list[dict]]:
     """(the candidates as the AI sees them, the same candidates in that order). Numbered in strategy and strike order,
     not the rule's order, so the list does not suggest a ranking of its own."""
@@ -567,6 +588,7 @@ def candidates_for_ai(pool: list[dict]) -> tuple[list[dict], list[dict]]:
         p, pr, lv = c["plan"], c["priced"], c["levels"]
         return {"n": n, "strategy": p["strategy"], "direction": p["bias"],
                 "legs": [{k: x[k] for k in ("action", "type", "strike", "price")} for x in pr["legs"]],
+                "index_entry_zone": [p["underlying_entry_low"], p["underlying_entry_high"]],
                 "index_target": p["underlying_target"], "index_stop": p["underlying_stop"],
                 "pnl_at_target_per_lot": round(lv["pnl_target_per_lot"]), "pnl_at_stop_per_lot": round(lv["pnl_stop_per_lot"]),
                 "max_loss_per_lot": round(pr["max_loss_per_lot"]), "breakevens": [round(b) for b in pr.get("breakevens") or []]}
@@ -584,7 +606,7 @@ def ask_rank_llm(ctx: dict, candidates: list[dict]) -> RankedAnswer:
     return llm.invoke([("system", RANK_SYSTEM), ("user", user)])
 
 
-def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, built=None, progress=None) -> dict:
+def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, built=None, moves=None, progress=None) -> dict:
     """The research, then the AI's ranked trades: each a full priced candidate with the AI's reason and confidence."""
     started = datetime.now()
     say = progress or (lambda stage: None)
@@ -597,6 +619,10 @@ def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, bui
     say("ranking")
     ctx, ch = built or build_context(symbol, expiry)
     ctx.pop("morning_ai_view", None)                            # replaced by this run's research
+    try:
+        ctx["today_intraday"] = (moves or today_moves)(symbol)
+    except Exception as exc:
+        ctx["today_intraday"] = {"error": str(exc)[:200]}
     ctx["agents_research_now"] = {"rating": research.get("rating"), "final_decision": (research.get("decision") or "")[:3000],
                                   "news_report": (research.get("news") or "")[:3000], "market_report": (research.get("market") or "")[:1500],
                                   "investment_plan": (research.get("plan") or "")[:1500]} if research else {"error": agents_out.get("error")}
@@ -621,6 +647,24 @@ def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, bui
             "seconds": (datetime.now() - started).seconds, "asked_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 
+# The last run for each instrument, saved so its trades stay fixed (page reloads, server restarts) until the next run.
+def _runs_dir():
+    from pathlib import Path
+
+    return Path(__file__).resolve().parent.parent / "reports" / "ai_runs"
+
+
+def save_run(res: dict) -> None:
+    d = _runs_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{res['symbol']}.json").write_text(json.dumps(res, default=str), encoding="utf-8")
+
+
+def latest_run(symbol: str) -> dict | None:
+    f = _runs_dir() / f"{symbol}.json"
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+
 # ---------------------------------------------------------------- background jobs (the agents take several minutes)
 
 _jobs: dict[str, dict] = {}
@@ -639,6 +683,10 @@ def start(symbol: str, expiry: str | None = None) -> str:
     def run():
         try:
             res = ai_ranked(symbol, expiry, progress=stage)
+            try:
+                save_run(res)
+            except Exception:
+                logger.exception("the AI run was not saved")
             top = res["trades"][0] if res["trades"] else None
             if top:                                    # the AI's #1 goes into the AI track record
                 try:
