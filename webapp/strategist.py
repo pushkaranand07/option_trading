@@ -679,14 +679,31 @@ def today_research(symbol: str, day: date | None = None) -> dict | None:
 
 
 def save_run(res: dict) -> None:
+    """Keep the run as the instrument's latest and, when it has an id, under its id (a Take names the run by id)."""
     d = _runs_dir()
     d.mkdir(parents=True, exist_ok=True)
-    (d / f"{res['symbol']}.json").write_text(json.dumps(res, default=str), encoding="utf-8")
+    text = json.dumps(res, default=str)
+    (d / f"{res['symbol']}.json").write_text(text, encoding="utf-8")
+    if res.get("run_id"):
+        (d / "by_id").mkdir(exist_ok=True)
+        (d / "by_id" / f"{res['run_id']}.json").write_text(text, encoding="utf-8")
 
 
 def latest_run(symbol: str) -> dict | None:
     f = _runs_dir() / f"{symbol}.json"
     return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+
+def load_run(run_id: str) -> dict | None:
+    f = _runs_dir() / "by_id" / f"{run_id}.json"
+    return json.loads(f.read_text(encoding="utf-8")) if run_id.isalnum() and f.exists() else None
+
+
+def run_expired(run: dict) -> bool:
+    """A run can be taken only on its own IST trading day; one saved before runs had an id never can."""
+    from webapp import signals
+
+    return not run.get("run_id") or run.get("day") != signals.now_ist().date().isoformat()
 
 
 # ---------------------------------------------------------------- background jobs (the agents take several minutes)
@@ -721,6 +738,7 @@ def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
             res = ai_ranked(symbol, expiry, agents=(lambda s: research) if research else full_research, progress=stage)
             res["mode"] = mode
             from webapp import signals
+            res["run_id"], res["day"] = uuid.uuid4().hex[:12], signals.now_ist().date().isoformat()
             res["market_closed"] = not signals.market_open()   # last prices: an analysis, not a trade to record
             try:
                 save_run(res)

@@ -1202,7 +1202,8 @@ function renderStrat(sym) {
       ${res && !st.running ? `The 8 trades below are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.` : ""}</div>`;
   const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
-    + (res ? aiListHtml(sym, res) : "") + (cand ? stratHtml(cand, sym) : "");
+    + (res ? aiListHtml(sym, res) : "")
+    + (cand ? stratHtml(Object.assign(cand, { _locked: res.expired ? "run expired" : res.market_closed ? "market band" : null }), sym) : "");
   slot.querySelectorAll(".ai-trade").forEach((r) => (r.onclick = () => { S.view[sym] = S.view[sym] === +r.dataset.ai ? null : +r.dataset.ai; S.ticket[sym] = null; refreshStrat(sym); }));
   slot.querySelectorAll(".strat-go").forEach((b) => (b.onclick = () => startStrat(sym, b.dataset.mode)));
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
@@ -1342,7 +1343,8 @@ function stratHtml(res, sym) {
   return `<div class="call ${a.strategy === "no_trade" ? "idle" : a.bias === "bearish" ? "go-down" : a.bias === "bullish" ? "go-up" : "idle"}">${head}
       ${story}${legs}<div class="ticket-slot"></div>${together}${econ}
       ${pr ? `<div class="take-row">${res._taken ? `<span class="badge up">Recorded ✓</span> <span class="small">Follow it on the <a href="#record">Trade Record</a> tab.</span>`
-        : `<button class="btn primary take-trade">Take this trade (dummy, 1 lot)</button> <span class="small muted">Records it on the Trade Record tab at these prices and tracks its profit and loss. No real order.</span>`}</div>` : ""}
+        : res._locked ? `<span class="small muted">Take band: ${esc(res._locked)}.</span>`
+        : `<button class="btn primary take-trade">Take this trade (dummy, 1 lot)</button> <span class="small muted">Records it on the Trade Record tab at the live price when you press it (the price shown here is from the run) and tracks its profit and loss. No real order.</span>`}</div>` : ""}
       ${lv ? `<div class="small muted">Target and stop premiums are estimates for ${esc(name)} reaching those levels today (Black-Scholes from each option's live price and implied vol). Nearer expiry the options move more.</div>` : ""}
       ${(res.warnings || []).map((w) => `<div class="small warn-c">⚠ ${esc(w)}</div>`).join("")}</div>
     ${read}
@@ -1438,12 +1440,16 @@ function renderTicket(sym) {
 // target or stop the trade closes itself at those prices (the stop if both). Stored on this computer (reports/trade_record).
 S.takenRank = {};
 const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
+// A Take sends only the run and the trade's place in it: the server prices the entry from a fresh chain now and
+// refuses (with the reason shown here) a run from another day, a closed market, NIFTY outside the entry zone or a
+// leg with no live bid / ask.
+const takeBody = (sym, i) => JSON.stringify({ run_id: S.strat[sym]?.result?.run_id || null, candidate: i });
 async function takeRanked(sym, i, btn) {
   const c = S.strat[sym]?.result?.trades?.[i];
   if (!c) return;
   btn.disabled = true;
   try {
-    await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
+    await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: takeBody(sym, i) });
     S.takenRank[takeKey(c)] = true; renderStrat(sym); loaded.record = false;
   } catch (e) { alert(e.message); btn.disabled = false; }
 }
@@ -1452,7 +1458,7 @@ async function takeTrade(sym) {
   const res = curRes(sym); if (!res) return;
   const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
   try {
-    const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(res) });
+    const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: takeBody(sym, S.view[sym]) });
     res._taken = t.id; S.takenRank[takeKey(res)] = true; renderStrat(sym); loaded.record = false;
   } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
@@ -1657,9 +1663,10 @@ function aiListHtml(sym, res) {
     : `<div class="small muted">${res.mode === "quick" ? "Quick analysis" : "Complete analysis"} · research: ${esc(ag.source && ag.source !== "fresh" ? `${ag.source} at ${ag.at}` : "run fresh")} (${esc(ag.minutes ?? "—")} min)${ag.rating ? `, the agents' call <b>${esc(ag.rating)}</b>` : ""}. Then the AI ranked ${res.considered} live candidates.</div>`;
   const read = `<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
     ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
-  const closedNote = res.market_closed ? `<div class="notice">Yeh run market band hone pe hua: prices last close ke hain, in pe asli order nahi lagta. Take band hai, aur AI record mein nahi gaya. 9:15 ke baad Quick analysis chala.</div>` : "";
+  const closedNote = (res.expired ? `<div class="notice">Yeh run expired hai (kisi aur din ka): sirf dekhne ke liye. Uske prices aaj ke nahi, isliye Take band hai. Analysis dobara chala.</div>` : "")
+    + (res.market_closed ? `<div class="notice">Yeh run market band hone pe hua: prices last close ke hain, in pe asli order nahi lagta. Take band hai, aur AI record mein nahi gaya. 9:15 ke baad Quick analysis chala.</div>` : "");
   if (!res.trades.length) return closedNote + `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
-  const cards = res.trades.map((c, i) => tradeCard(c, i, sym, v === i, res.market_closed)).join("");
+  const cards = res.trades.map((c, i) => tradeCard(c, i, sym, v === i, res.market_closed || res.expired)).join("");
   return `<div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}</div></div>
     ${closedNote}${read}
     <div class="ai-trades">${cards}</div>
