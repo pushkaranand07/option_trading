@@ -1471,7 +1471,7 @@ async function loadRecord() {
       ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}${stat("Money in open trades", money(d.open.reduce((a, t) => a + tradeMoney(t), 0)))}
       ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
       ${stat("Win rate", s.win_rate != null ? s.win_rate.toFixed(0) + "%" : "—")}${stat("Average a trade", money(s.avg), cls(s.avg))}
-      ${stat("Best", money(s.best), "up")}${stat("Worst", money(s.worst), "down")}</div></div></section>`;
+      ${stat("Best", money(s.best), cls(s.best))}${stat("Worst", money(s.worst), cls(s.worst))}</div></div></section>`;
   const open = d.open.length ? d.open.map(openTradeHtml).join("")
     : `<section class="card"><div class="body"><p class="muted">No open trades. On the Plan tab, ask the AI strategist and press <b>Take this trade</b> to record one here.</p></div></section>`;
   const hist = !d.closed.length ? `<p class="muted pad">Closed trades appear here with their profit or loss.</p>`

@@ -166,3 +166,11 @@ def test_live_marks_carry_the_time_of_nses_snapshot():
     tr.take(RESULT)
     stamped = lambda s, e: chain(22600, _q(130, 129, 131), _q(88, 87, 89))(s, e) | {"timestamp": "26-Oct-2026 11:44:29"}  # noqa: E731
     assert tr.overview(stamped)["open"][0]["live"]["as_of"] == "26-Oct-2026 11:44:29"
+
+
+@pytest.mark.unit
+def test_an_iron_condor_is_not_closed_by_a_directional_index_level():
+    condor = RESULT | {"plan": RESULT["plan"] | {"strategy": "iron_condor", "bias": "neutral", "underlying_target": 22550, "underlying_stop": 22400}}
+    tr.take(condor, source="ai")
+    o = tr.overview(chain(22600, _q(130, 129, 131), _q(88, 87, 89)))            # "above the target" for a bullish trade
+    assert o["ai"]["open"] and o["ai"]["open"][0]["live"]["flags"] == []

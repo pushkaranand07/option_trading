@@ -120,6 +120,8 @@ def _flags(trade: dict, spot: float | None, ltps: list[float | None] | None = No
     """Which of target / stop is reached now, whichever comes first (user's choice, 2026-11-04): the index level
     (bearish: target below, stop above), or a Super-order leg's premium at its last traded price, as Dhan triggers."""
     out, tgt, stop = [], trade.get("index_target"), trade.get("index_stop")
+    if trade.get("strategy") == "iron_condor":          # a range trade: one target and one stop on the index mean nothing
+        tgt = stop = None                                # (it settles at expiry, or when you close it)
     if spot is not None and tgt is not None and stop is not None:
         down = tgt < stop
         if (spot <= tgt) if down else (spot >= tgt):
