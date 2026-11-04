@@ -1482,7 +1482,8 @@ function renderTicket(sym) {
 S.takenRank = {};
 const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
 async function takeRanked(sym, i, btn) {
-  const c = S.rank[sym]?.data?.candidates?.[i]; if (!c || !S.ack[rankKey(sym)]) return;
+  const d = S.rank[sym]?.data, c = btn.dataset.best ? d?.best?.[btn.dataset.best] : d?.candidates?.[i];
+  if (!c || !S.ack[rankKey(sym)]) return;
   btn.disabled = true;
   try {
     await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
@@ -1641,13 +1642,43 @@ async function loadRank(sym) {
   if (!S.ticket[sym]) refreshStrat(sym); else renderStrat(sym);
 }
 
+// The game plan, in Hinglish (user's choice): above the call wall buy a call, below the put wall buy a put, in between
+// no trade. Only the zone NIFTY is in now shows a trade; the others say what to wait for.
+function gamePlanHtml(sym) {
+  const d = S.rank[sym]?.data, w = d?.walls, name = NAMES[sym] || sym;
+  if (!d || w?.call == null || w?.put == null || w.call <= w.put) return "";
+  const q = S.quotes[sym], spot = d.spot, zone = spot > w.call ? "call" : spot < w.put ? "put" : "mid";
+  const trade = (c) => {
+    if (!c) return `<div class="small muted">Abhi is taraf ka koi tradable option nahi mila (live bid / ask nahi hai).</div>`;
+    if (!S.ack[rankKey(sym)]) return `<div class="small muted">Trade dekhne ke liye neeche "Ranked trades" mein ${ACK_WORD} type kar.</div>`;
+    const lv = c.levels, l = lv.legs[0], a = c.plan;
+    return `<div class="gp-trade"><span class="leg-tag buy">BUY</span> <b>${esc(contractName(sym, c.expiry, l))}</b> @ ${fmt(l.price)}
+      <div class="small">Target <b class="up">${fmt(l.premium_at_target)}</b> (${esc(name)} ${fmt0(a.underlying_target)}) · Stop loss <b class="down">${fmt(l.premium_at_stop)}</b> (${esc(name)} ${fmt0(a.underlying_stop)})
+        · ek lot pe <b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b> / <b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b> · paisa lagega ${money(l.price * c.lot)}</div>
+      ${S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" data-take="-1" data-best="${a.strategy}">Take (dummy, 1 lot)</button>`}</div>`;
+  };
+  const row = (key, cond, what, body) => `<li class="gp-zone ${zone === key ? "gp-now" : "muted"}">${zone === key ? `<span class="badge warn">abhi yahan</span> ` : ""}<b>${cond}</b> → ${what}
+    ${zone === key ? body : `<div class="small">Jab ${esc(name)} is zone mein aayega, yahan us waqt ke price se trade dikhega.</div>`}</li>`;
+  const gap = zone === "mid" ? `${esc(name)} call wall se ${fmt0(w.call - spot)} points neeche aur put wall se ${fmt0(spot - w.put)} points upar hai.`
+    : zone === "call" ? `${esc(name)} call wall ${fmt0(w.call)} ke ${fmt0(spot - w.call)} points upar nikal gaya hai.`
+    : `${esc(name)} put wall ${fmt0(w.put)} ke ${fmt0(w.put - spot)} points neeche aa gaya hai.`;
+  return `<div class="game-plan"><h4 class="mini-h">Aaj ka game plan ${UNTESTED}</h4>
+    <div class="small"><b>Market abhi:</b> ${esc(name)} <b>${fmt0(spot)}</b>${q ? ` <span class="${cls(q.change)}">(${pct(q.change_pct)} aaj)</span>` : ""} · call wall ${fmt0(w.call)} · put wall ${fmt0(w.put)} (sabse zyada OI, ${esc(d.expiry)} expiry) · ${esc(d.built_at)} tak. ${gap}</div>
+    <ol class="gp-zones">
+      ${row("call", `${esc(name)} ${fmt0(w.call)} ke upar`, "<b>Call le</b> (buy call)", trade(d.best?.long_call))}
+      ${row("mid", `${fmt0(w.put)} se ${fmt0(w.call)} ke beech`, "<b>Koi trade nahi.</b> Ruk, wait kar.", `<div class="small">Market wall ke beech atka hai. Option kharida to time decay roz paisa khaayega.</div>`)}
+      ${row("put", `${esc(name)} ${fmt0(w.put)} ke neeche`, "<b>Put le</b> (buy put)", trade(d.best?.long_put))}</ol>
+    <div class="small muted">Har minute update hota hai jab market khula ho. Walls OI se aate hain aur din mein badal sakte hain. Prices abhi ke hain; trade lene se pehle Dhan pe dobara dekh.
+      Yeh rule test nahi hua hai, koi edge ka saboot nahi. ${cap(COST_NOTE)}.</div></div>`;
+}
+
 function rankHtml(sym) {
   const r = S.rank[sym];
   if (!r || (r.loading && !r.data)) return `<div class="loading"><span class="spinner"></span>Ranking trades from the live chain…</div>`;
   if (r.error && !r.data) return `<div class="notice">Ranking unavailable: ${esc(r.error)}</div>`;
   const d = r.data, name = NAMES[sym] || sym;
-  if (!d.candidates.length) return `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
-  if (!S.ack[rankKey(sym)]) return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades</h4>${ackGate(rankKey(sym), sym)}</div></div>`;
+  if (!d.candidates.length) return gamePlanHtml(sym) + `<div class="call idle">No tradable setup with live two-sided prices right now.</div>`;
+  if (!S.ack[rankKey(sym)]) return gamePlanHtml(sym) + `<div class="rank-head"><div><h4 class="mini-h">Ranked trades</h4>${ackGate(rankKey(sym), sym)}</div></div>`;
   const v = S.view[sym];
   const rows = d.candidates.map((c, i) => {
     const lv = c.levels, a = c.plan;
@@ -1668,7 +1699,7 @@ function rankHtml(sym) {
       <td class="num">${c.ratio.toFixed(1)} : 1</td>
       <td>${S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" data-take="${i}">Take (dummy, 1 lot)</button>`}</td></tr>`;
   }).join("");
-  return `<div class="rank-head"><div><h4 class="mini-h">Ranked trades ${UNTESTED}</h4>
+  return gamePlanHtml(sym) + `<div class="rank-head"><div><h4 class="mini-h">Ranked trades ${UNTESTED}</h4>
       <div class="small muted">Built by Pulse from the live ${esc(name)} chain (${esc(d.expiry)}): ${d.considered} tradable candidates, top ${d.candidates.length} shown.
       The order comes from a rule on trend, PCR, OI and similar inputs, then profit-to-loss at the levels; those inputs showed no edge under the conditions tested. Tap a row for its orders, ticket and the Take button.
       Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.</div></div>

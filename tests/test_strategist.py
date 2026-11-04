@@ -180,6 +180,9 @@ def test_rank_builds_tradable_defined_risk_trades_best_first():
            "fii_index_futures_long_share": {"value": 0.1}}
     r = st.rank("NIFTY", built=(ctx, chain), top=50)
     cands = r["candidates"]
+    assert r["walls"] == {"call": 23000, "put": 22000}
+    for s in ("long_call", "long_put"):                     # the game plan's pick: the best-ranked of that kind
+        assert r["best"][s] is next(c for c in cands if c["plan"]["strategy"] == s)
     assert cands and r["considered"] == len(cands)
     scores = [c["evidence"]["score"] for c in cands]
     assert scores == sorted(scores, reverse=True) and cands[0]["plan"]["bias"] == "bearish"   # the data say down
