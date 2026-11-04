@@ -45,6 +45,9 @@ A no-trade or refused suggestion cannot be taken. Once taken, the button shows "
   total, and the index now.
 - **Flags.** When the index reaches the target or stop, the trade is flagged and the flag is saved with its time, the
   index level and the P&L then. After expiry it is flagged "expired".
+- **Auto-close (2026-11-04, user's choice).** Your trades now close themselves like the AI's: at the live close-out
+  prices on the first check where the index reaches the target or stop (the stop if both), at intrinsic value after
+  expiry. The history can be downloaded as CSV.
 - **Never closed automatically.** The user closes each trade.
 - **Background check.** A thread in the server checks open trades once a minute while the market is open, so a
   target or stop reached while the page is closed is still recorded.

@@ -1478,7 +1478,7 @@ function renderTicket(sym) {
 
 // ---------- Trade Record: dummy trades taken from the AI strategist ----------
 // One lot each. Marked live from the NSE chain at the price each leg could be closed at; when the index reaches the
-// AI's target or stop the trade is flagged (never closed for you). Stored on this computer (reports/trade_record).
+// target or stop the trade closes itself at those prices (the stop if both). Stored on this computer (reports/trade_record).
 S.takenRank = {};
 const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
 async function takeRanked(sym, i, btn) {
@@ -1524,7 +1524,8 @@ async function loadRecord() {
         <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
         <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("")}</tbody></table></div>`;
   el.innerHTML = summary + `<h3 class="sub-h rec-h">Your open trades</h3>` + open +
-    `<section class="card"><div class="card-head"><h2>Your history</h2></div>${hist}</section>` + aiRecordHtml(d.ai);
+    `<section class="card"><div class="card-head"><h2>Your history</h2>${d.closed.length ? `<button class="btn small-btn rec-csv">Download CSV</button>` : ""}</div>${hist}</section>` + aiRecordHtml(d.ai);
+  if ($(".rec-csv", el)) $(".rec-csv", el).onclick = () => downloadHistory(d.closed);
   el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
     if (!confirm("Close this dummy trade at the current prices?")) return;
     b.disabled = true;
@@ -1536,6 +1537,20 @@ async function loadRecord() {
     try { await api(`/api/trades/${b.dataset.id}`, { method: "DELETE" }); } catch (e) { alert(e.message); }
     loadRecord();
   }));
+}
+
+// Your closed trades as a CSV file, one row per trade, for your own analysis.
+function downloadHistory(closed) {
+  const q = (x) => `"${String(x ?? "").replace(/"/g, '""')}"`;
+  const head = ["taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "index_at_entry", "index_at_exit",
+    "index_target", "index_stop", "reason", "gross_pnl", "charges", "net_pnl"];
+  const rows = closed.map((t) => [t.taken_at, t.closed_at, t.symbol, t.strategy, t.expiry,
+    t.legs.map((l) => `${legShort(l)} ${l.entry} -> ${l.exit}`).join("; "), t.spot_at_entry, t.spot_at_exit,
+    t.index_target, t.index_stop, t.reason, t.gross_pnl?.toFixed(2), t.charges?.toFixed(2), t.net_pnl?.toFixed(2)]);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([[head, ...rows].map((r) => r.map(q).join(",")).join("\n")], { type: "text/csv" }));
+  a.download = `trade_history_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
 // Every AI suggestion, recorded automatically and settled by rule (target / stop / expiry).
@@ -1579,7 +1594,7 @@ function openTradeHtml(t) {
   const banners = flags.map((f) => {
     const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f];
     const extra = f === "expired" ? "The expiry has passed: close it to settle at the expiry value."
-      : `${a ? `at ${esc(a.at)} (${esc(name)} ${fmt0(a.spot)}${a.pnl != null ? `, P&L then ${money(a.pnl)}` : ""})` : "now"} — close the trade when you are ready.`;
+      : `${a ? `at ${esc(a.at)} (${esc(name)} ${fmt0(a.spot)})` : "now"} — no live price for a leg yet; it closes itself at the next one.`;
     return `<div class="rec-flag ${c}"><b>${txt}</b> ${extra}</div>`;
   }).join("");
   const plan = { underlying_target: t.index_target, underlying_stop: t.index_stop, underlying_entry_low: t.entry_low, underlying_entry_high: t.entry_high };
