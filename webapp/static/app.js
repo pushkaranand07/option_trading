@@ -1190,7 +1190,7 @@ function renderStrat(sym) {
   const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
     + (res ? aiListHtml(sym, res) : "") + (cand ? stratHtml(cand, sym) : "");
-  slot.querySelectorAll("[data-ai]").forEach((r) => r.tagName === "TR" && (r.onclick = () => { S.view[sym] = S.view[sym] === +r.dataset.ai ? null : +r.dataset.ai; S.ticket[sym] = null; refreshStrat(sym); }));
+  slot.querySelectorAll(".ai-trade").forEach((r) => (r.onclick = () => { S.view[sym] = S.view[sym] === +r.dataset.ai ? null : +r.dataset.ai; S.ticket[sym] = null; refreshStrat(sym); }));
   $(".strat-go", slot).onclick = () => startStrat(sym);
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
   if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
@@ -1578,23 +1578,29 @@ function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChar
 function lotMoney(debit, perLot) {
   return debit ? { v: perLot, label: "you pay" } : { v: perLot, label: "≈ margin (Dhan sets exact)" };
 }
-const lotMoneyHtml = (debit, perLot) => { const m = lotMoney(debit, perLot); return `<b>${rupee(m.v)}</b><div class="small muted">${m.label}</div>`; };
 
-// The cells every trade table shares: Dhan orders, entry / target / stop premiums, index levels, per-lot result.
-function tradeCells(c, sym) {
-  const lv = c.levels, a = c.plan;
-  const legs = lv.legs.map((l) => `<div><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(sym, c.expiry, l))}</div>`).join("");
-  const prem = (k) => lv.legs.map((l) => {
-    const role = legRole(a.strategy, lv.legs, l);
-    if (k === "price") return `<div>${fmt(l.price)}</div>`;
-    if (role === "hedge") return `<div class="muted">none</div>`;
-    return role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop) ? `<div>${fmt(l[k])}</div>` : `<div class="ref">(${fmt(l[k])})</div>`;
+// One trade as a compact card that fits the page width: the summary line, each Dhan order with its entry,
+// target and stop, the NIFTY levels with the per-lot result, and the AI's reason (two lines; all of it when selected).
+function tradeCard(c, i, sym, on) {
+  const lv = c.levels, a = c.plan, name = NAMES[sym] || sym;
+  const legs = lv.legs.map((l) => {
+    const role = legRole(a.strategy, lv.legs, l), dhan = role === "super" && legLevelsOk(l, l.premium_at_target, l.premium_at_stop);
+    const lvl = role === "hedge" ? `<span class="muted">protection, no target / stop</span>`
+      : dhan ? `target <b class="up">${fmt(l.premium_at_target)}</b> · stop loss <b class="down">${fmt(l.premium_at_stop)}</b>`
+      : `<span class="ref">at ${esc(name)} target ${fmt(l.premium_at_target)} · at stop ${fmt(l.premium_at_stop)}</span>`;
+    return `<div class="ai-leg"><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> <b>${esc(contractName(sym, c.expiry, l))}</b>
+      <span>limit <b>${fmt(l.price)}</b></span> <span>${lvl}</span></div>`;
   }).join("");
-  return `<td class="rank-legs">${legs}</td>
-      <td class="num">${prem("price")}</td><td class="num up">${prem("premium_at_target")}</td><td class="num down">${prem("premium_at_stop")}</td>
-      <td class="num nowrap"><span>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</span><br><span class="up">${fmt0(a.underlying_target)}</span><br><span class="down">${fmt0(a.underlying_stop)}</span></td>
-      <td class="num"><b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b><br><b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></td>
-      <td class="num">${lotMoneyHtml(c.priced.debit, c.priced.outlay_per_lot)}</td>`;
+  const m = lotMoney(c.priced.debit, c.priced.outlay_per_lot);
+  return `<div class="ai-trade ${on ? "on" : ""}" data-ai="${i}">
+    <div class="ai-top"><b class="rk">#${c.rank}</b> <b>${esc(STRAT_NAMES[a.strategy])}</b>
+      <span class="badge ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</span><span class="small muted">AI confidence ${esc(a.confidence)}</span>
+      <span class="ai-take"><span class="small">1 lot <b>${rupee(m.v)}</b> <span class="muted">${m.label}</span></span> ${takeCell(c, `data-take="${i}"`)}</span></div>
+    <div class="ai-legs">${legs}</div>
+    <div class="ai-nums"><span>${esc(name)} entry <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b></span>
+      <span>target <b class="up">${fmt0(a.underlying_target)}</b></span><span>stop <b class="down">${fmt0(a.underlying_stop)}</b></span>
+      <span>a lot <b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b> / <b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b></span></div>
+    <div class="ai-why">${esc(c.ai_why)}</div></div>`;
 }
 const takeCell = (c, attrs) => S.takenRank[takeKey(c)] ? `<span class="badge up">Recorded ✓</span>` : `<button class="btn small-btn rank-take" ${attrs}>Take (dummy, 1 lot)</button>`;
 
@@ -1606,18 +1612,12 @@ function aiListHtml(sym, res) {
   const read = `<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
     ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
   if (!res.trades.length) return `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
-  const rows = res.trades.map((c, i) => `<tr data-ai="${i}" class="${v === i ? "on" : ""}">
-      <td class="num"><b>#${c.rank}</b></td>
-      <td><b>${esc(STRAT_NAMES[c.plan.strategy])}</b><div class="small ${c.plan.bias === "bearish" ? "down" : "up"}">${esc(c.plan.bias)}</div><div class="small muted">AI confidence ${esc(c.plan.confidence)}</div></td>
-      <td class="small ai-why">${esc(c.ai_why)}</td>
-      ${tradeCells(c, sym)}
-      <td>${takeCell(c, `data-take="${i}"`)}</td></tr>`).join("");
+  const cards = res.trades.map((c, i) => tradeCard(c, i, sym, v === i)).join("");
   return `<div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}</div></div>
     ${read}
-    <div class="oc-scroll rank-scroll"><table class="t rank"><thead><tr><th>Rank</th><th>Trade</th><th>Why (AI)</th><th>Orders (Dhan)</th><th>Entry ₹ (limit)</th><th>Target ₹</th><th>Stop loss ₹</th><th>${esc(name)} entry zone / target / stop</th><th>Per lot at target / stop</th><th>Money for 1 lot</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
+    <div class="ai-trades">${cards}</div>
     <div class="small muted">Strongest first, by the whole analysis, not by profit size. Pulse priced each at the live bid / ask of the run and set its entry zone, target and stop by a fixed rule.
-      Entry: place a Limit order at the entry price while ${esc(name)} is inside the entry zone. Tap a row for its orders and ticket. Target / stop loss are Dhan Super-order prices; <span class="ref">(grey)</span> = expected price when ${esc(name)} hits its level, closed by hand; "none" = protection leg.
+      Entry: place each Limit order at its price while ${esc(name)} is inside the entry zone. Tap a trade for its full card and ticket. Target / stop loss are Dhan Super-order prices; <span class="ref">grey</span> = expected price when ${esc(name)} hits its level, closed by hand.
       Premiums at target and stop are estimates for today. One lot each; charges in the card. ${cap(COST_NOTE)}. #1 is the forward test's trade. Take records it on the Trade Record tab; no real order.</div>`;
 }
 
