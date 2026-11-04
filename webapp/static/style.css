@@ -379,6 +379,8 @@ table.depth { width: 100%; border-collapse: collapse; font-variant-numeric: tabu
 .ai-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .ai-top .rk { font-size: 15px; }
 .ai-take { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.plain-trade { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 14px; line-height: 1.5; }
+.plain-trade ol { margin: 4px 0 6px 18px; padding: 0; }
 .ai-legs { display: grid; gap: 4px; margin: 8px 0 6px; font-size: 13px; }
 .ai-leg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .ai-nums { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }

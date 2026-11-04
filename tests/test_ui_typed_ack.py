@@ -91,3 +91,11 @@ def test_every_trade_shows_the_money_one_lot_needs():
     assert "lotMoney(c.priced.debit, c.priced.outlay_per_lot)" in _function("tradeCard") and "1 lot <b>${rupee(m.v)}</b>" in _function("tradeCard")
     assert "Money for 1 lot" in _function("stratHtml") and "money in it" in _function("openTradeHtml")
     assert '"≈ margin (Dhan sets exact)"' in _function("lotMoney")
+
+
+@pytest.mark.unit
+def test_each_trade_says_in_hinglish_what_to_buy_or_sell_and_what_a_lot_costs():
+    plain = _function("plainTradeHtml")
+    assert 'kharid (BUY)' in plain and 'bech (SELL)' in plain and "rupee(l.price * lot)" in plain and "Pehle " in plain
+    assert "Kul milake tu" in plain and "Kul milake tujhe" in plain and "profit book kar" in plain and "nikal ja" in plain
+    assert "plainTradeHtml(c, sym)" in _function("tradeCard")
