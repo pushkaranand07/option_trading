@@ -18,7 +18,7 @@ The Plan tab showed two answers that could contradict each other: the AI's singl
 | Question | Choice |
 |---|---|
 | Forward test v1.1 | **Close it** and start v2, whose #1 is the trade that counts |
-| What the AI reads | A **fresh full multi-agent run** on every click (news, market, sentiment, bull / bear debate) |
+| What the AI reads | First a **fresh full multi-agent run** on every click; changed the same day to **two buttons**: **Complete analysis** runs the research (news, yesterday's market, sentiment, bull / bear debate) once a day and saves it (`reports/ai_runs/research/<symbol>_<date>.json`); **Quick analysis** reuses it, or the 8:30 morning view, with the live data (1-2 minutes) and is refused when neither exists |
 | The UNTESTED label | **None.** First one badge, then removed entirely the same day, before any trade counted under v2. Results still say "cost model unverified" |
 | How many trades | **Exactly 8**, strongest first |
 | The Plan tab | Chart, then **one** button and **one** list. The "Today's call" card, the rule ranking and the OI-wall game plan left the Plan tab |

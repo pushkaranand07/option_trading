@@ -749,7 +749,7 @@ function renderPlanCards() {
         <h3 class="sub-h">Morning view</h3><div class="morning-slot"></div></div></section>`).join("");
     planCharts.clear();
     loadPlanCharts();
-    for (const [sym] of entries) { renderStrat(sym); loadNseChain(sym); loadLatestRun(sym); }
+    for (const [sym] of entries) { renderStrat(sym); loadNseChain(sym); loadLatestRun(sym); loadResearch(sym); }
   }
   for (const [sym, e] of entries) {
     const card = $(`.plan-card[data-sym="${sym}"]`);
@@ -1178,42 +1178,59 @@ function renderNseChain(sym) {
   if (atm && slot.dataset.centered !== c.expiry) { sc.scrollTop = atm.offsetTop - sc.clientHeight / 2; slot.dataset.centered = c.expiry; }
 }
 
-const STAGE = { agents: "Step 1 of 2: the research agents are reading the news, the market and sentiment, and debating bull vs bear (several minutes)",
-  ranking: "Step 2 of 2: the AI is ranking the live trades by the whole analysis" };
+// Two buttons (user's choice): the Complete analysis runs the research once a day (10-15 min, best before the open) and
+// saves it; a Quick analysis reuses it with the live chart, today's moves and the chain (1-2 min), as often as wanted.
+const STAGE = { full: { agents: "Step 1 of 2: the research agents are reading the news, yesterday's market and sentiment, and debating bull vs bear (10-15 min)",
+    ranking: "Step 2 of 2: the AI is ranking the live trades by the whole analysis" },
+  quick: { agents: "Using today's research…", ranking: "The AI is reading the live chart, today's moves and the option chain and ranking the trades (1-2 min)" } };
+S.research = {};
+async function loadResearch(sym) {
+  try { S.research[sym] = await api("/api/strategy/research/" + encodeURIComponent(sym)); } catch { S.research[sym] = {}; }
+  renderStrat(sym);
+}
 function renderStrat(sym) {
   const slot = $(`.plan-card[data-sym="${sym}"] .strat-slot`); if (!slot) return;
   const st = S.strat[sym] || {}, res = st.result;
-  const ask = `<div class="strat-ask"><button class="btn primary strat-go" ${st.running ? "disabled" : ""}>${st.running ? "Running…" : res ? "Run again" : "Run AI strategy"}</button>
-    <span class="small muted">${st.running ? `<span class="spinner"></span> ${esc(STAGE[st.stage] || "Starting…")} — started ${esc(st.started || "")}`
-      : res ? `The 8 trades below are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.`
-      : `Reads the news, sentiment, the bull / bear debate, today's moves, trend, volatility and the option chain, then gives the 8 strongest trades for expiry <b>${esc(S.nseExp[sym] || "nearest")}</b>. Takes several minutes.`}</span></div>`;
+  const rs = S.research[sym] || {}, have = !!rs.source, busy = st.running ? "disabled" : "";
+  const researchLine = have ? `Today's research: <b>${esc(rs.source)}</b> at ${esc(rs.at)}${rs.rating ? `, the agents' call <b>${esc(rs.rating)}</b>` : ""}. A Quick analysis uses it with the live market.`
+    : `No research yet today. Run the <b>Complete analysis</b> once (best before 9:15); after that, Quick analysis takes 1-2 minutes.`;
+  const ask = `<div class="strat-ask strat-modes">
+      <button class="btn ${have ? "" : "primary"} strat-go" data-mode="full" ${busy}>Complete analysis</button>
+      <button class="btn ${have ? "primary" : ""} strat-go" data-mode="quick" ${busy || (have ? "" : "disabled")}>Quick analysis</button>
+      <span class="small muted">${st.running ? `<span class="spinner"></span> ${esc(STAGE[st.mode]?.[st.stage] || "Starting…")} — started ${esc(st.started || "")}` : researchLine}</span></div>
+    <div class="small muted">Complete: news, yesterday's market, sentiment and the bull / bear debate, then the 8 trades (10-15 min, once a day). Quick: today's research plus the live chart, today's moves and the option chain, then the 8 trades (1-2 min).
+      ${res && !st.running ? `The 8 trades below are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.` : ""}</div>`;
   const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
     + (res ? aiListHtml(sym, res) : "") + (cand ? stratHtml(cand, sym) : "");
   slot.querySelectorAll(".ai-trade").forEach((r) => (r.onclick = () => { S.view[sym] = S.view[sym] === +r.dataset.ai ? null : +r.dataset.ai; S.ticket[sym] = null; refreshStrat(sym); }));
-  $(".strat-go", slot).onclick = () => startStrat(sym);
+  slot.querySelectorAll(".strat-go").forEach((b) => (b.onclick = () => startStrat(sym, b.dataset.mode)));
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
   if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
   slot.querySelectorAll(".rank-take").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); takeRanked(sym, +b.dataset.take, b); }));
   if (S.ticket[sym]) renderTicket(sym);
 }
 
-async function startStrat(sym) {
-  S.strat[sym] = { running: true, started: istNow().hhmm.slice(0, 5) }; S.view[sym] = null; renderStrat(sym);
+async function startStrat(sym, mode = "quick") {
+  const prev = S.strat[sym]?.result;                       // the last trades stay on screen while the new run works
+  S.strat[sym] = { running: true, mode, started: istNow().hhmm.slice(0, 5), result: prev }; renderStrat(sym);
   try {
     const { job } = await api("/api/strategy", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: sym, expiry: S.nseExp[sym] || null }) });
+      body: JSON.stringify({ symbol: sym, expiry: S.nseExp[sym] || null, mode }) });
     stratJobs[sym] = job; store("stratJobs", JSON.stringify(stratJobs));
     pollStrat(sym, job);
-  } catch (e) { S.strat[sym] = { error: e.message }; renderStrat(sym); }
+  } catch (e) { S.strat[sym] = { error: e.message, result: prev }; renderStrat(sym); }
 }
 
 async function pollStrat(sym, job) {
   try {
     const j = await api("/api/strategy/" + job);
-    if (j.status === "running") { S.strat[sym] = { running: true, started: j.started, stage: j.stage }; renderStrat(sym); setTimeout(() => pollStrat(sym, job), 3000); return; }
-    S.strat[sym] = j.status === "done" && j.result?.trades ? { result: j.result } : j.status === "done" ? {} : { error: j.error };   // {}: an answer from before this version
+    const prev = S.strat[sym]?.result;
+    if (j.status === "running") { S.strat[sym] = { running: true, mode: j.mode || "full", started: j.started, stage: j.stage, result: prev }; renderStrat(sym); setTimeout(() => pollStrat(sym, job), 3000); return; }
+    S.strat[sym] = j.status === "done" && j.result?.trades ? { result: j.result } : j.status === "done" ? { result: prev } : { error: j.error, result: prev };
+    if (j.result?.mode === "full") loadResearch(sym);
     S.ticket[sym] = null; S.view[sym] = S.strat[sym].result?.trades?.length ? 0 : null;
+    delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs));
   } catch { delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs)); S.strat[sym] = {}; }   // server restarted
   renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym);
 }
@@ -1633,7 +1650,7 @@ const takeCell = (c, attrs) => S.takenRank[takeKey(c)] ? `<span class="badge up"
 function aiListHtml(sym, res) {
   const name = NAMES[sym] || sym, v = S.view[sym], ag = res.agents || {};
   const research = ag.error ? `<div class="notice">The research agents failed (${esc(ag.error)}), so this ranking used the live data only, with no news.</div>`
-    : `<div class="small muted">Research: the agents ran fresh (${esc(ag.minutes ?? "—")} min)${ag.rating ? `, their call <b>${esc(ag.rating)}</b>` : ""}. Then the AI ranked ${res.considered} live candidates.</div>`;
+    : `<div class="small muted">${res.mode === "quick" ? "Quick analysis" : "Complete analysis"} · research: ${esc(ag.source && ag.source !== "fresh" ? `${ag.source} at ${ag.at}` : "run fresh")} (${esc(ag.minutes ?? "—")} min)${ag.rating ? `, the agents' call <b>${esc(ag.rating)}</b>` : ""}. Then the AI ranked ${res.considered} live candidates.</div>`;
   const read = `<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
     ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
   if (!res.trades.length) return `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;

@@ -99,3 +99,11 @@ def test_each_trade_says_in_hinglish_what_to_buy_or_sell_and_what_a_lot_costs():
     assert 'kharid (BUY)' in plain and 'bech (SELL)' in plain and "rupee(l.price * lot)" in plain and "Pehle " in plain
     assert "Kul milake tu" in plain and "Kul milake tujhe" in plain and "profit book kar" in plain and "nikal ja" in plain
     assert "plainTradeHtml(c, sym)" in _function("tradeCard")
+
+
+@pytest.mark.unit
+def test_two_buttons_complete_once_a_day_and_quick_from_its_research():
+    render = _function("renderStrat")
+    assert 'data-mode="full"' in render and 'data-mode="quick"' in render and "Complete analysis" in render and "Quick analysis" in render
+    assert "startStrat(sym, b.dataset.mode)" in render and "loadResearch(sym)" in APP and '"/api/strategy/research/"' in APP
+    assert "mode })" in _fn_any("async function startStrat(")

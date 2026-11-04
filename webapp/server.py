@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 
@@ -221,6 +222,7 @@ async def trade_rank(symbol: str, expiry: str | None = None):
 class StrategyRequest(BaseModel):
     symbol: str
     expiry: str | None = None
+    mode: Literal["full", "quick"] = "full"
 
 
 @app.post("/api/strategy")
@@ -228,7 +230,17 @@ def strategy_start(req: StrategyRequest):
     if problem := ai.azure_problem():
         raise HTTPException(400, problem)
     sym = md.instrument(req.symbol)["symbol"]
-    return {"job": strategist.start(sym, req.expiry)}
+    try:
+        return {"job": strategist.start(sym, req.expiry, req.mode)}
+    except strategist.NoResearch as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/strategy/research/{symbol}")
+def strategy_research(symbol: str):
+    """Whether today's research exists for a Quick analysis: when, from where, and the agents' call."""
+    r = strategist.today_research(md.instrument(symbol)["symbol"]) or {}
+    return {k: r.get(k) for k in ("source", "at", "rating", "minutes")} if r else {}
 
 
 @app.get("/api/strategy/latest/{symbol}")
