@@ -517,6 +517,8 @@ def rank(symbol: str, expiry: str | None = None, top: int = 10, built=None) -> d
 # moves, then one LLM call that ranks 8 of Pulse's priced candidates, strongest first, by the whole analysis. The code
 # builds and prices every candidate, so the AI cannot invent a strike or a price; it only chooses and orders them.
 # The run is saved and stays fixed until the next run. Forward test v2 counts its #1.
+# Two modes (user's choice, 2026-11-04): "full" runs the research and saves it for the day (Complete analysis, once,
+# best before the open); "quick" reuses today's research, or the 8:30 morning view, with fresh live data (1-2 minutes).
 
 TOP_AI = 8
 
@@ -613,7 +615,8 @@ def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, bui
     say("agents")
     try:
         research = (agents or agents_view)(symbol)
-        agents_out = {"rating": research.get("rating"), "minutes": research.get("minutes")}
+        agents_out = {"rating": research.get("rating"), "minutes": research.get("minutes"), "source": research.get("source", "fresh"),
+                      "at": research.get("at")}
     except Exception as exc:                                     # the ranking still runs, without the research
         research, agents_out = {}, {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
     say("ranking")
@@ -654,6 +657,27 @@ def _runs_dir():
     return Path(__file__).resolve().parent.parent / "reports" / "ai_runs"
 
 
+def save_research(symbol: str, research: dict, day: date | None = None) -> dict:
+    """Keep the day's research (the Complete analysis) for every Quick analysis that day."""
+    d = _runs_dir() / "research"
+    d.mkdir(parents=True, exist_ok=True)
+    out = research | {"source": "complete analysis", "at": datetime.now().strftime("%H:%M")}
+    (d / f"{symbol}_{day or date.today()}.json").write_text(json.dumps(out, default=str), encoding="utf-8")
+    return out
+
+
+def today_research(symbol: str, day: date | None = None) -> dict | None:
+    """Today's research: the Complete analysis if it ran today, else the 8:30 morning view, else None."""
+    from webapp import morning
+
+    day = day or date.today()
+    f = _runs_dir() / "research" / f"{symbol}_{day}.json"
+    if f.exists():
+        return json.loads(f.read_text(encoding="utf-8"))
+    ai = (((morning.load(day) or {}).get("indices") or {}).get(symbol) or {}).get("ai") or {}
+    return ai | {"source": "8:30 morning view", "at": "08:30"} if ai.get("decision") and not ai.get("error") else None
+
+
 def save_run(res: dict) -> None:
     d = _runs_dir()
     d.mkdir(parents=True, exist_ok=True)
@@ -671,10 +695,22 @@ _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
 
-def start(symbol: str, expiry: str | None = None) -> str:
+class NoResearch(Exception):
+    pass
+
+
+def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
+    """Start a run: "full" (research, then ranking) or "quick" (today's research, then ranking)."""
+    research = None
+    if mode == "quick" and (research := today_research(symbol)) is None:
+        raise NoResearch("Aaj ka Complete analysis abhi nahi hua (aur 8:30 wala morning view bhi nahi hai). "
+                         "Pehle Complete analysis chala (10-15 min); uske baad Quick analysis 1-2 minute mein hoga.")
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
-        _jobs[job_id] = {"status": "running", "symbol": symbol, "started": datetime.now().strftime("%H:%M:%S")}
+        _jobs[job_id] = {"status": "running", "symbol": symbol, "mode": mode, "started": datetime.now().strftime("%H:%M:%S")}
+
+    def full_research(sym):
+        return save_research(sym, agents_view(sym))
 
     def stage(name):
         with _jobs_lock:
@@ -682,7 +718,8 @@ def start(symbol: str, expiry: str | None = None) -> str:
 
     def run():
         try:
-            res = ai_ranked(symbol, expiry, progress=stage)
+            res = ai_ranked(symbol, expiry, agents=(lambda s: research) if research else full_research, progress=stage)
+            res["mode"] = mode
             try:
                 save_run(res)
             except Exception:

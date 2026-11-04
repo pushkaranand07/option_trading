@@ -195,7 +195,7 @@ def test_ai_ranked_keeps_the_ais_order_drops_unknown_or_repeated_numbers_and_cap
     assert seen["ctx"]["today_intraday"] == {"high": 22700, "low": 22500} and all(len(x["index_entry_zone"]) == 2 for x in shown)
     assert [t["ai_why"] for t in r["trades"]] == [f"w{len(shown)}", *[f"w{k}" for k in range(1, 5)]]   # 99 and the repeat dropped
     assert [t["rank"] for t in r["trades"]] == list(range(1, 6)) and all(t["plan"]["confidence"] == "low" for t in r["trades"])
-    assert all(t["priced"]["legs"] and t["levels"] for t in r["trades"]) and r["agents"] == {"rating": "Sell", "minutes": 4.0}
+    assert all(t["priced"]["legs"] and t["levels"] for t in r["trades"]) and r["agents"] == {"rating": "Sell", "minutes": 4.0, "source": "fresh", "at": None}
 
 
 @pytest.mark.unit
@@ -258,3 +258,26 @@ def test_rank_builds_tradable_defined_risk_trades_best_first():
             assert "buy back the SELL leg first" in exit_text
     kinds = {c["plan"]["strategy"] for c in cands}                    # the 5-strike test chain fits these
     assert {"long_put", "bear_put_spread", "long_call", "bull_call_spread"} <= kinds
+
+
+@pytest.mark.unit
+def test_quick_analysis_uses_todays_complete_analysis_else_the_morning_view_else_refuses(tmp_path, monkeypatch):
+    from datetime import date
+
+    from webapp import morning
+
+    monkeypatch.setattr(st, "_runs_dir", lambda: tmp_path)
+    day = date(2027, 1, 4)
+    monkeypatch.setattr(morning, "load", lambda d=None: None)
+    assert st.today_research("NIFTY", day) is None
+    monkeypatch.setattr(st, "today_research", lambda s, d=None: None)
+    with pytest.raises(st.NoResearch, match="Complete analysis"):
+        st.start("NIFTY", mode="quick")
+    monkeypatch.undo()
+    monkeypatch.setattr(st, "_runs_dir", lambda: tmp_path)
+    monkeypatch.setattr(morning, "load", lambda d=None: {"indices": {"NIFTY": {"ai": {"rating": "Hold", "decision": "d"}}}})
+    assert st.today_research("NIFTY", day)["source"] == "8:30 morning view"
+    saved = st.save_research("NIFTY", {"rating": "Buy", "decision": "x", "news": "n"}, day)
+    got = st.today_research("NIFTY", day)
+    assert got == saved and got["source"] == "complete analysis" and got["rating"] == "Buy"
+    assert st.today_research("NIFTY", date(2027, 1, 5)) == st.today_research("NIFTY", date(2027, 1, 6))   # another day: not today's file

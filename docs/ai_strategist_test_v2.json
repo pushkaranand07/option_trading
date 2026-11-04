@@ -2,10 +2,10 @@
  "version_number": "2",
  "written": "2026-11-04",
  "written_before_any_trade_counts": true,
- "what_this_tests": "whether the AI strategist's #1 ranked NIFTY trade earns a net return, against baselines on the same sessions, going forward. Each question runs the multi-agent research fresh, then one LLM call ranks exactly 8 of the app's priced candidates, strongest first",
+ "what_this_tests": "whether the AI strategist's #1 ranked NIFTY trade earns a net return, against baselines on the same sessions, going forward. The multi-agent research runs once a day (the Complete analysis, or the 8:30 morning view) and every run that day reuses it; one LLM call then ranks exactly 8 of the app's priced candidates from the live data, strongest first",
  "version": {
-  "prompt_sha256": "606cad0a970550c2a9aefbc310f940e198181f9e88b2da9c244d33fab6823d81",
-  "prompt_covers": "the ranking system prompt, answer schema, strategy menu, the number ranked (8), and the source of ask_rank_llm, ai_ranked, candidates_for_ai, today_moves, agents_view, build_context, rank, _structures, _index_levels, trade_levels, price, check_structure and morning.ai_view",
+  "prompt_sha256": "6660b707e1c75771eb2e03f3cd3450629e5d85cfd335f3e48024d8d9114509db",
+  "prompt_covers": "the ranking system prompt, answer schema, strategy menu, the number ranked (8), and the source of ask_rank_llm, ai_ranked, candidates_for_ai, today_moves, agents_view, today_research, build_context, rank, _structures, _index_levels, trade_levels, price, check_structure and morning.ai_view",
   "model": {
    "provider": "azure",
    "model": "gpt-5",
@@ -18,7 +18,7 @@
  },
  "forward_test": {
   "instrument": "NIFTY, the app's default expiry",
-  "frequency": "the #1 of the first answer in a session counts: 09:30 to 15:00 IST, weekdays. Trades ranked 2 to 8 do not count",
+  "frequency": "the #1 of the first answer in a session counts, Complete or Quick analysis alike: 09:30 to 15:00 IST, weekdays. Trades ranked 2 to 8 do not count",
   "starts": "the first weekday session after this file is on main. The user asks on the Plan tab; nothing runs by itself, so the collection freeze is unaffected",
   "registry": "reports/ai_test/v2/registry.jsonl, append-only and hash-chained (tradingagents/research/registry.py). Version 1.1's registry is separate and unchanged",
   "registered_before_entry": [
@@ -162,7 +162,7 @@
   "trades_counted_under_it": 1,
   "closed": "2026-11-04 by the user, to rank 8 trades a question. Its trade stays on file and is not settled or reported"
  },
- "user_decision": "2026-11-04: close version 1.1 and start version 2, whose #1 counts; a fresh multi-agent run each question; the stop date and interim check carried over from version 1.1 unchanged",
+ "user_decision": "2026-11-04: close version 1.1 and start version 2, whose #1 counts; the research once a day (Complete analysis), reused by Quick analyses; the stop date and interim check carried over from version 1.1 unchanged",
  "stop": {
   "date": "2027-11-01",
   "questions_after_it_do_not_count": true,
