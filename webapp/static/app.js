@@ -59,6 +59,8 @@ async function loadStatus() {
     const mp = $("#marketPill");
     mp.textContent = S.status.market_open ? "● Market open" : "Market closed";
     mp.classList.toggle("open", S.status.market_open);
+    const cw = $("#calWarn");
+    if (cw) { cw.hidden = !S.status.calendar_warning; cw.textContent = S.status.calendar_warning || ""; }
   } catch (e) { console.warn(e); }
 }
 

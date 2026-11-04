@@ -70,6 +70,8 @@ def status():
         "azure": ai.azure_problem() is None,
         "azure_problem": ai.azure_problem(),
         "market_open": signals.market_open(),
+        "calendar_warning": ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
+                             "so a market holiday would show as open." if signals.nse_calendar().source == "weekends only" else None),
         "indices": [{"symbol": k, "name": v[0]} for k, v in md.INDICES.items()],
     }
 

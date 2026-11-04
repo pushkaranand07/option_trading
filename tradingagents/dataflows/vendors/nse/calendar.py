@@ -24,6 +24,7 @@ is always decided by the date *inside* the data, never by the clock alone.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -42,6 +43,7 @@ MARKET_CLOSE = time(15, 30)
 
 # The capital-market segment's list governs equity and index sessions.
 HOLIDAY_SEGMENT = "CM"
+SAVED_HOLIDAYS = None    # where the last good holiday list is kept; None: <data cache>/nse/holidays_last_good.json
 
 # Weekend sessions NSE actually held, each verified by downloading its official files (F&O bhavcopy and
 # index closes): Budget days, Diwali Muhurat sessions on a weekend, and the 2024 special live sessions.
@@ -76,7 +78,8 @@ class NSECalendar:
     """Sessions of the NSE capital market, from an explicit holiday list."""
 
     def __init__(self, holidays: dict[date, str] | None = None, special_sessions: set[date] | None = None,
-                 muhurat_days: set[date] | None = None):
+                 muhurat_days: set[date] | None = None, source: str = "given"):
+        self.source = source     # "nse", "nse (cached copy)", "last saved list", "weekends only" or "given"
         self.holidays = dict(holidays or {})
         # Sessions on days that are otherwise closed (e.g. a weekend Muhurat or budget-day session).
         self.special_sessions = set(special_sessions or ())
@@ -95,14 +98,27 @@ class NSECalendar:
         from tradingagents.dataflows.vendors.nse.client import default_client
 
         client = client or default_client()
+        source = "nse"
         try:
             fetched = client.get_json("/api/holiday-master", {"type": "trading"}, ttl=86400)
-        except VendorError as exc:
-            logger.warning("NSE holiday list unavailable (%s); using weekends and known special sessions", exc)
-            return cls(special_sessions=set(KNOWN_SPECIAL_SESSIONS))
-        holidays = parse_holiday_master(fetched.data)
+            holidays = parse_holiday_master(fetched.data)
+            if getattr(fetched, "stale", False):
+                source = "nse (cached copy)"
+            why = None if holidays else "NSE's list parsed empty"
+        except (VendorError, AttributeError, TypeError, ValueError) as exc:     # unreachable, refused, or a changed format
+            holidays, why = {}, str(exc) or type(exc).__name__
+        if holidays:
+            _save_holidays(holidays)
+        else:
+            holidays = _load_saved_holidays()
+            if holidays:
+                logger.warning("NSE holiday list unavailable (%s); using the last saved list", why)
+                source = "last saved list"
+            else:
+                logger.warning("NSE holiday list unavailable (%s) and none saved; using weekends and known special sessions", why)
+                return cls(special_sessions=set(KNOWN_SPECIAL_SESSIONS), source="weekends only")
         muhurat = {d for d, name in holidays.items() if name.endswith("*")}
-        return cls(holidays, special_sessions=set(KNOWN_SPECIAL_SESSIONS), muhurat_days=muhurat)
+        return cls(holidays, special_sessions=set(KNOWN_SPECIAL_SESSIONS), muhurat_days=muhurat, source=source)
 
     def is_trading_day(self, day: date) -> bool:
         if day in self.special_sessions:
@@ -152,6 +168,35 @@ class NSECalendar:
         if clock < MARKET_CLOSE:
             return SessionState.OPEN
         return SessionState.POST_CLOSE
+
+
+def _saved_holidays_path():
+    from pathlib import Path
+
+    from tradingagents.dataflows.config import get_config
+
+    return Path(SAVED_HOLIDAYS) if SAVED_HOLIDAYS else Path(get_config()["data_cache_dir"]) / "nse" / "holidays_last_good.json"
+
+
+def _save_holidays(holidays: dict[date, str]) -> None:
+    """Keep a good list for the days NSE cannot give one. A failure to save never stops the calendar."""
+    try:
+        path = _saved_holidays_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"saved_at": datetime.now().isoformat(timespec="seconds"),
+                                   "holidays": {d.strftime("%d-%b-%Y"): n for d, n in sorted(holidays.items())}}), encoding="utf-8")
+        tmp.replace(path)
+    except OSError as exc:
+        logger.warning("could not save the NSE holiday list: %s", exc)
+
+
+def _load_saved_holidays() -> dict[date, str]:
+    try:
+        saved = json.loads(_saved_holidays_path().read_text(encoding="utf-8"))
+        return {datetime.strptime(d, "%d-%b-%Y").date(): n for d, n in saved["holidays"].items()}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
 
 
 def parse_holiday_master(payload: dict) -> dict[date, str]:
