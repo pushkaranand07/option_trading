@@ -745,12 +745,16 @@ def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
             except Exception:
                 logger.exception("the AI run was not saved")
             top = res["trades"][0] if res["trades"] else None
-            if top and not res["market_closed"]:        # the AI's #1 goes into the AI track record
+            if top and not res["market_closed"]:        # the AI's #1 goes into the AI track record, priced now
                 try:
                     from webapp import trade_record
-                    res["ai_record"] = trade_record.take(top, source="ai")["id"]
+                    rec = trade_record.record_ai_pick(res["run_id"])
+                    if rec["status"] == "not_taken":
+                        res["ai_record_refused"] = rec["reason"]
+                    else:
+                        res["ai_record"] = rec["id"]
                 except Exception:
-                    pass
+                    logger.exception("the AI's pick was not recorded")
             try:                                       # forward test v2 counts the #1 of the first NIFTY answer of a session
                 from webapp import ai_test
                 ai_test.record(top or {"symbol": symbol, "expiry": res["expiry"], "plan": {"strategy": "no_trade"}})

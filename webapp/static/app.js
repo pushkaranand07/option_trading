@@ -1535,7 +1535,11 @@ function aiRecordHtml(ai) {
       <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
       <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
       <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
-  }).join("");
+  }).join("") + (ai.not_taken || []).map((t) => `<tr class="muted"><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
+      <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
+      <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.shown_price)}`).join("<br>")}</td><td class="num small">${levelsTxt(t)}</td>
+      <td class="small"><b>not taken</b><br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
+      <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("");
   return `<section class="card"><div class="card-head"><h2>AI suggestions — track record</h2> <span class="small muted">every suggestion, 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE}</span></div>
     <div class="body">${RECORDED_NOTE}
       <div class="levels rec-stats">
@@ -1545,7 +1549,7 @@ function aiRecordHtml(ai) {
         <div class="lv"><span>Open now</span><b class="${cls(s.open_pnl)}">${money(s.open_pnl)}</b><small>before charges · ${COST_NOTE}</small></div></div>
       <p class="small muted">A handful of trades proves nothing either way.</p>
     </div>
-    ${all.length ? `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Asked</th><th>Trade</th><th>AI confidence</th><th>Legs: entry → exit</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ${all.length || ai.not_taken?.length ? `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Asked</th><th>Trade</th><th>AI confidence</th><th>Legs: entry → exit</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<p class="muted pad">Every suggestion from the AI strategist will appear here.</p>`}</section>`;
 }
 

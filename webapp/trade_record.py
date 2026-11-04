@@ -105,7 +105,7 @@ def _as_range_trade(t: dict) -> None:
         leg["target"] = leg["stop"] = None
 
 
-def take_from_run(run_id: str, candidate: int, chain_fn=None) -> dict:
+def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you") -> dict:
     """Your Take on candidate ``candidate`` of AI run ``run_id``, priced here and now: the run must be today's
     (IST), the market open, the index inside the candidate's entry zone, and every leg quoted on both sides in a
     fresh chain. The entry is that chain's ask for a bought leg and bid for a sold one; the run's price is kept
@@ -143,8 +143,33 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None) -> dict:
     days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - signals.now_ist().date()).days
     fresh = c | {"spot": spot, "priced": priced, "levels": st.trade_levels(sp, priced, ch, days), "charges_per_lot": st.charges(priced, 1)}
     shown = {(x["strike"], x["type"], x["action"]): x["price"] for x in c["priced"]["legs"]}
-    return take(fresh, source="you", provenance={"run_id": run_id, "candidate": candidate, "run_asked_at": run.get("asked_at"),
-                                                 "spot_at_run": c.get("spot")}, shown=shown)
+    return take(fresh, source=source, provenance={"run_id": run_id, "candidate": candidate, "run_asked_at": run.get("asked_at"),
+                                                  "spot_at_run": c.get("spot")}, shown=shown)
+
+
+def record_ai_pick(run_id: str, chain_fn=None) -> dict:
+    """The AI's #1 of a run, into the AI track record through the same fresh-chain path as your Take. A refusal
+    (stale quotes, outside the entry zone, no live quote...) is kept as a "not taken" row with its reason, so a
+    missed pick shows instead of a trade at an old price."""
+    from webapp import strategist as st
+
+    try:
+        return take_from_run(run_id, 0, chain_fn, source="ai")
+    except TradeError as exc:
+        c = ((st.load_run(run_id) or {}).get("trades") or [None])[0]
+        if c is None:
+            raise
+        plan = c["plan"]
+        row = {"id": uuid.uuid4().hex[:10], "taken_at": _now(), "status": "not_taken", "reason": str(exc), "source": "ai",
+               "symbol": c["symbol"], "expiry": c["expiry"], "strategy": plan["strategy"], "bias": plan.get("bias"),
+               "index_target": plan.get("underlying_target"), "index_stop": plan.get("underlying_stop"),
+               "legs": [{"action": x["action"], "type": x["type"], "strike": x["strike"], "shown_price": x["price"]} for x in c["priced"]["legs"]],
+               "ai_confidence": plan.get("confidence"), "run_id": run_id, "candidate": 0, "spot_at_run": c.get("spot")}
+        with _lock:
+            trades = _load()
+            trades.append(row)
+            _save(trades)
+        return row
 
 
 def take(result: dict, source: str = "you", provenance: dict | None = None, shown: dict | None = None) -> dict:
@@ -333,7 +358,8 @@ def overview(chain_fn=None) -> dict:
         mine = [t for t in trades if t.get("source", "you") == who]
         open_ = sorted((t for t in mine if t["status"] == "open"), key=lambda t: t["taken_at"], reverse=True)
         closed = sorted((t for t in mine if t["status"] == "closed"), key=lambda t: t["closed_at"], reverse=True)
-        out[who] = {"open": open_, "closed": closed, "stats": _stats(closed, open_)}
+        out[who] = {"open": open_, "closed": closed, "stats": _stats(closed, open_),
+                    "not_taken": sorted((t for t in mine if t["status"] == "not_taken"), key=lambda t: t["taken_at"], reverse=True)}
     out["ai"]["by_score"] = {band: _stats([t for t in out["ai"]["closed"] if t.get("score_label") == band], [])
                              for band in ("Strong", "Moderate", "Weak")}
     # the page's original keys stay = your trades
