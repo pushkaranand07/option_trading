@@ -310,6 +310,45 @@ def direction_of(strategy: str) -> str:
         raise ValueError(f"strategy {strategy!r} has no direction: add it to strategist.DIRECTION") from None
 
 
+BET_FIELDS = ("bet_id", "bet_index", "bet_size", "bet_started")   # read-time only, never saved
+
+
+def _bet_side(t: dict) -> tuple:
+    """What a bet is: whose (you / ai), which index, which direction. The expiry is not part of it."""
+    return t.get("source", "you"), t["symbol"], direction_of(t["strategy"])
+
+
+def _in_a_bet(t: dict) -> bool:
+    """Taken trades only: a not-taken row and a row entered outside the session are in no bet (never counted)."""
+    return t["status"] in ("open", "closed") and not _outside_session(t)
+
+
+def find_bet(trades: list[dict], row: dict) -> str | None:
+    """The bet ``row`` joins, as its bet_id, or None for a new bet; the one check that both the grouping and the
+    "add to this bet?" question use. A trade joins a bet when, at its taken_at, a trade of the same source, symbol and
+    direction was open (overnight too), or was taken the same day; trades already grouped carry their bet_id, so
+    a chain of overlaps is one bet. The earliest such bet wins."""
+    at, side = row["taken_at"], _bet_side(row)
+    for t in trades:
+        if t is row or t.get("id") == row.get("id") or not _in_a_bet(t) or t["taken_at"] > at or _bet_side(t) != side:
+            continue
+        if t["status"] == "open" or (t.get("closed_at") or "") > at or t["taken_at"][:10] == at[:10]:
+            return t.get("bet_id") or t["id"]
+    return None
+
+
+def _group_bets(trades: list[dict]) -> None:
+    """Read time: give every trade in a bet its bet_id (its first trade's id), place, size and start."""
+    done, members = [], {}
+    for t in sorted((x for x in trades if _in_a_bet(x)), key=lambda x: x["taken_at"]):
+        t["bet_id"] = find_bet(done, t) or t["id"]
+        done.append(t)
+        members.setdefault(t["bet_id"], []).append(t)
+    for ms in members.values():
+        for i, t in enumerate(ms, 1):
+            t.update(bet_index=i, bet_size=len(ms), bet_started=ms[0]["taken_at"])
+
+
 def _bet_key(t: dict) -> tuple:
     return (t.get("run_day") or (t.get("taken_at") or "")[:10], t["symbol"], t["expiry"], t["strategy"],
             tuple(sorted((x["action"], x["type"], float(x["strike"])) for x in t["legs"])))
@@ -430,10 +469,24 @@ def _remember_flags(trade: dict, view: dict) -> bool:
     return bool(new)
 
 
+def _bet_stats(closed: list[dict], open_: list[dict]) -> dict:
+    """Bets, not trades: a bet with any trade open is open (outside won / lost); a closed bet is won when the sum of
+    its trades' net is above zero."""
+    bets: dict[str, list[dict]] = {}
+    for t in closed + open_:
+        bets.setdefault(t.get("bet_id") or t["id"], []).append(t)
+    still_open = {b for b, ms in bets.items() if any(t["status"] == "open" for t in ms)}
+    sums = [sum(t["net_pnl"] for t in ms) for b, ms in bets.items() if b not in still_open]
+    won = len([x for x in sums if x > 0])
+    return {"bets": len(bets), "bets_open": len(still_open), "bet_wins": won, "bet_losses": len(sums) - won,
+            "bet_win_rate": won / len(sums) * 100 if sums else None}
+
+
 def _stats(closed: list[dict], open_: list[dict]) -> dict:
+    """Net is closed trades only; the open trades' P&L is open_pnl, a line of its own."""
     nets = [t["net_pnl"] for t in closed]
     wins = [x for x in nets if x > 0]
-    return {"closed": len(closed), "open": len(open_), "net": sum(nets), "wins": len(wins),
+    return _bet_stats(closed, open_) | {"closed": len(closed), "open": len(open_), "net": sum(nets), "wins": len(wins),
             "losses": len([x for x in nets if x <= 0]), "win_rate": len(wins) / len(nets) * 100 if nets else None,
             "avg": sum(nets) / len(nets) if nets else None, "best": max(nets, default=None),
             "worst": min(nets, default=None), "open_pnl": sum((t.get("live") or {}).get("pnl") or 0 for t in open_)}
@@ -462,9 +515,10 @@ def overview(chain_fn=None) -> dict:
             changed |= _auto_settle(t, v)
             t["live"] = v
         if changed:
-            _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session")} for t in trades])
+            _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session", *BET_FIELDS)} for t in trades])
     for t in trades:                                     # read-time only, never saved
         t["outside_session"] = t["status"] != "not_taken" and _outside_session(t)
+    _group_bets(trades)
     counted = lambda rows: [t for t in rows if not t["outside_session"]]  # noqa: E731
     out = {}
     for who in ("you", "ai"):
