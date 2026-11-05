@@ -90,9 +90,19 @@ def _quote_age(ch: dict, now: datetime) -> tuple[int | None, str | None]:
 
 
 def entry_allowed() -> str | None:
-    """Why no trade may be entered (or closed by hand) now, or None. The one session check every entry path asks:
+    """Why no trade may be entered now, or None. The one session check every entry path asks:
     take() (the only writer of a trade row), take_from_run() before fetching prices, the AI run before recording its pick."""
     return None if _market_open() else CLOSED_MSG
+
+
+EXIT_CLOSED_MSG = ("Market band hai: band karne ka asli price abhi nahi hai. 9:15 ke baad band karna; "
+                   "expiry ke baad trade expiry value pe band hota hai.")
+
+
+def exit_allowed() -> str | None:
+    """Why a trade cannot be closed now, or None. Only whether the market is open: no entry rule (the entry gate, a
+    time window, dedupe) ever stops an exit. A trade past expiry settles at intrinsic value whatever this says."""
+    return None if _market_open() else EXIT_CLOSED_MSG
 
 
 EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
@@ -413,7 +423,7 @@ def _stats(closed: list[dict], open_: list[dict]) -> dict:
 def overview(chain_fn=None) -> dict:
     """Open trades with live marks (flags saved; every trade settled by the rules), closed trades, totals —
     yours and the AI's separately, the AI's also by evidence score."""
-    live = _market_open()
+    live = exit_allowed() is None                        # closed market: last prices shown, nothing settled (expiry aside)
     with _lock:
         trades = _load()
         changed = _repair_range_trades(trades)
@@ -627,7 +637,7 @@ def close(trade_id: str, chain_fn=None) -> dict:
             spot = t.get("last_spot") or t["spot_at_entry"]
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
             reason = "expired"
-        elif why := entry_allowed():
+        elif why := exit_allowed():
             raise TradeError(why)
         else:
             v = mark(t, chain_fn or oc.full_chain)

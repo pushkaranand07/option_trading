@@ -44,8 +44,8 @@ def test_the_ai_run_asks_the_same_gate_before_recording_its_pick(world, run_ai, 
 @pytest.mark.unit
 def test_the_session_is_read_in_one_place():
     src = inspect.getsource(tr)
-    assert src.count("_market_open()") == 3                                      # its definition, entry_allowed(), the live marking
-    for fn in (tr.take, tr.take_from_run, tr.close):
+    assert src.count("_market_open()") == 3                                      # its definition, entry_allowed(), exit_allowed()
+    for fn in (tr.take, tr.take_from_run):                                       # close() asks exit_allowed() (tests/test_exit_allowed.py)
         assert "entry_allowed()" in inspect.getsource(fn), fn.__name__
     start = inspect.getsource(st.start)
     assert "entry_allowed()" in start and "market_open()" not in start
