@@ -1539,7 +1539,7 @@ const detailRow = (t, cols) => `<tr class="rec-detail" data-for="${t.id}" ${S.op
 // The v2 link of an AI #1 row; v2's own entry only on days v2 counts (before it started there is nothing to compare).
 const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">${esc(t.v2.note)}${t.v2.entry && !t.v2.note.startsWith("before v2") ? ` · v2 entry ${esc(t.v2.entry)}` : ""}</span>` : "");
 
-const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"] };
+const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"], exit_pending: ["Exit pending", "warn"] };
 // A range trade (iron condor) has a profit zone between its sold strikes, not one target and one stop.
 const levelsTxt = (t) => (t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}` : `${fmt0(t.index_target)} / ${fmt0(t.index_stop)}`);
 const legShort = (l) => `${l.action === "BUY" ? "B" : "S"} ${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
@@ -1562,12 +1562,14 @@ const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.
 
 function openRowHtml(t) {
   const v = t.live || {}, name = NAMES[t.symbol] || t.symbol;
-  const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])].map((f) => {
-    const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f];
+  const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])].filter((f) => f !== "exit_pending").map((f) => {
+    const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f] || [f, "warn"];
     return `<div class="row-flag ${c === "up" ? "up" : c === "down" ? "down" : "warn-c"}"><b>${txt}</b> ${f === "expired" ? "— close it to settle at the expiry value"
       : `${a ? `at ${esc(a.at)}` : "now"} — closes itself at the next live price`}</div>`;
   }).join("");
-  const notes = (t.note ? `<div class="row-flag warn-c">${esc(t.note)}</div>` : "") + (v.error ? `<div class="row-flag down">${esc(v.error)}</div>` : "");
+  const pending = v.pending?.length ? v.pending : (t.alerts || []).find((a) => a.kind === "exit_pending")?.legs || [];
+  const notes = (pending.length ? `<div class="row-flag warn-c"><b>Exit pending</b>: ${pending.map((p) => `${esc(p)} quote missing`).join(", ")} — it closes at the first price for every leg</div>` : "")
+    + (t.note ? `<div class="row-flag warn-c">${esc(t.note)}</div>` : "") + (v.error ? `<div class="row-flag down">${esc(v.error)}</div>` : "");
   return `<tr><td class="when">${when(t.taken_at)}</td>${tradeCell(t, flags + notes)}
     <td class="small paid">${paidTxt(t)}</td>
     <td class="num">${fmt0(t.spot_at_entry)} → <b>${fmt0(v.spot)}</b><div class="small muted">${t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}`

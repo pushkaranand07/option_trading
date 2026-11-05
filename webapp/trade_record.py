@@ -17,6 +17,7 @@ Paper trades only: nothing here places an order.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from datetime import date, datetime
@@ -25,6 +26,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 STORE = ROOT / "reports" / "trade_record" / "trades.json"
 _lock = threading.Lock()
+
+
+logger = logging.getLogger(__name__)
 
 
 class TradeError(Exception):
@@ -324,12 +328,12 @@ def mark(trade: dict, chain_fn=None) -> dict:
     (flags are remembered with the time they first happened)."""
     from webapp import option_chain as oc
 
-    view = {"spot": None, "legs": [], "pnl": None, "flags": [], "error": None, "as_of": None}
+    view = {"spot": None, "legs": [], "pnl": None, "flags": [], "error": None, "as_of": None, "pending": []}
     if _expired(trade):
         view["flags"].append("expired")
         return view
     try:
-        ch = (chain_fn or oc.chain)(trade["symbol"], trade["expiry"])
+        ch = (chain_fn or oc.full_chain)(trade["symbol"], trade["expiry"])     # every strike: a held leg can be far from the money
     except Exception as exc:
         view["error"] = f"Live prices unavailable: {str(exc)[:160]}"
         return view
@@ -340,6 +344,8 @@ def mark(trade: dict, chain_fn=None) -> dict:
         x = _exit_price(leg, q)
         exits.append(x)
         view["legs"].append({"now": x, "ltp": q["ltp"] if q else None})
+        if x is None:
+            view["pending"].append(f"{float(leg['strike']):.0f} {leg['type']}")
     view["spot"], view["as_of"] = ch["spot"], ch.get("timestamp")
     if None not in exits:
         view["pnl"] = _pnl(trade, exits)
@@ -518,6 +524,12 @@ def _auto_settle(t: dict, v: dict) -> bool:
         _settle(t, [_intrinsic(leg, spot) for leg in t["legs"]], spot, "expired")
         return True
     hit = "stop" if "stop" in v["flags"] else "target" if "target" in v["flags"] else None
+    if hit and v["pnl"] is None and v.get("pending"):         # it should close, but a leg has no quote: say so once
+        if any(a["kind"] == "exit_pending" for a in t["alerts"]):
+            return False
+        t["alerts"].append({"kind": "exit_pending", "at": _now(), "spot": v["spot"], "legs": v["pending"]})
+        logger.warning("exit pending: trade %s reached its %s but has no quote for %s", t["id"], hit, ", ".join(v["pending"]))
+        return True
     if hit and v["pnl"] is not None:
         _settle(t, [x["now"] for x in v["legs"]], v["spot"], "range broken" if t.get("range") else f"{hit} reached")
         return True
@@ -564,7 +576,7 @@ def close(trade_id: str, chain_fn=None) -> dict:
         elif not _market_open():
             raise TradeError(CLOSED_MSG)
         else:
-            v = mark(t, chain_fn or oc.chain)
+            v = mark(t, chain_fn or oc.full_chain)
             if v["error"] or v["pnl"] is None:
                 raise TradeError(v["error"] or "A leg has no live price; try again in a moment.")
             exits, spot = [x["now"] for x in v["legs"]], v["spot"]

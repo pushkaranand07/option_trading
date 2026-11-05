@@ -143,10 +143,25 @@ def chain(symbol: str, expiry: str | None = None, lot: int | None = None, client
     return md._cache.get(("nse chain", symbol, expiry), CACHE_SECONDS, lambda: _chain(symbol, expiry, exps, lot, client))
 
 
-def _chain(symbol: str, expiry: str, exps: list[str], lot: int | None, client) -> dict:
+def full_chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None) -> dict:
+    """Every strike of the chain (no display window), for pricing legs already held: a leg can drift far from the
+    money. Same NSE fetch as ``chain`` (cached together)."""
+    symbol = symbol.upper()
+    client = client or _client()
+    exps = expiries(symbol, client)
+    expiry = expiry if expiry in exps else exps[0]
+    return md._cache.get(("nse chain full", symbol, expiry), CACHE_SECONDS, lambda: _chain(symbol, expiry, exps, lot, client, 10 ** 6))
+
+
+def _raw_chain(symbol: str, expiry: str, client) -> dict:
     kind = "Indices" if symbol in NSE_INDICES else "Equity"
-    raw = client.get_json(CHAIN, {"type": kind, "symbol": symbol, "expiry": expiry}, ttl=0).data
+    return md._cache.get(("nse chain raw", symbol, expiry), CACHE_SECONDS,
+                         lambda: client.get_json(CHAIN, {"type": kind, "symbol": symbol, "expiry": expiry}, ttl=0).data)
+
+
+def _chain(symbol: str, expiry: str, exps: list[str], lot: int | None, client, strikes_each_side: int = 15) -> dict:
+    raw = _raw_chain(symbol, expiry, client)
     if lot is None:
         lot = lot_size(symbol)
-    return shape(raw, int(lot)) | {"symbol": symbol, "expiry": expiry, "expiries": exps,
-                                   "fetched": datetime.now().strftime("%H:%M:%S")}
+    return shape(raw, int(lot), strikes_each_side) | {"symbol": symbol, "expiry": expiry, "expiries": exps,
+                                                      "fetched": datetime.now().strftime("%H:%M:%S")}
