@@ -5,8 +5,10 @@
 The registry, chains and spec hash default to version 2's. Rows before its first counted session (webapp.ai_test.V2_FIRST_SESSION,
 from the spec's "starts" rule) are left out. It prints JSON and writes no file.
 
-Not cleared for real rows: REAL_RUN_APPROVED stays False until the user says otherwise, in a reviewed commit. Until then the real registry
-is refused, and so is any copy of it, because every non-synthetic row is refused. Settlement and session files map or list ISO dates.
+Real rows: the interim count (questions, entries, voids, missed days; no price, no return) is cleared for the real registry
+(REAL_INTERIM_APPROVED, the user's decision of 2026-11-05). The stop stays locked: REAL_RUN_APPROVED is False until the user says
+otherwise, in a reviewed commit, and the spec forbids any performance figure before the stop date. Settlement and session files map or
+list ISO dates.
 """
 
 from __future__ import annotations
@@ -24,15 +26,19 @@ from tradingagents.research import ai_settle  # noqa: E402
 from webapp import ai_test  # noqa: E402
 
 REAL_RUN_APPROVED = False
+REAL_INTERIM_APPROVED = True
 REAL_REGISTRY = ai_test.REGISTRY          # version 2's; version 1.1's (reports/ai_test/registry.jsonl) is closed and never settled
 
 
 def run(registry_path: Path, chains: Path, settlements: dict[date, float], sessions: set[date], spec_hash: str, mode: str = "interim", today: date | None = None, stop: date | None = None) -> dict:
-    if Path(registry_path).resolve() == REAL_REGISTRY.resolve() and not REAL_RUN_APPROVED:
-        raise ai_settle.RealRowsRefused("the real registry is refused until the user approves this script for real rows")
+    real = Path(registry_path).resolve() == REAL_REGISTRY.resolve()
     starts = ai_test.V2_FIRST_SESSION
     if mode == "interim":
-        return ai_settle.interim_counts(registry_path, spec_hash, sessions, approved=REAL_RUN_APPROVED, starts=starts)
+        if real and not REAL_INTERIM_APPROVED:
+            raise ai_settle.RealRowsRefused("the interim count on the real registry is not approved")
+        return ai_settle.interim_counts(registry_path, spec_hash, sessions, approved=real and REAL_INTERIM_APPROVED, starts=starts)
+    if real and not REAL_RUN_APPROVED:
+        raise ai_settle.RealRowsRefused("the real registry is refused for settlement until the user approves this script for real rows")
     from tradingagents.analytics import trial_log
 
     stop = stop or date.fromisoformat(ai_test.read_spec()["stop"]["date"])

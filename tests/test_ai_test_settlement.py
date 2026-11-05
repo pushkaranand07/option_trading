@@ -128,9 +128,9 @@ def test_real_rows_are_refused_wherever_the_file_is(tmp_path, real):
 @pytest.mark.unit
 def test_the_script_is_not_cleared_and_refuses_the_real_registry(tmp_path):
     m = _script("ai_test_settle")
-    assert m.REAL_RUN_APPROVED is False
-    with pytest.raises(s.RealRowsRefused):
-        m.run(m.REAL_REGISTRY, tmp_path, {}, set(), SPEC)
+    assert m.REAL_RUN_APPROVED is False and m.REAL_INTERIM_APPROVED is True   # since 2026-11-05: the interim count only
+    with pytest.raises(s.RealRowsRefused):                                  # settling the real registry stays refused
+        m.run(m.REAL_REGISTRY, tmp_path, {}, set(), SPEC, mode="stop")
 
 
 @pytest.mark.unit

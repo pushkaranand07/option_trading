@@ -1519,6 +1519,7 @@ function tradeDetailHtml(t) {
     ["From", known ? `${esc({ quick: "Quick", full: "Complete" }[t.mode] || t.mode || "?")} analysis · AI rank #${esc(t.ai_rank ?? "?")} · research ${esc(t.research_source || "?")} · AI confidence ${esc(t.ai_confidence || "?")}`
       : "unknown (recorded before provenance)"],
     ["Why the AI picked it", t.ai_why ? esc(t.ai_why) : unk],
+    ["Quotes at the Take", "quote_age_s" in t ? `${esc(t.quote_age_s ?? "?")} s old${t.attempts > 1 ? ` · ${t.attempts} attempts, the last at ${esc(t.last_attempt_at)}` : ""}` : unk],
   ];
   if (taken && t.net_entry != null) facts.push(["Money, 1 lot", `${rupee(tradeMoney(t))} (${lotMoney(t.debit).label})${t.status === "closed"
     ? ` · gross ${money(t.gross_pnl)} · charges ${money(t.charges)} · net <b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b>` : ""} · ${COST_NOTE}`]);
@@ -1590,7 +1591,7 @@ function notTakenRowsHtml(list) {
   return (list || []).map((t) => `<tr class="muted"><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
       <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
       <td class="small">${paidTxt(t)}<br>${provTxt(t)}${t.v2 ? `<br>${v2Txt(t)}` : ""}</td><td class="num small">${levelsTxt(t)}</td>
-      <td class="small"><b>not taken</b><br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
+      <td class="small"><b>not taken</b>${t.attempts > 1 ? ` · ${t.attempts} attempts` : ""}<br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
       <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`).join("");
 }
 

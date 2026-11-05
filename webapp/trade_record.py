@@ -42,30 +42,31 @@ def _market_open() -> bool:
 
 
 CLOSED_MSG = "Market band hai: abhi ke prices pe asli order nahi lag sakta. 9:15 ke baad karna."
-MAX_QUOTE_AGE = 60               # seconds: an older chain snapshot is not a price you could trade at now
+MAX_QUOTE_AGE = 120              # seconds: an older chain snapshot is not a price you could trade at now (user's choice,
+                                 # 2026-11-05: at 60 s NSE's ~45 s refresh plus the cache refused most Takes, e.g. 78 s, 83 s)
 MAX_CLOCK_AHEAD = 30             # seconds NSE's stamp may run ahead of this computer's clock
 
 
-def _stale_quotes(ch: dict, now: datetime) -> str | None:
-    """Why the chain's quotes cannot be traded at now, or None. NSE stamps the whole chain (``records.timestamp``,
-    IST); the quotes carry no time of their own."""
+def _quote_age(ch: dict, now: datetime) -> tuple[int | None, str | None]:
+    """(how old the chain's quotes are in seconds, why they cannot be traded at now or None). NSE stamps the whole
+    chain (``records.timestamp``, IST); the quotes carry no time of their own."""
     import pytz
 
     ts = ch.get("timestamp")
     if not ts:
-        return "the chain has no timestamp, so its quotes may be old"
+        return None, "the chain has no timestamp, so its quotes may be old"
     try:
         when = pytz.timezone("Asia/Kolkata").localize(datetime.strptime(ts, "%d-%b-%Y %H:%M:%S"))
     except ValueError:
-        return f"the chain's timestamp {ts!r} could not be read"
+        return None, f"the chain's timestamp {ts!r} could not be read"
+    age = round((now - when).total_seconds())
     if when.date() != now.date():
-        return f"the quotes are from {ts[:11]}, not today"
-    age = (now - when).total_seconds()
+        return age, f"the quotes are from {ts[:11]}, not today"
     if age < -MAX_CLOCK_AHEAD:
-        return f"NSE's time ({ts[-8:]}) is {-age:.0f} s ahead of this computer's clock: check the clock"
+        return age, f"NSE's time ({ts[-8:]}) is {-age} s ahead of this computer's clock: check the clock"
     if age > MAX_QUOTE_AGE:
-        return f"the quotes are {age:.0f} s old (limit {MAX_QUOTE_AGE} s)"
-    return None
+        return age, f"the quotes are {age} s old (limit {MAX_QUOTE_AGE} s)"
+    return age, None
 
 
 EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
@@ -129,26 +130,27 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
         ch = (chain_fn or oc.chain)(c["symbol"], c["expiry"])
     except Exception as exc:                               # never fall back to the run's prices
         raise TradeError(f"Live prices unavailable ({str(exc)[:160]}): not taken. Try again in a moment.") from exc
-    if why := _stale_quotes(ch, signals.now_ist()):
-        raise TradeError(f"NSE: {why}. Not taken; try again in a moment.", {"spot_at_take": ch.get("spot"), "in_entry_zone": None})
+    age, why = _quote_age(ch, signals.now_ist())
+    if why:
+        raise TradeError(f"NSE: {why}. Not taken; try again in a moment.", {"spot_at_take": ch.get("spot"), "in_entry_zone": None, "quote_age_s": age})
     plan, spot = c["plan"], ch["spot"]
     lo, hi = plan.get("underlying_entry_low"), plan.get("underlying_entry_high")
     in_zone = None if lo is None or hi is None else lo <= spot <= hi
     if in_zone is False:
         raise TradeError(f"{c['symbol']} is at {spot:,.2f}, outside this trade's entry zone {lo:,.0f}-{hi:,.0f}: not taken.",
-                         {"spot_at_take": spot, "in_entry_zone": False})
+                         {"spot_at_take": spot, "in_entry_zone": False, "quote_age_s": age})
     rows = {r["strike"]: r for r in ch["rows"]}
     for leg in plan["legs"]:
         q = (rows.get(float(leg["strike"])) or {}).get(leg["option_type"].lower())
         if not q or not q.get("bid") or not q.get("ask"):
             raise TradeError(f"{leg['strike']:,.0f} {leg['option_type']} has no live bid / ask right now: not taken.",
-                             {"spot_at_take": spot, "in_entry_zone": in_zone})
+                             {"spot_at_take": spot, "in_entry_zone": in_zone, "quote_age_s": age})
     sp = st.StrategyPlan(**plan)
     priced = st.price(sp, ch)
     days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - signals.now_ist().date()).days
     fresh = c | {"spot": spot, "priced": priced, "levels": st.trade_levels(sp, priced, ch, days), "charges_per_lot": st.charges(priced, 1)}
     shown = {(x["strike"], x["type"], x["action"]): x["price"] for x in c["priced"]["legs"]}
-    return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone}, shown=shown)
+    return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone, "quote_age_s": age}, shown=shown)
 
 
 def _provenance(run: dict, run_id: str, candidate: int) -> dict:
@@ -189,10 +191,18 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
            "index_target": plan.get("underlying_target"), "index_stop": plan.get("underlying_stop"),
            "legs": [{"action": x["action"], "type": x["type"], "strike": x["strike"], "shown_price": x["price"]} for x in c["priced"]["legs"]],
            "ai_confidence": plan.get("confidence"), **_provenance(run, run_id, candidate),
-           "spot_at_take": exc.details.get("spot_at_take"), "in_entry_zone": exc.details.get("in_entry_zone")}
+           "spot_at_take": exc.details.get("spot_at_take"), "in_entry_zone": exc.details.get("in_entry_zone"),
+           "quote_age_s": exc.details.get("quote_age_s"), "attempts": 1}
     with _lock:
         trades = _load()
-        trades.append(row)
+        same = next((t for t in trades if t["status"] == "not_taken" and t.get("run_id") == run_id
+                     and t.get("candidate") == candidate and t.get("source") == source), None)
+        if same:                                         # the same trade refused again: one row, the latest reason, the count
+            same.update({k: row[k] for k in ("reason", "spot_at_take", "in_entry_zone", "quote_age_s")},
+                        last_attempt_at=row["taken_at"], attempts=same.get("attempts", 1) + 1)
+            row = same
+        else:
+            trades.append(row)
         _save(trades)
     return row
 
@@ -444,7 +454,7 @@ def _v2_link(t: dict, days: dict) -> dict:
 
 
 CSV_HEADER = ["view", "source", "status", "taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "run_id", "candidate",
-              "ai_rank", "mode", "run_asked_at", "research_source", "spot_at_run", "spot_at_take", "in_entry_zone",
+              "ai_rank", "mode", "run_asked_at", "research_source", "spot_at_run", "spot_at_take", "in_entry_zone", "quote_age_s", "attempts",
               "index_target", "index_stop", "close_reason", "refusal_reason", "is_v2_counted", "v2_entry", "gross_pnl",
               "charges", "net_pnl", "ai_reason"]
 MODES = {"quick": "Quick", "full": "Complete"}
@@ -483,7 +493,7 @@ def history_csv() -> str:
                     MODES.get(t["mode"], t["mode"] or "") if "mode" in t else "unknown", known("run_asked_at"), known("research_source"),
                     known("spot_at_run"),
                     (_cell(t["spot_at_take"]) if "spot_at_take" in t else _cell(t.get("spot_at_entry"))) if "run_id" in t else "unknown",
-                    known("in_entry_zone"), _cell(t.get("index_target")), _cell(t.get("index_stop")),
+                    known("in_entry_zone"), known("quote_age_s"), _cell(t.get("attempts")), _cell(t.get("index_target")), _cell(t.get("index_stop")),
                     _cell(t.get("reason")) if t["status"] == "closed" else "", _cell(t.get("reason")) if t["status"] == "not_taken" else "",
                     _cell(bool(link and link["counted"])), _cell(link and link["entry"]),
                     _money(t.get("gross_pnl")), _money(t.get("charges")) if t["status"] == "closed" else "", _money(t.get("net_pnl")),
