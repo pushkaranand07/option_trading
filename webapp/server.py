@@ -346,7 +346,9 @@ def trade_take(body: dict = Body(...)):
     chain now. Any price in the body is ignored."""
     try:
         run_id, candidate = str(body.get("run_id") or ""), int(body.get("candidate"))
-        return trade_record.take_from_run(run_id, candidate)
+        return trade_record.take_from_run(run_id, candidate, confirm=bool(body.get("confirm")))
+    except trade_record.BetExists as exc:                                  # ask first; nothing written
+        raise HTTPException(409, {"message": str(exc), **exc.details}) from exc
     except trade_record.TradeError as exc:
         trade_record.record_refused(run_id, candidate, exc, "you")       # kept under My picks, outside the stats
         raise HTTPException(400, f"Not taken: {exc}") from exc

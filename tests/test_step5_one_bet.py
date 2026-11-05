@@ -152,3 +152,57 @@ def test_grouping_reads_find_bet():
     import inspect
     assert "find_bet(" in inspect.getsource(tr._group_bets)
     assert "direction_of(" in inspect.getsource(tr._bet_side)
+
+
+# ---------------------------------------------------------------- adding to a bet: you confirm, the AI adds and logs it
+
+from tests.test_take_honest_entry import take as take_via_server, world  # noqa: E402,F401  (world is a fixture)
+from tests.test_trade_record import RESULT  # noqa: E402
+
+
+def events(world_tmp):
+    log = tr.STORE.parent / "events.log"
+    return log.read_text(encoding="utf-8") if log.exists() else ""
+
+
+@pytest.mark.unit
+def test_your_second_take_in_the_same_direction_asks_first_and_writes_nothing(world):
+    first = take_via_server(world, 0)                                               # long call: bullish
+    r = take_via_server(world, 1)                                                   # bull call spread: bullish too
+    assert first.status_code == 200 and r.status_code == 409
+    assert r.json()["detail"]["bet_id"] == first.json()["id"] and "bet" in r.json()["detail"]["message"]
+    assert [t["id"] for t in tr._load()] == [first.json()["id"]]                    # no row, not even "not taken"
+
+
+@pytest.mark.unit
+def test_on_ok_the_trade_is_added_to_the_bet_tagged_and_logged(world):
+    first = take_via_server(world, 0).json()
+    r = take_via_server(world, 1, confirm=True)
+    assert r.status_code == 200 and r.json()["added_to_bet"] == first["id"]
+    assert f"override: added to bet {first['id']}" in events(world)
+    o = tr.overview(lambda *a: (_ for _ in ()).throw(RuntimeError("no prices")))
+    assert {t["id"]: t["bet_id"] for t in o["you"]["open"]} == {first["id"]: first["id"], r.json()["id"]: first["id"]}
+
+
+@pytest.mark.unit
+def test_the_opposite_direction_or_a_double_click_does_not_ask(world):
+    tr.take(RESULT)                                                                 # bearish, already held
+    first = take_via_server(world, 0)
+    again = take_via_server(world, 0)                                               # the same trade twice: the same row
+    assert first.status_code == again.status_code == 200 and again.json()["id"] == first.json()["id"]
+
+
+@pytest.mark.unit
+def test_the_ais_second_trade_in_the_same_direction_is_recorded_in_the_same_bet(world):
+    st.save_run(world["run"] | {"run_id": "run2", "trades": world["run"]["trades"][::-1]})   # #1 is now the spread
+    a = tr.record_ai_pick("run1")
+    b = tr.record_ai_pick("run2")
+    assert b["status"] == "open" and b["added_to_bet"] == a["id"] and "added_to_bet" not in a
+    assert f"auto: added to bet {a['id']}" in events(world)
+
+
+@pytest.mark.unit
+def test_the_question_and_the_grouping_use_the_same_find_bet():
+    import inspect
+    assert "find_bet(" in inspect.getsource(tr.take) and "find_bet(" in inspect.getsource(tr._group_bets)
+    assert "_bet_side" not in inspect.getsource(tr.take)                           # no second copy of the rule

@@ -141,7 +141,7 @@ def test_premium_stop_closes_before_the_index_stop_like_a_dhan_super_order():
     o = tr.overview(call_chain(23750, _q(63.5, 63, 64)))                         # time decay: premium at the stop
     c = o["closed"][0]
     assert c["reason"] == "stop reached" and c["legs"][0]["exit"] == 63 and c["spot_at_exit"] == 23750
-    t = tr.take(LONG_CALL)
+    t = tr.take(LONG_CALL, confirm=True)                                         # the same day, bullish: you said OK to the bet
     o = tr.overview(call_chain(24000, _q(412, 411, 413)))                        # premium target before the index target
     assert next(x for x in o["closed"] if x["id"] == t["id"])["reason"] == "target reached"
 
@@ -150,7 +150,7 @@ def test_premium_stop_closes_before_the_index_stop_like_a_dhan_super_order():
 def test_debit_spread_has_no_premium_trigger_only_the_index():
     t = tr.take(RESULT | {"plan": RESULT["plan"] | {"strategy": "bear_put_spread"}})
     assert tr._super_legs(t) == []
-    assert tr._super_legs(tr.take(RESULT)) == [0]                               # bear call spread: the sold leg
+    assert tr._super_legs(tr.take(RESULT, confirm=True)) == [0]                 # bearish again: added to the bet on OK                               # bear call spread: the sold leg
 
 
 @pytest.mark.unit
@@ -235,6 +235,6 @@ def test_the_same_ai_trade_from_a_re_run_is_recorded_once_yours_are_not_merged()
     a = tr.take(RESULT, source="ai")
     assert tr.take(RESULT, source="ai")["id"] == a["id"]
     tr.take(RESULT)
-    tr.take(RESULT)
+    tr.take(RESULT, confirm=True)                                               # your second: asked first, then its own row
     o = tr.overview(chain(22600, _q(130, 129, 131), _q(88, 87, 89)))
     assert len(o["ai"]["open"]) == 1 and len(o["you"]["open"]) == 2

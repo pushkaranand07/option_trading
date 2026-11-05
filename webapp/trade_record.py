@@ -53,6 +53,10 @@ class TradeError(Exception):
         self.details = details or {}      # what was known when it was refused (index at the Take, in the zone or not)
 
 
+class BetExists(TradeError):
+    """Your Take would add to a bet already running in the same direction: the page asks first (nothing written)."""
+
+
 def _market_open(at: datetime | None = None) -> bool:
     """NSE's regular session, now or at the moment ``at``: the one place the trade record asks. Outside it the chain
     shows the last prices (NSE keeps refreshing them until about 15:40), which no order could get: no trade is entered,
@@ -152,7 +156,7 @@ def _as_range_trade(t: dict) -> None:
         leg["target"] = leg["stop"] = None
 
 
-def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you") -> dict:
+def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you", confirm: bool = False) -> dict:
     """Your Take on candidate ``candidate`` of AI run ``run_id``, priced here and now: the run must be today's
     (IST), the market open, the index inside the candidate's entry zone, and every leg quoted on both sides in a
     fresh chain. The entry is that chain's ask for a bought leg and bid for a sold one; the run's price is kept
@@ -194,7 +198,8 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
     days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - signals.now_ist().date()).days
     fresh = c | {"spot": spot, "priced": priced, "levels": st.trade_levels(sp, priced, ch, days), "charges_per_lot": st.charges(priced, 1)}
     shown = {(x["strike"], x["type"], x["action"]): x["price"] for x in c["priced"]["legs"]}
-    return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone, "quote_age_s": age}, shown=shown)
+    return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone, "quote_age_s": age},
+                shown=shown, confirm=confirm)
 
 
 def _provenance(run: dict, run_id: str, candidate: int) -> dict:
@@ -254,9 +259,12 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
     return row
 
 
-def take(result: dict, source: str = "you", provenance: dict | None = None, shown: dict | None = None) -> dict:
+def take(result: dict, source: str = "you", provenance: dict | None = None, shown: dict | None = None,
+         confirm: bool = False) -> dict:
     """Record the strategist's proposal (``recommend``'s result) as an open one-lot paper trade.
-    ``source``: "you" (taken on the Plan tab) or "ai" (every suggestion, recorded automatically)."""
+    ``source``: "you" (taken on the Plan tab) or "ai" (every suggestion, recorded automatically).
+    A trade that would join a bet already running (find_bet): yours raises BetExists unless ``confirm``; the AI's is
+    recorded. Either way the row carries added_to_bet and the event log says who added it."""
     plan, priced = result.get("plan") or {}, result.get("priced")
     if result.get("rejected") or not priced or plan.get("strategy") in (None, "no_trade"):
         raise TradeError("There is no trade to take in this suggestion.")
@@ -290,12 +298,24 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
         same = _same_bet(trades, trade)
         if same and same["status"] == "open":            # already held: one row
             return same
+        grouped = [dict(t) for t in trades]              # copies: the bet fields are read time only, never saved
+        _group_bets(grouped)
+        bet = find_bet(grouped, trade)
+        if bet and source == "you" and not confirm:
+            started = next(t["taken_at"] for t in grouped if t["id"] == bet)
+            raise BetExists(f"Is disha ({direction_of(trade['strategy'])}) ka ek {trade['symbol']} bet pehle se chal raha hai "
+                            f"(bet {bet}, shuru {started}). Isi bet mein ek aur trade jodna hai?",
+                            {"bet_id": bet, "bet_started": started})
+        if bet:
+            trade["added_to_bet"] = bet
         if same:                                         # refused before, taken now: both rows stay, the refusal linked
             same["later_taken"] = {"at": trade["taken_at"][-5:], "id": trade["id"]}
         trades.append(trade)
         _save(trades)
     _event("taken", trade, "entry " + "; ".join(f"{x['action']} {float(x['strike']):.0f} {x['type']} {x['entry']}" for x in trade["legs"])
            + (f"; refused earlier as {same['id']}" if same else ""))
+    if bet:
+        _event(f"{'override' if source == 'you' else 'auto'}: added to bet {bet}", trade)
     return trade
 
 
