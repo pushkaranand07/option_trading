@@ -29,6 +29,7 @@ _lock = threading.Lock()
 
 
 logger = logging.getLogger(__name__)
+from webapp import build_info  # noqa: E402  (the commit and start time each new row records)
 
 
 def _event(what: str, t: dict, why: str = "", level: int = logging.INFO) -> None:
@@ -217,7 +218,8 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
            "legs": [{"action": x["action"], "type": x["type"], "strike": x["strike"], "shown_price": x["price"]} for x in c["priced"]["legs"]],
            "ai_confidence": plan.get("confidence"), **_provenance(run, run_id, candidate),
            "spot_at_take": exc.details.get("spot_at_take"), "in_entry_zone": exc.details.get("in_entry_zone"),
-           "quote_age_s": exc.details.get("quote_age_s"), "attempts": 1}
+           "quote_age_s": exc.details.get("quote_age_s"), "attempts": 1,
+           "code_version": build_info.CODE_VERSION, "server_started_at": build_info.STARTED_AT}
     with _lock:
         trades = _load()
         same = _same_bet(trades, row)
@@ -260,6 +262,7 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
         "charges": result.get("charges_per_lot"), "legs": legs, "alerts": [], "source": source,
         "score": (result.get("evidence") or {}).get("score"), "score_label": (result.get("evidence") or {}).get("label"),
         "ai_confidence": plan.get("confidence"), "last_spot": result.get("spot"),
+        "code_version": build_info.CODE_VERSION, "server_started_at": build_info.STARTED_AT,
     }
     trade |= provenance or {}
     if trade["strategy"] in RANGE:

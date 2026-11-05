@@ -26,6 +26,7 @@ from pydantic import BaseModel  # noqa: E402
 from webapp import (  # noqa: E402
     ai,
     ai_test,
+    build_info,
     latency,
     market_data as md,
     morning,
@@ -83,6 +84,7 @@ def status():
         "calendar_warning": ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
                              "so a market holiday would show as open." if signals.nse_calendar().source == "weekends only" else None),
         "v2": ai_test.today_status(),
+        "code": build_info.status(),
         "indices": [{"symbol": k, "name": v[0]} for k, v in md.INDICES.items()],
     }
 

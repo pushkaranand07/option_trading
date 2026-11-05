@@ -55,7 +55,8 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; el.textContent = text || ""; } };
 // The page-wide banners' text from /api/status (null: no banner).
 const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
-  v2: st?.v2?.fingerprint_problem ? `v2 forward test: ${st.v2.fingerprint_problem}.` : null });
+  v2: st?.v2?.fingerprint_problem ? `v2 forward test: ${st.v2.fingerprint_problem}.` : null,
+  code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null });
 // Did today's v2 answer count: YES / NO / NOT YET (the server says why).
 function v2LineHtml() {
   const v = S.status?.v2; if (!v) return "";
@@ -72,6 +73,7 @@ async function loadStatus() {
     const b = bannerTexts(S.status);
     banner("#calWarn", b.calendar);
     banner("#v2Warn", b.v2);
+    banner("#codeWarn", b.code);
     document.querySelectorAll(".v2-line").forEach((e) => (e.innerHTML = v2LineHtml()));
   } catch (e) { console.warn(e); }
 }
