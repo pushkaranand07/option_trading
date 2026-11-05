@@ -107,7 +107,7 @@ def test_the_red_banner_appears_on_a_mismatch_and_goes_when_restored(real_prompt
     assert server.status()["v2"]["fingerprint_problem"] is None and server.v2_startup_check() is None
     assert 'id="v2Warn"' in PAGE and 'class="notice danger"' in PAGE
     loader = APP[APP.index("async function loadStatus"):]
-    assert 'banner("#v2Warn", S.status.v2?.fingerprint_problem' in loader[:1200] and 'banner("#calWarn"' in loader[:1200]
+    assert "bannerTexts(S.status)" in loader[:1200] and 'banner("#v2Warn", b.v2)' in loader[:1200] and 'banner("#calWarn", b.calendar)' in loader[:1200]
 
 
 @pytest.mark.unit

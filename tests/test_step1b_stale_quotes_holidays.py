@@ -101,7 +101,7 @@ def test_with_nothing_saved_it_is_weekends_only_and_the_page_says_so(saved, monk
     warning = server.status().get("calendar_warning")
     assert warning and "holiday" in warning.lower()
     loader = APP[APP.index("async function loadStatus"):]
-    assert "S.status.calendar_warning" in loader[:900]
+    assert "bannerTexts(S.status)" in loader[:900] and "st?.calendar_warning" in APP[APP.index("const bannerTexts"):][:200]
 
 
 @pytest.mark.unit
