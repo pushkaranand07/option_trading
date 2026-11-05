@@ -205,8 +205,9 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
            "quote_age_s": exc.details.get("quote_age_s"), "attempts": 1}
     with _lock:
         trades = _load()
-        same = next((t for t in trades if t["status"] == "not_taken" and t.get("run_id") == run_id
-                     and t.get("candidate") == candidate and t.get("source") == source), None)
+        same = _same_bet(trades, row)
+        if same and same["status"] == "open":            # the bet is already held: a refusal of it adds nothing
+            return same
         if same:                                         # the same trade refused again: one row, the latest reason, the count
             same.update({k: row[k] for k in ("reason", "spot_at_take", "in_entry_zone", "quote_age_s")},
                         last_attempt_at=row["taken_at"], attempts=same.get("attempts", 1) + 1)
@@ -249,23 +250,35 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
         _as_range_trade(trade)
     with _lock:
         trades = _load()
-        if provenance:                                   # a double click on the same run's trade: one trade
-            again = next((t for t in trades if t.get("run_id") == provenance["run_id"]
-                          and t.get("candidate") == provenance["candidate"] and t.get("source") == source), None)
-            if again:
-                return again
-        if source == "ai":                               # the same trade again (a re-run, same strikes): counted once
-            same = next((t for t in trades if t["status"] == "open" and t.get("source") == "ai" and _same(t, trade)), None)
-            if same:
-                return same
+        same = _same_bet(trades, trade)
+        if same and same["status"] == "open":            # already held: one row
+            return same
+        if same:                                         # refused before, taken now: both rows stay, the refusal linked
+            same["later_taken"] = {"at": trade["taken_at"][-5:], "id": trade["id"]}
         trades.append(trade)
         _save(trades)
     return trade
 
 
-def _same(a: dict, b: dict) -> bool:
-    key = lambda t: (t["symbol"], t["expiry"], t["strategy"], sorted((x["action"], x["type"], x["strike"]) for x in t["legs"]))  # noqa: E731
-    return key(a) == key(b)
+def _bet_key(t: dict) -> tuple:
+    return (t.get("run_day") or (t.get("taken_at") or "")[:10], t["symbol"], t["expiry"], t["strategy"],
+            tuple(sorted((x["action"], x["type"], float(x["strike"])) for x in t["legs"])))
+
+
+def _same_bet(trades: list[dict], row: dict) -> dict | None:
+    """The row already on the record for this bet, or None; the one check both writers (take, record_refused) use.
+    The AI's: the same day, symbol, expiry, structure and strikes, whichever run it came from. Yours: the same run's
+    same trade (a double click); taking the same strikes again from another run is your choice. Only open and
+    not-taken rows count: a closed trade is history, so the same trade again is a new row."""
+    for t in trades:
+        if t.get("source", "you") != row.get("source", "you") or t["status"] not in ("open", "not_taken"):
+            continue
+        if row.get("source") == "ai":
+            if _bet_key(t) == _bet_key(row):
+                return t
+        elif row.get("run_id") and (t.get("run_id"), t.get("candidate")) == (row.get("run_id"), row.get("candidate")):
+            return t
+    return None
 
 
 def _expired(trade: dict, today: date | None = None) -> bool:

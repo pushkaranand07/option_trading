@@ -1590,7 +1590,8 @@ function histRowHtml(t) {
 function notTakenRowsHtml(list) {
   return (list || []).map((t) => `<tr class="not-taken"><td class="when">${when(t.taken_at)}</td>${tradeCell(t)}
       <td class="small paid">${paidTxt(t)}</td>
-      <td class="small"><b>not taken</b>${t.attempts > 1 ? ` · ${t.attempts} attempts` : ""}<div class="muted">${esc(t.reason)}</div></td>
+      <td class="small"><b>not taken</b>${t.attempts > 1 ? ` · ${t.attempts} attempts` : ""}<div class="muted">${esc(t.reason)}</div>${t.later_taken
+        ? `<div class="up">later taken at ${esc(t.later_taken.at)} · trade ${esc(t.later_taken.id)}</div>` : ""}</td>
       <td class="acts">${moreBtn(t)}${delBtn(t)}</td></tr>${detailRow(t, 5)}`).join("");
 }
 
