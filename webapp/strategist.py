@@ -739,7 +739,8 @@ def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
             res["mode"] = mode
             from webapp import signals
             res["run_id"], res["day"] = uuid.uuid4().hex[:12], signals.now_ist().date().isoformat()
-            res["market_closed"] = not signals.market_open()   # last prices: an analysis, not a trade to record
+            from webapp import trade_record
+            res["market_closed"] = trade_record.entry_allowed() is not None   # last prices: an analysis, not a trade to record
             try:
                 save_run(res)
             except Exception:
@@ -747,7 +748,6 @@ def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
             top = res["trades"][0] if res["trades"] else None
             if top and not res["market_closed"]:        # the AI's #1 goes into the AI track record, priced now
                 try:
-                    from webapp import trade_record
                     rec = trade_record.record_ai_pick(res["run_id"])
                     if rec["status"] == "not_taken":
                         res["ai_record_refused"] = rec["reason"]

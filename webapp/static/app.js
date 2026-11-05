@@ -55,7 +55,8 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; el.textContent = text || ""; } };
 // The page-wide banners' text from /api/status (null: no banner).
 const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
-  v2: st?.v2?.fingerprint_problem ? `v2 forward test: ${st.v2.fingerprint_problem}.` : null });
+  v2: st?.v2?.fingerprint_problem ? `v2 forward test: ${st.v2.fingerprint_problem}.` : null,
+  code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null });
 // Did today's v2 answer count: YES / NO / NOT YET (the server says why).
 function v2LineHtml() {
   const v = S.status?.v2; if (!v) return "";
@@ -72,6 +73,7 @@ async function loadStatus() {
     const b = bannerTexts(S.status);
     banner("#calWarn", b.calendar);
     banner("#v2Warn", b.v2);
+    banner("#codeWarn", b.code);
     document.querySelectorAll(".v2-line").forEach((e) => (e.innerHTML = v2LineHtml()));
   } catch (e) { console.warn(e); }
 }
@@ -1539,7 +1541,7 @@ const detailRow = (t, cols) => `<tr class="rec-detail" data-for="${t.id}" ${S.op
 // The v2 link of an AI #1 row; v2's own entry only on days v2 counts (before it started there is nothing to compare).
 const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">${esc(t.v2.note)}${t.v2.entry && !t.v2.note.startsWith("before v2") ? ` · v2 entry ${esc(t.v2.entry)}` : ""}</span>` : "");
 
-const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"] };
+const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"], exit_pending: ["Exit pending", "warn"] };
 // A range trade (iron condor) has a profit zone between its sold strikes, not one target and one stop.
 const levelsTxt = (t) => (t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}` : `${fmt0(t.index_target)} / ${fmt0(t.index_stop)}`);
 const legShort = (l) => `${l.action === "BUY" ? "B" : "S"} ${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
@@ -1558,16 +1560,18 @@ const OPEN_HEAD = `<thead><tr><th>Taken</th><th>Trade</th><th>Bought / sold</th>
 const HIST_HEAD = `<thead><tr><th>Taken → closed</th><th>Trade</th><th>Bought / sold</th><th class="num">NIFTY in → out</th><th>Why closed</th><th class="num">Net P&L</th><th></th></tr></thead>`;
 const NOT_TAKEN_HEAD = `<thead><tr><th>Tried</th><th>Trade</th><th>Would have bought / sold</th><th>Why not taken</th><th></th></tr></thead>`;
 const delBtn = (t) => `<button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record (a trade taken by mistake)">✕</button>`;
-const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.strategy)}</b><div class="small muted">${esc(NAMES[t.symbol] || t.symbol)} · ${esc(t.expiry)}${t.source === "ai" && t.ai_confidence ? ` · AI ${esc(t.ai_confidence)}` : ""}</div>${t.v2 ? `<div class="row-flag">${v2Txt(t)}</div>` : ""}${extra}</td>`;
+const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.strategy)}</b><div class="small muted">${esc(NAMES[t.symbol] || t.symbol)} · ${esc(t.expiry)}${t.source === "ai" && t.ai_confidence ? ` · AI ${esc(t.ai_confidence)}` : ""}</div>${t.v2 ? `<div class="row-flag">${v2Txt(t)}</div>` : ""}${t.outside_session ? `<div class="row-flag warn-c">entered while market closed: not counted</div>` : ""}${extra}</td>`;
 
 function openRowHtml(t) {
   const v = t.live || {}, name = NAMES[t.symbol] || t.symbol;
-  const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])].map((f) => {
-    const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f];
+  const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])].filter((f) => f !== "exit_pending").map((f) => {
+    const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f] || [f, "warn"];
     return `<div class="row-flag ${c === "up" ? "up" : c === "down" ? "down" : "warn-c"}"><b>${txt}</b> ${f === "expired" ? "— close it to settle at the expiry value"
       : `${a ? `at ${esc(a.at)}` : "now"} — closes itself at the next live price`}</div>`;
   }).join("");
-  const notes = (t.note ? `<div class="row-flag warn-c">${esc(t.note)}</div>` : "") + (v.error ? `<div class="row-flag down">${esc(v.error)}</div>` : "");
+  const pending = v.pending?.length ? v.pending : (t.alerts || []).find((a) => a.kind === "exit_pending")?.legs || [];
+  const notes = (pending.length ? `<div class="row-flag warn-c"><b>Exit pending</b>: ${pending.map((p) => `${esc(p)} quote missing`).join(", ")} — it closes at the first price for every leg</div>` : "")
+    + (t.note ? `<div class="row-flag warn-c">${esc(t.note)}</div>` : "") + (v.error ? `<div class="row-flag down">${esc(v.error)}</div>` : "");
   return `<tr><td class="when">${when(t.taken_at)}</td>${tradeCell(t, flags + notes)}
     <td class="small paid">${paidTxt(t)}</td>
     <td class="num">${fmt0(t.spot_at_entry)} → <b>${fmt0(v.spot)}</b><div class="small muted">${t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}`
@@ -1588,7 +1592,8 @@ function histRowHtml(t) {
 function notTakenRowsHtml(list) {
   return (list || []).map((t) => `<tr class="not-taken"><td class="when">${when(t.taken_at)}</td>${tradeCell(t)}
       <td class="small paid">${paidTxt(t)}</td>
-      <td class="small"><b>not taken</b>${t.attempts > 1 ? ` · ${t.attempts} attempts` : ""}<div class="muted">${esc(t.reason)}</div></td>
+      <td class="small"><b>not taken</b>${t.attempts > 1 ? ` · ${t.attempts} attempts` : ""}<div class="muted">${esc(t.reason)}</div>${t.later_taken
+        ? `<div class="up">later taken at ${esc(t.later_taken.at)} · trade ${esc(t.later_taken.id)}</div>` : ""}</td>
       <td class="acts">${moreBtn(t)}${delBtn(t)}</td></tr>${detailRow(t, 5)}`).join("");
 }
 
@@ -1604,7 +1609,7 @@ function calendarHtml(v, who) {
   const days = {};
   for (const t of [...v.open, ...v.closed]) {
     const d = (t.taken_at || "").slice(0, 10);
-    if (!d) continue;
+    if (!d || t.outside_session) continue;                                // entered while the market was closed: not counted
     const x = (days[d] ||= { n: 0, inv: 0, net: 0, closed: 0, open: 0, openPnl: 0 });
     x.n += 1;
     if (t.net_entry != null && t.lot) x.inv += tradeMoney(t);

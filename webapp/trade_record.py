@@ -17,6 +17,7 @@ Paper trades only: nothing here places an order.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from datetime import date, datetime
@@ -25,6 +26,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 STORE = ROOT / "reports" / "trade_record" / "trades.json"
 _lock = threading.Lock()
+
+
+logger = logging.getLogger(__name__)
+from webapp import build_info  # noqa: E402  (the commit and start time each new row records)
+
+
+def _event(what: str, t: dict, why: str = "", level: int = logging.INFO) -> None:
+    """One line in events.log beside the trade record (and the server log): when, which row, what happened, why.
+    A failure to write it is logged as a warning and never stops the trade itself."""
+    line = (f"{datetime.now():%Y-%m-%d %H:%M:%S} {t.get('id')} {t.get('source', 'you')} {what} {t.get('strategy')} "
+            f"{t.get('symbol')} {t.get('expiry')}" + (f" | {why}" if why else ""))
+    logger.log(level, line)
+    try:
+        path = STORE.parent / "events.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError as exc:
+        logger.warning("events.log not written (%s): %s", exc, line)
 
 
 class TradeError(Exception):
@@ -67,6 +87,12 @@ def _quote_age(ch: dict, now: datetime) -> tuple[int | None, str | None]:
     if age > MAX_QUOTE_AGE:
         return age, f"the quotes are {age} s old (limit {MAX_QUOTE_AGE} s)"
     return age, None
+
+
+def entry_allowed() -> str | None:
+    """Why no trade may be entered (or closed by hand) now, or None. The one session check every entry path asks:
+    take() (the only writer of a trade row), take_from_run() before fetching prices, the AI run before recording its pick."""
+    return None if _market_open() else CLOSED_MSG
 
 
 EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
@@ -120,8 +146,8 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
         raise TradeError("This run is not on file: run the analysis again.")
     if st.run_expired(run):
         raise TradeError(EXPIRED_MSG)
-    if not _market_open():
-        raise TradeError(CLOSED_MSG)
+    if why := entry_allowed():
+        raise TradeError(why)
     trades = run.get("trades") or []
     if not 0 <= candidate < len(trades):
         raise TradeError(f"This run has no trade #{candidate + 1}.")
@@ -192,11 +218,13 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
            "legs": [{"action": x["action"], "type": x["type"], "strike": x["strike"], "shown_price": x["price"]} for x in c["priced"]["legs"]],
            "ai_confidence": plan.get("confidence"), **_provenance(run, run_id, candidate),
            "spot_at_take": exc.details.get("spot_at_take"), "in_entry_zone": exc.details.get("in_entry_zone"),
-           "quote_age_s": exc.details.get("quote_age_s"), "attempts": 1}
+           "quote_age_s": exc.details.get("quote_age_s"), "attempts": 1,
+           "code_version": build_info.CODE_VERSION, "server_started_at": build_info.STARTED_AT}
     with _lock:
         trades = _load()
-        same = next((t for t in trades if t["status"] == "not_taken" and t.get("run_id") == run_id
-                     and t.get("candidate") == candidate and t.get("source") == source), None)
+        same = _same_bet(trades, row)
+        if same and same["status"] == "open":            # the bet is already held: a refusal of it adds nothing
+            return same
         if same:                                         # the same trade refused again: one row, the latest reason, the count
             same.update({k: row[k] for k in ("reason", "spot_at_take", "in_entry_zone", "quote_age_s")},
                         last_attempt_at=row["taken_at"], attempts=same.get("attempts", 1) + 1)
@@ -204,6 +232,7 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
         else:
             trades.append(row)
         _save(trades)
+    _event("refused" if row.get("attempts", 1) == 1 else "refused_again", row, f"{row['reason']} (attempt {row.get('attempts', 1)})")
     return row
 
 
@@ -213,8 +242,8 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
     plan, priced = result.get("plan") or {}, result.get("priced")
     if result.get("rejected") or not priced or plan.get("strategy") in (None, "no_trade"):
         raise TradeError("There is no trade to take in this suggestion.")
-    if not _market_open():
-        raise TradeError(CLOSED_MSG)
+    if why := entry_allowed():
+        raise TradeError(why)
     lv = {(x["strike"], x["type"], x["action"]): x for x in (result.get("levels") or {}).get("legs", [])}
     legs = []
     for x in priced["legs"]:
@@ -233,29 +262,44 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
         "charges": result.get("charges_per_lot"), "legs": legs, "alerts": [], "source": source,
         "score": (result.get("evidence") or {}).get("score"), "score_label": (result.get("evidence") or {}).get("label"),
         "ai_confidence": plan.get("confidence"), "last_spot": result.get("spot"),
+        "code_version": build_info.CODE_VERSION, "server_started_at": build_info.STARTED_AT,
     }
     trade |= provenance or {}
     if trade["strategy"] in RANGE:
         _as_range_trade(trade)
     with _lock:
         trades = _load()
-        if provenance:                                   # a double click on the same run's trade: one trade
-            again = next((t for t in trades if t.get("run_id") == provenance["run_id"]
-                          and t.get("candidate") == provenance["candidate"] and t.get("source") == source), None)
-            if again:
-                return again
-        if source == "ai":                               # the same trade again (a re-run, same strikes): counted once
-            same = next((t for t in trades if t["status"] == "open" and t.get("source") == "ai" and _same(t, trade)), None)
-            if same:
-                return same
+        same = _same_bet(trades, trade)
+        if same and same["status"] == "open":            # already held: one row
+            return same
+        if same:                                         # refused before, taken now: both rows stay, the refusal linked
+            same["later_taken"] = {"at": trade["taken_at"][-5:], "id": trade["id"]}
         trades.append(trade)
         _save(trades)
+    _event("taken", trade, "entry " + "; ".join(f"{x['action']} {float(x['strike']):.0f} {x['type']} {x['entry']}" for x in trade["legs"])
+           + (f"; refused earlier as {same['id']}" if same else ""))
     return trade
 
 
-def _same(a: dict, b: dict) -> bool:
-    key = lambda t: (t["symbol"], t["expiry"], t["strategy"], sorted((x["action"], x["type"], x["strike"]) for x in t["legs"]))  # noqa: E731
-    return key(a) == key(b)
+def _bet_key(t: dict) -> tuple:
+    return (t.get("run_day") or (t.get("taken_at") or "")[:10], t["symbol"], t["expiry"], t["strategy"],
+            tuple(sorted((x["action"], x["type"], float(x["strike"])) for x in t["legs"])))
+
+
+def _same_bet(trades: list[dict], row: dict) -> dict | None:
+    """The row already on the record for this bet, or None; the one check both writers (take, record_refused) use.
+    The AI's: the same day, symbol, expiry, structure and strikes, whichever run it came from. Yours: the same run's
+    same trade (a double click); taking the same strikes again from another run is your choice. Only open and
+    not-taken rows count: a closed trade is history, so the same trade again is a new row."""
+    for t in trades:
+        if t.get("source", "you") != row.get("source", "you") or t["status"] not in ("open", "not_taken"):
+            continue
+        if row.get("source") == "ai":
+            if _bet_key(t) == _bet_key(row):
+                return t
+        elif row.get("run_id") and (t.get("run_id"), t.get("candidate")) == (row.get("run_id"), row.get("candidate")):
+            return t
+    return None
 
 
 def _expired(trade: dict, today: date | None = None) -> bool:
@@ -324,12 +368,12 @@ def mark(trade: dict, chain_fn=None) -> dict:
     (flags are remembered with the time they first happened)."""
     from webapp import option_chain as oc
 
-    view = {"spot": None, "legs": [], "pnl": None, "flags": [], "error": None, "as_of": None}
+    view = {"spot": None, "legs": [], "pnl": None, "flags": [], "error": None, "as_of": None, "pending": []}
     if _expired(trade):
         view["flags"].append("expired")
         return view
     try:
-        ch = (chain_fn or oc.chain)(trade["symbol"], trade["expiry"])
+        ch = (chain_fn or oc.full_chain)(trade["symbol"], trade["expiry"])     # every strike: a held leg can be far from the money
     except Exception as exc:
         view["error"] = f"Live prices unavailable: {str(exc)[:160]}"
         return view
@@ -340,6 +384,8 @@ def mark(trade: dict, chain_fn=None) -> dict:
         x = _exit_price(leg, q)
         exits.append(x)
         view["legs"].append({"now": x, "ltp": q["ltp"] if q else None})
+        if x is None:
+            view["pending"].append(f"{float(leg['strike']):.0f} {leg['type']}")
     view["spot"], view["as_of"] = ch["spot"], ch.get("timestamp")
     if None not in exits:
         view["pnl"] = _pnl(trade, exits)
@@ -387,19 +433,22 @@ def overview(chain_fn=None) -> dict:
             changed |= _auto_settle(t, v)
             t["live"] = v
         if changed:
-            _save([{k: x for k, x in t.items() if k not in ("live", "v2")} for t in trades])
+            _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session")} for t in trades])
+    for t in trades:                                     # read-time only, never saved
+        t["outside_session"] = t["status"] != "not_taken" and _outside_session(t)
+    counted = lambda rows: [t for t in rows if not t["outside_session"]]  # noqa: E731
     out = {}
     for who in ("you", "ai"):
         mine = [t for t in trades if t.get("source", "you") == who]
         open_ = sorted((t for t in mine if t["status"] == "open"), key=lambda t: t["taken_at"], reverse=True)
         closed = sorted((t for t in mine if t["status"] == "closed"), key=lambda t: t["closed_at"], reverse=True)
-        out[who] = {"open": open_, "closed": closed, "stats": _stats(closed, open_),
+        out[who] = {"open": open_, "closed": closed, "stats": _stats(counted(closed), counted(open_)),
                     "not_taken": sorted((t for t in mine if t["status"] == "not_taken"), key=lambda t: t["taken_at"], reverse=True)}
     days = _v2_days()
     for t in out["ai"]["open"] + out["ai"]["closed"] + out["ai"]["not_taken"]:
         t["v2"] = _v2_link(t, days)
-    out["ai"]["v2_stats"] = _stats([t for t in out["ai"]["closed"] if t["v2"]["counted"]], [t for t in out["ai"]["open"] if t["v2"]["counted"]])
-    out["ai"]["by_score"] = {band: _stats([t for t in out["ai"]["closed"] if t.get("score_label") == band], [])
+    out["ai"]["v2_stats"] = _stats([t for t in counted(out["ai"]["closed"]) if t["v2"]["counted"]], [t for t in counted(out["ai"]["open"]) if t["v2"]["counted"]])
+    out["ai"]["by_score"] = {band: _stats([t for t in counted(out["ai"]["closed"]) if t.get("score_label") == band], [])
                              for band in ("Strong", "Moderate", "Weak")}
     # the page's original keys stay = your trades
     return out | {"open": out["you"]["open"], "closed": out["you"]["closed"], "stats": out["you"]["stats"]}
@@ -501,6 +550,16 @@ def history_csv() -> str:
     return buf.getvalue()
 
 
+def _outside_session(t: dict) -> bool:
+    """Entered while the market was closed: its taken_at (IST) falls outside the NSE session. Listed, never counted."""
+    import pytz
+
+    from webapp import signals
+
+    when = pytz.timezone("Asia/Kolkata").localize(datetime.strptime(t["taken_at"], "%Y-%m-%d %H:%M"))
+    return not signals.market_open(when)
+
+
 def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dict:
     gross = _pnl(t, exits)
     fee = _charges(t, exits)
@@ -508,6 +567,7 @@ def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dic
              net_pnl=gross - fee)
     for leg, x in zip(t["legs"], exits, strict=True):
         leg["exit"] = x
+    _event("closed", t, f"{reason}; net {t['net_pnl']:.2f}")
     return t
 
 
@@ -518,6 +578,12 @@ def _auto_settle(t: dict, v: dict) -> bool:
         _settle(t, [_intrinsic(leg, spot) for leg in t["legs"]], spot, "expired")
         return True
     hit = "stop" if "stop" in v["flags"] else "target" if "target" in v["flags"] else None
+    if hit and v["pnl"] is None and v.get("pending"):         # it should close, but a leg has no quote: say so once
+        if any(a["kind"] == "exit_pending" for a in t["alerts"]):
+            return False
+        t["alerts"].append({"kind": "exit_pending", "at": _now(), "spot": v["spot"], "legs": v["pending"]})
+        _event("exit_pending", t, f"exit pending: reached its {hit} but has no quote for {', '.join(v['pending'])}", logging.WARNING)
+        return True
     if hit and v["pnl"] is not None:
         _settle(t, [x["now"] for x in v["legs"]], v["spot"], "range broken" if t.get("range") else f"{hit} reached")
         return True
@@ -561,10 +627,10 @@ def close(trade_id: str, chain_fn=None) -> dict:
             spot = t.get("last_spot") or t["spot_at_entry"]
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
             reason = "expired"
-        elif not _market_open():
-            raise TradeError(CLOSED_MSG)
+        elif why := entry_allowed():
+            raise TradeError(why)
         else:
-            v = mark(t, chain_fn or oc.chain)
+            v = mark(t, chain_fn or oc.full_chain)
             if v["error"] or v["pnl"] is None:
                 raise TradeError(v["error"] or "A leg has no live price; try again in a moment.")
             exits, spot = [x["now"] for x in v["legs"]], v["spot"]
@@ -594,6 +660,7 @@ def delete(trade_id: str) -> None:
         if len(keep) == len(trades):
             raise TradeError("Unknown trade.")
         _save(keep)
+    _event("removed", next(t for t in trades if t["id"] == trade_id), "removed from the record by you")
 
 
 # ---------------------------------------------------------------- background monitor
