@@ -73,6 +73,12 @@ def _quote_age(ch: dict, now: datetime) -> tuple[int | None, str | None]:
     return age, None
 
 
+def entry_allowed() -> str | None:
+    """Why no trade may be entered (or closed by hand) now, or None. The one session check every entry path asks:
+    take() (the only writer of a trade row), take_from_run() before fetching prices, the AI run before recording its pick."""
+    return None if _market_open() else CLOSED_MSG
+
+
 EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
 
 
@@ -124,8 +130,8 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
         raise TradeError("This run is not on file: run the analysis again.")
     if st.run_expired(run):
         raise TradeError(EXPIRED_MSG)
-    if not _market_open():
-        raise TradeError(CLOSED_MSG)
+    if why := entry_allowed():
+        raise TradeError(why)
     trades = run.get("trades") or []
     if not 0 <= candidate < len(trades):
         raise TradeError(f"This run has no trade #{candidate + 1}.")
@@ -217,8 +223,8 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
     plan, priced = result.get("plan") or {}, result.get("priced")
     if result.get("rejected") or not priced or plan.get("strategy") in (None, "no_trade"):
         raise TradeError("There is no trade to take in this suggestion.")
-    if not _market_open():
-        raise TradeError(CLOSED_MSG)
+    if why := entry_allowed():
+        raise TradeError(why)
     lv = {(x["strike"], x["type"], x["action"]): x for x in (result.get("levels") or {}).get("legs", [])}
     legs = []
     for x in priced["legs"]:
@@ -573,8 +579,8 @@ def close(trade_id: str, chain_fn=None) -> dict:
             spot = t.get("last_spot") or t["spot_at_entry"]
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
             reason = "expired"
-        elif not _market_open():
-            raise TradeError(CLOSED_MSG)
+        elif why := entry_allowed():
+            raise TradeError(why)
         else:
             v = mark(t, chain_fn or oc.full_chain)
             if v["error"] or v["pnl"] is None:
