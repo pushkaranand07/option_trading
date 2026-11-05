@@ -399,19 +399,22 @@ def overview(chain_fn=None) -> dict:
             changed |= _auto_settle(t, v)
             t["live"] = v
         if changed:
-            _save([{k: x for k, x in t.items() if k not in ("live", "v2")} for t in trades])
+            _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session")} for t in trades])
+    for t in trades:                                     # read-time only, never saved
+        t["outside_session"] = t["status"] != "not_taken" and _outside_session(t)
+    counted = lambda rows: [t for t in rows if not t["outside_session"]]  # noqa: E731
     out = {}
     for who in ("you", "ai"):
         mine = [t for t in trades if t.get("source", "you") == who]
         open_ = sorted((t for t in mine if t["status"] == "open"), key=lambda t: t["taken_at"], reverse=True)
         closed = sorted((t for t in mine if t["status"] == "closed"), key=lambda t: t["closed_at"], reverse=True)
-        out[who] = {"open": open_, "closed": closed, "stats": _stats(closed, open_),
+        out[who] = {"open": open_, "closed": closed, "stats": _stats(counted(closed), counted(open_)),
                     "not_taken": sorted((t for t in mine if t["status"] == "not_taken"), key=lambda t: t["taken_at"], reverse=True)}
     days = _v2_days()
     for t in out["ai"]["open"] + out["ai"]["closed"] + out["ai"]["not_taken"]:
         t["v2"] = _v2_link(t, days)
-    out["ai"]["v2_stats"] = _stats([t for t in out["ai"]["closed"] if t["v2"]["counted"]], [t for t in out["ai"]["open"] if t["v2"]["counted"]])
-    out["ai"]["by_score"] = {band: _stats([t for t in out["ai"]["closed"] if t.get("score_label") == band], [])
+    out["ai"]["v2_stats"] = _stats([t for t in counted(out["ai"]["closed"]) if t["v2"]["counted"]], [t for t in counted(out["ai"]["open"]) if t["v2"]["counted"]])
+    out["ai"]["by_score"] = {band: _stats([t for t in counted(out["ai"]["closed"]) if t.get("score_label") == band], [])
                              for band in ("Strong", "Moderate", "Weak")}
     # the page's original keys stay = your trades
     return out | {"open": out["you"]["open"], "closed": out["you"]["closed"], "stats": out["you"]["stats"]}
@@ -511,6 +514,16 @@ def history_csv() -> str:
                     _money(t.get("gross_pnl")), _money(t.get("charges")) if t["status"] == "closed" else "", _money(t.get("net_pnl")),
                     known("ai_why")])
     return buf.getvalue()
+
+
+def _outside_session(t: dict) -> bool:
+    """Entered while the market was closed: its taken_at (IST) falls outside the NSE session. Listed, never counted."""
+    import pytz
+
+    from webapp import signals
+
+    when = pytz.timezone("Asia/Kolkata").localize(datetime.strptime(t["taken_at"], "%Y-%m-%d %H:%M"))
+    return not signals.market_open(when)
 
 
 def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dict:

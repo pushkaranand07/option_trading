@@ -1558,7 +1558,7 @@ const OPEN_HEAD = `<thead><tr><th>Taken</th><th>Trade</th><th>Bought / sold</th>
 const HIST_HEAD = `<thead><tr><th>Taken → closed</th><th>Trade</th><th>Bought / sold</th><th class="num">NIFTY in → out</th><th>Why closed</th><th class="num">Net P&L</th><th></th></tr></thead>`;
 const NOT_TAKEN_HEAD = `<thead><tr><th>Tried</th><th>Trade</th><th>Would have bought / sold</th><th>Why not taken</th><th></th></tr></thead>`;
 const delBtn = (t) => `<button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record (a trade taken by mistake)">✕</button>`;
-const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.strategy)}</b><div class="small muted">${esc(NAMES[t.symbol] || t.symbol)} · ${esc(t.expiry)}${t.source === "ai" && t.ai_confidence ? ` · AI ${esc(t.ai_confidence)}` : ""}</div>${t.v2 ? `<div class="row-flag">${v2Txt(t)}</div>` : ""}${extra}</td>`;
+const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.strategy)}</b><div class="small muted">${esc(NAMES[t.symbol] || t.symbol)} · ${esc(t.expiry)}${t.source === "ai" && t.ai_confidence ? ` · AI ${esc(t.ai_confidence)}` : ""}</div>${t.v2 ? `<div class="row-flag">${v2Txt(t)}</div>` : ""}${t.outside_session ? `<div class="row-flag warn-c">entered while market closed: not counted</div>` : ""}${extra}</td>`;
 
 function openRowHtml(t) {
   const v = t.live || {}, name = NAMES[t.symbol] || t.symbol;
@@ -1606,7 +1606,7 @@ function calendarHtml(v, who) {
   const days = {};
   for (const t of [...v.open, ...v.closed]) {
     const d = (t.taken_at || "").slice(0, 10);
-    if (!d) continue;
+    if (!d || t.outside_session) continue;                                // entered while the market was closed: not counted
     const x = (days[d] ||= { n: 0, inv: 0, net: 0, closed: 0, open: 0, openPnl: 0 });
     x.n += 1;
     if (t.net_entry != null && t.lot) x.inv += tradeMoney(t);
