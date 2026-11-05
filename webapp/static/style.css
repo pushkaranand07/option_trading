@@ -449,3 +449,7 @@ a.btn { display: inline-block; text-decoration: none; color: inherit; }
 .cal-day b { display: block; margin-top: 2px; font-size: 16px; font-variant-numeric: tabular-nums; }
 .cal-day small { display: block; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 @media (max-width: 720px) { .cal-grid { gap: 4px; padding: 0 8px 12px; } .cal-day { padding: 6px; min-height: 70px; } .cal-day b { font-size: 13px; } }
+button.cal-day { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+button.cal-day:hover { outline: 1px solid var(--muted); }
+.cal-day.pick { outline: 2px solid var(--brand); outline-offset: -2px; }
+.rec-day { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border); font-size: 14px; }
