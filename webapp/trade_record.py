@@ -299,6 +299,17 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
     return trade
 
 
+def direction_of(strategy: str) -> str:
+    """The one direction function: bullish, bearish or neutral, from the strategist's own map. A strategy outside
+    it (no_trade, anything new) is an error, never a default."""
+    from webapp.strategist import DIRECTION
+
+    try:
+        return DIRECTION[strategy]
+    except (KeyError, TypeError):
+        raise ValueError(f"strategy {strategy!r} has no direction: add it to strategist.DIRECTION") from None
+
+
 def _bet_key(t: dict) -> tuple:
     return (t.get("run_day") or (t.get("taken_at") or "")[:10], t["symbol"], t["expiry"], t["strategy"],
             tuple(sorted((x["action"], x["type"], float(x["strike"])) for x in t["legs"])))
