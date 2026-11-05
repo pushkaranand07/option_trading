@@ -158,7 +158,7 @@ def test_the_calendar_shows_each_day_invested_and_profit_in_its_own_view():
                          legs=[{"action": "BUY", "type": "CE", "strike": 24450.0, "entry": 105.10, "exit": 135.35}])]
     open5 = [closed_trade(id="d", status="open", taken_at="2026-11-05 09:47", net_entry=-146.85, closed_at=None, net_pnl=None, live={"pnl": 130.0},
                           legs=[{"action": "BUY", "type": "CE", "strike": 24400.0, "entry": 146.85}])]
-    html = render("recordHtml(ARGS[0])", record(you={"closed": day4 + day5, "open": open5, "stats": stats(6516, closed=3, wins=3)},
+    html = render("S.recMonth = { you: '2026-11', ai: '2026-11' }; recordHtml(ARGS[0])", record(you={"closed": day4 + day5, "open": open5, "stats": stats(6516, closed=3, wins=3)},
                                                 ai={"closed": [closed_trade(id="x", net_pnl=-500.0)], "stats": stats(-500, wins=0, losses=1)}))
     you, ai = text(view(html, "you")), text(view(html, "ai"))
     assert "Day by day" in you and "November 2026" in you
@@ -176,8 +176,26 @@ def test_a_picked_calendar_day_shows_only_that_days_trades_with_a_way_back():
     data = record(you={"closed": [d4, d5], "stats": stats(3178, closed=2, wins=2)})
     everything = text(view(render("recordHtml(ARGS[0])", data), "you"))
     assert "closed on the fourth" in everything and "closed on the fifth" in everything
-    html = render("S.recDay = { you: '2026-11-05' }; recordHtml(ARGS[0])", data)
+    html = render("S.recMonth = { you: '2026-11' }; S.recDay = { you: '2026-11-05' }; recordHtml(ARGS[0])", data)
     picked = text(view(html, "you"))
     assert "closed on the fifth" in picked and "closed on the fourth" not in picked
     assert "05 Nov" in picked and "Show all" in picked
     assert 'data-day="2026-11-04"' in view(html, "you") and 'data-day="2026-11-05"' in view(html, "you")   # the days with trades can be picked
+
+
+def calendar_part(html: str) -> str:
+    part = text(view(html, "you"))
+    start = part.index("Day by day")
+    return part[start:part.index("Open", start)]                                      # up to the Open section after it
+
+
+@pytest.mark.unit
+def test_the_calendar_moves_month_by_month_shows_the_whole_week_and_empty_months():
+    data = record(you={"closed": [closed_trade()], "stats": stats(1589)})            # one trade, on 4 Nov 2026
+    nov = render("S.recMonth = { you: '2026-11' }; recordHtml(ARGS[0])", data)
+    cal = calendar_part(nov)
+    assert "November 2026" in cal and "₹1,589" in cal and "Sat" in cal and "Sun" in cal
+    assert "October 2026" in cal and "December 2026" in cal                          # the month before and after, to move to
+    assert 'data-month-nav="-1"' in view(nov, "you") and 'data-month-nav="1"' in view(nov, "you")
+    dec = calendar_part(render("S.recMonth = { you: '2026-12' }; recordHtml(ARGS[0])", data))
+    assert "December 2026" in dec and "₹1,589" not in dec and "January 2027" in dec    # a month with no trade still shows
