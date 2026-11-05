@@ -1471,6 +1471,55 @@ function provTxt(t) {
   const mode = { quick: "Quick", full: "Complete" }[t.mode] || t.mode || "?";
   return `<span class="small muted">run ${esc((t.run_asked_at || "").slice(-5))} · ${esc(mode)} · AI #${esc(t.ai_rank ?? "?")} · research ${esc(t.research_source || "?")}${t.in_entry_zone === false ? " · outside the entry zone" : ""}</span>`;
 }
+// One trade in full: each leg in words (BUY — kharida / SELL — becha) with its contract, quantity, the run's price,
+// the filled entry and the exit or the price now; the times, NIFTY at the run, the Take and the exit; the plan; where
+// it came from and why the AI picked it. A field the trade never recorded says "unknown".
+S.openDetail = new Set();
+function paidTxt(t) {
+  const qty = t.lot ? t.lot * (t.lots || 1) : null;
+  return t.legs.map((l) => {
+    const buy = l.action === "BUY", k = `${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
+    if (l.entry == null) return `${buy ? "Kharidna tha" : "Bechna tha"} ${k} @ ₹${fmt(l.shown_price)} <span class="muted">(not taken)</span>`;
+    const amt = (px) => (qty ? ` × ${qty} = <b>${rupee(px * qty)}</b>` : "");
+    const out = l.exit != null ? ` → ${buy ? "becha" : "wapas kharida"} @ ₹${fmt(l.exit)}${amt(l.exit)}` : "";
+    return `<b class="${buy ? "up" : "down"}">${buy ? "Kharida" : "Becha"}</b> ${k} @ ₹${fmt(l.entry)}${amt(l.entry)}${out}`;
+  }).join("<br>") + (t.net_entry != null && t.status !== "not_taken" ? `<br><span class="muted">kul ${t.debit ? "diya" : "mila"} ${rupee(Math.abs(t.net_entry) * (qty || 0))} (1 lot)</span>` : "");
+}
+function tradeDetailHtml(t) {
+  const name = NAMES[t.symbol] || t.symbol, v = t.live || {}, qty = t.lot ? t.lot * (t.lots || 1) : null, taken = t.status !== "not_taken";
+  const unk = `<span class="muted">unknown</span>`, val = (x, f = fmt) => (x == null ? unk : f(x)), known = "run_id" in t;
+  const legs = t.legs.map((l, i) => {
+    const now = v.legs?.[i]?.now, out = l.exit ?? (t.status === "open" ? now : null);
+    const p = taken && l.entry != null && out != null && qty ? (out - l.entry) * (l.action === "BUY" ? 1 : -1) * qty : null;
+    return `<tr><td><b class="${l.action === "BUY" ? "up" : "down"}">${l.action === "BUY" ? "BUY — kharida" : "SELL — becha"}</b></td>
+      <td>${esc(contractName(t.symbol, t.expiry, l))}</td><td class="num">${qty ?? unk}</td>
+      <td class="num">${"shown_price" in l ? val(l.shown_price) : unk}</td>
+      <td class="num"><b>${taken ? val(l.entry) : `<span class="muted">not taken</span>`}</b></td>
+      <td class="num">${taken && l.entry != null && qty ? `${rupee(l.entry * qty)} <span class="muted">${l.action === "BUY" ? "diya" : "mila"}</span>` : "—"}</td>
+      <td class="num">${l.exit != null ? fmt(l.exit) : t.status === "open" && now != null ? `${fmt(now)} <span class="muted">now</span>` : "—"}</td>
+      <td class="num">${l.target != null || l.stop != null ? `${val(l.target)} / ${val(l.stop)}` : "—"}</td>
+      <td class="num ${cls(p)}">${p != null ? money(p) : "—"}</td></tr>`;
+  }).join("");
+  const facts = [
+    ["Taken", `${esc(t.taken_at)}${known ? ` · from the run at ${esc((t.run_asked_at || "").slice(-5))}` : ""}`],
+    [`${esc(name)} then`, `${known ? `at the run ${val(t.spot_at_run)} · ` : ""}at the Take ${val(t.status === "not_taken" ? t.spot_at_take : t.spot_at_entry)}${t.in_entry_zone === false ? " (outside the entry zone)" : ""}`],
+    ["Plan", t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}: earns while ${esc(name)} stays inside`
+      : `enter while ${esc(name)} is in ${t.entry_low != null ? `${fmt0(t.entry_low)}–${fmt0(t.entry_high)}` : unk} · target ${val(t.index_target, fmt0)} · stop ${val(t.index_stop, fmt0)}`],
+    ["Closed", t.status === "closed" ? `${esc(t.closed_at)} · ${esc(name)} ${val(t.spot_at_exit)} · ${esc(t.reason)}`
+      : t.status === "open" ? `still open${v.spot != null ? ` · ${esc(name)} now ${fmt(v.spot)}` : ""}` : `not taken: ${esc(t.reason)}`],
+    ["From", known ? `${esc({ quick: "Quick", full: "Complete" }[t.mode] || t.mode || "?")} analysis · AI rank #${esc(t.ai_rank ?? "?")} · research ${esc(t.research_source || "?")} · AI confidence ${esc(t.ai_confidence || "?")}`
+      : "unknown (recorded before provenance)"],
+    ["Why the AI picked it", t.ai_why ? esc(t.ai_why) : unk],
+  ];
+  if (taken && t.net_entry != null) facts.push(["Money, 1 lot", `${rupee(tradeMoney(t))} (${lotMoney(t.debit).label})${t.status === "closed"
+    ? ` · gross ${money(t.gross_pnl)} · charges ${money(t.charges)} · net <b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b>` : ""} · ${COST_NOTE}`]);
+  if (t.alerts?.length) facts.push(["Alerts", t.alerts.map((a) => `${esc(FLAG_TEXT[a.kind]?.[0] || a.kind)} at ${esc(a.at)} (${esc(name)} ${fmt0(a.spot)})`).join(" · ")]);
+  return `<div class="trade-detail"><table class="facts small-facts">${facts.map(([k, x]) => `<tr><th>${k}</th><td>${x}</td></tr>`).join("")}</table>
+    <table class="t legs"><thead><tr><th>Order</th><th>Contract</th><th>Qty</th><th>Price in the run</th><th>Entry (filled)</th><th>Amount (entry × qty)</th><th>Exit</th><th>Target / stop (premium)</th><th>P&L</th></tr></thead><tbody>${legs}</tbody></table></div>`;
+}
+const moreBtn = (t) => `<button class="btn small-btn rec-more" data-id="${t.id}">${S.openDetail.has(t.id) ? "Hide" : "Details"}</button>`;
+const detailRow = (t, cols) => `<tr class="rec-detail" data-for="${t.id}" ${S.openDetail.has(t.id) ? "" : "hidden"}><td colspan="${cols}">${tradeDetailHtml(t)}</td></tr>`;
+
 const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">v2: ${esc(t.v2.note)}${t.v2.entry ? ` · v2 entry ${esc(t.v2.entry)}` : ""}</span>` : "");
 
 const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"] };
@@ -1495,10 +1544,10 @@ async function loadRecord() {
   const hist = !d.closed.length ? `<p class="muted pad">Closed trades appear here with their profit or loss.</p>`
     : `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Taken</th><th>Closed</th><th>Trade</th><th>Legs: entry → exit</th><th>NIFTY in → out</th><th>Why closed</th><th>Gross</th><th>Charges</th><th>Net P&L</th><th></th></tr></thead><tbody>
       ${d.closed.map((t) => `<tr><td>${esc(t.taken_at)}</td><td>${esc(t.closed_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
-        <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.entry)} → ${fmt(l.exit)}`).join("<br>")}<br>${provTxt(t)}</td>
+        <td class="small">${paidTxt(t)}<br>${provTxt(t)}</td>
         <td class="num">${fmt0(t.spot_at_entry)} → ${fmt0(t.spot_at_exit)}</td><td class="small">${esc(t.reason)}</td>
         <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
-        <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("")}</tbody></table></div>`;
+        <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 10)}`).join("")}</tbody></table></div>`;
   el.innerHTML = summary + `<h3 class="sub-h rec-h">My picks — open</h3>` + open +
     `<section class="card"><div class="card-head"><h2>My picks — history</h2><a class="btn small-btn" href="/api/trades.csv" download>Download CSV (both views)</a></div>${hist}</section>` + aiRecordHtml(d.ai);
   el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
@@ -1512,6 +1561,14 @@ async function loadRecord() {
     try { await api(`/api/trades/${b.dataset.id}`, { method: "DELETE" }); } catch (e) { alert(e.message); }
     loadRecord();
   }));
+  el.querySelectorAll(".rec-more").forEach((b) => (b.onclick = () => {
+    const id = b.dataset.id, on = !S.openDetail.has(id);
+    on ? S.openDetail.add(id) : S.openDetail.delete(id);
+    const row = el.querySelector(`tr.rec-detail[data-for="${id}"]`);
+    if (row) row.hidden = !on;
+    b.textContent = on ? "Hide" : "Details";
+  }));
+  el.querySelectorAll("details.rec-detail-box").forEach((d) => (d.ontoggle = () => (d.open ? S.openDetail.add(d.dataset.id) : S.openDetail.delete(d.dataset.id))));
 }
 
 
@@ -1519,7 +1576,7 @@ async function loadRecord() {
 function aiRecordHtml(ai) {
   if (!ai) return "";
   const s = ai.stats;
-  const legsTxt = (t) => t.legs.map((l) => `${legShort(l)} ${fmt(l.entry)}${l.exit != null ? ` → ${fmt(l.exit)}` : ""}`).join("<br>");
+  const legsTxt = paidTxt;
   const all = [...ai.open, ...ai.closed];
   const rows = all.map((t) => {
     const live = t.status === "open" ? t.live || {} : null;
@@ -1528,12 +1585,12 @@ function aiRecordHtml(ai) {
       <td class="small">${legsTxt(t)}<br>${provTxt(t)}<br>${v2Txt(t)}</td><td class="num small">${levelsTxt(t)}</td>
       <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
       <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
-      <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`;
+      <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`;
   }).join("") + (ai.not_taken || []).map((t) => `<tr class="muted"><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
       <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
       <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.shown_price)}`).join("<br>")}<br>${provTxt(t)}<br>${v2Txt(t)}</td><td class="num small">${levelsTxt(t)}</td>
       <td class="small"><b>not taken</b><br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
-      <td><button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>`).join("");
+      <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`).join("");
   return `<section class="card"><div class="card-head"><h2>AI #1 — track record</h2> <span class="small muted">the AI's #1 of each run, recorded by itself · 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE} · never mixed with My picks</span></div>
     <div class="body">${RECORDED_NOTE}
       <div class="levels rec-stats">
@@ -1588,6 +1645,7 @@ function openTradeHtml(t) {
         Worst case at expiry ${money(t.max_loss_per_lot)}.</span>
         <span><button class="btn primary small-btn rec-close" data-id="${t.id}">Close trade</button>
         <button class="btn small-btn rec-del" data-id="${t.id}">Remove</button></span></div>
+      <details class="rec-detail-box" data-id="${t.id}" ${S.openDetail.has(t.id) ? "open" : ""}><summary>Full details: what was bought and sold, at what price, when</summary>${tradeDetailHtml(t)}</details>
     </div></section>`;
 }
 

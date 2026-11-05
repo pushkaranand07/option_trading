@@ -373,6 +373,10 @@ table.depth { width: 100%; border-collapse: collapse; font-variant-numeric: tabu
 /* Pulse trade ranking */
 .rank-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
 .strat-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.trade-detail { padding: 8px 4px; display: grid; gap: 8px; }
+.trade-detail .facts th { white-space: nowrap; }
+details.rec-detail-box { margin-top: 10px; }
+details.rec-detail-box > summary { cursor: pointer; color: var(--brand); font-size: 13px; }
 .ai-trades { display: grid; gap: 8px; margin: 10px 0 6px; }
 .ai-trade { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); cursor: pointer; min-width: 0; }
 .ai-trade:hover { border-color: var(--muted); }

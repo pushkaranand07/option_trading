@@ -15,7 +15,7 @@ from webapp import ai_test, server, strategist as st, trade_record as tr
 HEADER = ["view", "source", "status", "taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "run_id", "candidate",
           "ai_rank", "mode", "run_asked_at", "research_source", "spot_at_run", "spot_at_take", "in_entry_zone",
           "index_target", "index_stop", "close_reason", "refusal_reason", "is_v2_counted", "v2_entry", "gross_pnl",
-          "charges", "net_pnl"]
+          "charges", "net_pnl", "ai_reason"]
 APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
 
 
