@@ -1492,9 +1492,9 @@ function paidTxt(t) {
   const qty = t.lot ? t.lot * (t.lots || 1) : null;
   return t.legs.map((l) => {
     const buy = l.action === "BUY", k = `${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
-    if (l.entry == null) return `${buy ? "Kharidna tha" : "Bechna tha"} ${k} @ ₹${fmt(l.shown_price)} <span class="muted">(not taken)</span>`;
+    if (l.entry == null) return `${buy ? "Kharidna tha" : "Bechna tha"} ${k} @ ₹${fmt(l.shown_price)}`;
     const amt = (px) => (qty ? ` × ${qty} = <b>${rupee(px * qty)}</b>` : "");
-    const out = l.exit != null ? ` → ${buy ? "becha" : "wapas kharida"} @ ₹${fmt(l.exit)}${amt(l.exit)}` : "";
+    const out = l.exit != null ? `<br><span class="muted">→</span> ${buy ? "becha" : "wapas kharida"} @ ₹${fmt(l.exit)}${amt(l.exit)}` : "";
     return `<b class="${buy ? "up" : "down"}">${buy ? "Kharida" : "Becha"}</b> ${k} @ ₹${fmt(l.entry)}${amt(l.entry)}${out}`;
   }).join("<br>") + (t.net_entry != null && t.status !== "not_taken" ? `<br><span class="muted">kul ${t.debit ? "diya" : "mila"} ${rupee(Math.abs(t.net_entry) * (qty || 0))} (1 lot)</span>` : "");
 }
@@ -1526,46 +1526,101 @@ function tradeDetailHtml(t) {
     ["Quotes at the Take", "quote_age_s" in t ? `${esc(t.quote_age_s ?? "?")} s old${t.attempts > 1 ? ` · ${t.attempts} attempts, the last at ${esc(t.last_attempt_at)}` : ""}` : unk],
   ];
   if (taken && t.net_entry != null) facts.push(["Money, 1 lot", `${rupee(tradeMoney(t))} (${lotMoney(t.debit).label})${t.status === "closed"
-    ? ` · gross ${money(t.gross_pnl)} · charges ${money(t.charges)} · net <b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b>` : ""} · ${COST_NOTE}`]);
+    ? ` · gross ${money(t.gross_pnl)} · charges ${money(t.charges)} · net <b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b>` : ""}`]);
   if (t.alerts?.length) facts.push(["Alerts", t.alerts.map((a) => `${esc(FLAG_TEXT[a.kind]?.[0] || a.kind)} at ${esc(a.at)} (${esc(name)} ${fmt0(a.spot)})`).join(" · ")]);
-  return `<div class="trade-detail"><table class="facts small-facts">${facts.map(([k, x]) => `<tr><th>${k}</th><td>${x}</td></tr>`).join("")}</table>
+  const lad = t.status === "open" && v.spot != null && t.index_target != null
+    ? ladder({ underlying_target: t.index_target, underlying_stop: t.index_stop, underlying_entry_low: t.entry_low, underlying_entry_high: t.entry_high }, v.spot, t.index_target < t.index_stop) : "";
+  return `<div class="trade-detail">${lad}<table class="facts small-facts">${facts.map(([k, x]) => `<tr><th>${k}</th><td>${x}</td></tr>`).join("")}</table>
     <table class="t legs"><thead><tr><th>Order</th><th>Contract</th><th>Qty</th><th>Price in the run</th><th>Entry (filled)</th><th>Amount (entry × qty)</th><th>Exit</th><th>Target / stop (premium)</th><th>P&L</th></tr></thead><tbody>${legs}</tbody></table></div>`;
 }
 const moreBtn = (t) => `<button class="btn small-btn rec-more" data-id="${t.id}">${S.openDetail.has(t.id) ? "Hide" : "Details"}</button>`;
 const detailRow = (t, cols) => `<tr class="rec-detail" data-for="${t.id}" ${S.openDetail.has(t.id) ? "" : "hidden"}><td colspan="${cols}">${tradeDetailHtml(t)}</td></tr>`;
 
-const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">v2: ${esc(t.v2.note)}${t.v2.entry ? ` · v2 entry ${esc(t.v2.entry)}` : ""}</span>` : "");
+// The v2 link of an AI #1 row; v2's own entry only on days v2 counts (before it started there is nothing to compare).
+const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">${esc(t.v2.note)}${t.v2.entry && !t.v2.note.startsWith("before v2") ? ` · v2 entry ${esc(t.v2.entry)}` : ""}</span>` : "");
 
 const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"] };
 // A range trade (iron condor) has a profit zone between its sold strikes, not one target and one stop.
 const levelsTxt = (t) => (t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}` : `${fmt0(t.index_target)} / ${fmt0(t.index_stop)}`);
 const legShort = (l) => `${l.action === "BUY" ? "B" : "S"} ${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
 
-// The whole Trade Record from /api/trades, as HTML: "My picks" in [data-view="you"], "AI #1" in [data-view="ai"].
-// A pure function, so tests/test_ui_regressions.py can check what the page shows.
+// ---------- Trade Record: one page, two views (My picks / AI #1), each with its own numbers ----------
+// The warnings appear once, at the top, as text. Each view: four numbers, then Open, History and Not taken, one line a
+// trade; Details opens the full record of a trade. "My picks" is [data-view="you"], "AI #1" is [data-view="ai"].
+S.recView = store("recView") === "ai" ? "ai" : "you";
+const when = (x) => {                     // "2026-11-05 09:41" -> "05 Nov 09:41"
+  if (!x) return "—";
+  const [d, t] = String(x).split(" "), [, m, dd] = d.split("-"), mon = MONTHS[+m - 1] || "";
+  return `${dd} ${mon.charAt(0)}${mon.slice(1).toLowerCase()}${t ? " " + t : ""}`;
+};
+const OPEN_HEAD = `<thead><tr><th>Taken</th><th>Trade</th><th>Bought / sold</th><th class="num">NIFTY entry → now</th><th class="num">P&L now</th><th></th></tr></thead>`;
+const HIST_HEAD = `<thead><tr><th>Taken → closed</th><th>Trade</th><th>Bought / sold</th><th class="num">NIFTY in → out</th><th>Why closed</th><th class="num">Net P&L</th><th></th></tr></thead>`;
+const NOT_TAKEN_HEAD = `<thead><tr><th>Tried</th><th>Trade</th><th>Would have bought / sold</th><th>Why not taken</th><th></th></tr></thead>`;
+const delBtn = (t) => `<button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record (a trade taken by mistake)">✕</button>`;
+const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.strategy)}</b><div class="small muted">${esc(NAMES[t.symbol] || t.symbol)} · ${esc(t.expiry)}${t.source === "ai" && t.ai_confidence ? ` · AI ${esc(t.ai_confidence)}` : ""}</div>${t.v2 ? `<div class="row-flag">${v2Txt(t)}</div>` : ""}${extra}</td>`;
+
+function openRowHtml(t) {
+  const v = t.live || {}, name = NAMES[t.symbol] || t.symbol;
+  const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])].map((f) => {
+    const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f];
+    return `<div class="row-flag ${c === "up" ? "up" : c === "down" ? "down" : "warn-c"}"><b>${txt}</b> ${f === "expired" ? "— close it to settle at the expiry value"
+      : `${a ? `at ${esc(a.at)}` : "now"} — closes itself at the next live price`}</div>`;
+  }).join("");
+  const notes = (t.note ? `<div class="row-flag warn-c">${esc(t.note)}</div>` : "") + (v.error ? `<div class="row-flag down">${esc(v.error)}</div>` : "");
+  return `<tr><td class="when">${when(t.taken_at)}</td>${tradeCell(t, flags + notes)}
+    <td class="small paid">${paidTxt(t)}</td>
+    <td class="num">${fmt0(t.spot_at_entry)} → <b>${fmt0(v.spot)}</b><div class="small muted">${t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}`
+      : `target <span class="up">${fmt0(t.index_target)}</span> · stop <span class="down">${fmt0(t.index_stop)}</span>`}</div></td>
+    <td class="num"><b class="${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}</b>${v.as_of ? `<div class="small muted">NSE ${esc(v.as_of.slice(-8))}</div>` : ""}</td>
+    <td class="acts">${t.source !== "ai" ? `<button class="btn primary small-btn rec-close" data-id="${t.id}">Close</button>` : ""}${moreBtn(t)}${delBtn(t)}</td></tr>${detailRow(t, 6)}`;
+}
+
+function histRowHtml(t) {
+  return `<tr><td class="when">${when(t.taken_at)}<br>→ ${when(t.closed_at)}</td>${tradeCell(t)}
+    <td class="small paid">${paidTxt(t)}</td>
+    <td class="num">${fmt0(t.spot_at_entry)} → ${fmt0(t.spot_at_exit)}</td><td class="small">${esc(t.reason)}</td>
+    <td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b><div class="small muted">gross ${money(t.gross_pnl)} · charges ${money(t.charges)}</div></td>
+    <td class="acts">${moreBtn(t)}${delBtn(t)}</td></tr>${detailRow(t, 7)}`;
+}
+
+// Not-taken rows (the AI's refused pick, or your refused Take): listed with the reason, never counted.
+function notTakenRowsHtml(list) {
+  return (list || []).map((t) => `<tr class="not-taken"><td class="when">${when(t.taken_at)}</td>${tradeCell(t)}
+      <td class="small paid">${paidTxt(t)}</td>
+      <td class="small"><b>not taken</b>${t.attempts > 1 ? ` · ${t.attempts} attempts` : ""}<div class="muted">${esc(t.reason)}</div></td>
+      <td class="acts">${moreBtn(t)}${delBtn(t)}</td></tr>${detailRow(t, 5)}`).join("");
+}
+
+function viewHtml(who, v) {
+  const s = v.stats, ai = who === "ai";
+  const inOpen = v.open.reduce((a, t) => a + (t.net_entry != null ? tradeMoney(t) : 0), 0);
+  const kpi = (label, val, c, sub) => `<div class="kpi"><span>${label}</span><b class="${c || ""}">${val}</b><small>${sub}</small></div>`;
+  const kpis = `<div class="kpis">
+    ${kpi("Net P&L, closed", money(s.net), cls(s.net), `${s.closed} closed · average ${money(s.avg)}`)}
+    ${kpi("Open now", s.open ? `${s.open} · ${money(s.open_pnl)}` : "0", s.open ? cls(s.open_pnl) : "", s.open ? `${rupee(inOpen)} in them` : "nothing open")}
+    ${kpi("Won / lost", `${s.wins} / ${s.losses}`, "", s.win_rate != null ? `${s.win_rate.toFixed(0)}% won` : "none closed yet")}
+    ${kpi("Best / worst", s.closed ? `${money(s.best)} / ${money(s.worst)}` : "—", "", ai ? "the AI's #1 of each run, recorded by itself" : "trades you took")}</div>`;
+  const v2 = ai && v.v2_stats ? `<p class="rec-v2">v2 counted ${v.v2_stats.closed + v.v2_stats.open} of these (its own entry, held to expiry in v2); settled P&L here ${money(v.v2_stats.net)}.</p>` : "";
+  const closedNow = v.open.some((t) => t.live?.market_closed)
+    ? `<p class="rec-v2 warn-c">Market band hai: these are the last prices (NSE stops near 15:40). P&L, targets and stops resume at 9:15; nothing opens or closes while the market is closed.</p>` : "";
+  const table = (head, rows) => `<div class="tbl"><table class="t rec-t">${head}<tbody>${rows}</tbody></table></div>`;
+  const sec = (title, n, body, note = "") => `<section class="card rec-sec"><div class="card-head"><h2>${title}<span class="count">${n}</span></h2>${note}</div>${body}</section>`;
+  return kpis + v2 + closedNow
+    + sec("Open", v.open.length, v.open.length ? table(OPEN_HEAD, v.open.map(openRowHtml).join(""))
+      : `<p class="empty">Nothing open.${ai ? "" : " Take a trade on the Plan tab to see it here."}</p>`)
+    + sec("History", v.closed.length, v.closed.length ? table(HIST_HEAD, v.closed.map(histRowHtml).join("")) : `<p class="empty">Closed trades appear here with their profit or loss.</p>`)
+    + (v.not_taken?.length ? sec(ai ? "Not taken" : "Refused Takes", v.not_taken.length, table(NOT_TAKEN_HEAD, notTakenRowsHtml(v.not_taken)),
+      `<span class="small muted">listed with the reason, never counted</span>`) : "");
+}
+
+// The whole Trade Record from /api/trades, as HTML (a pure function, so tests/test_ui_regressions.py can check it).
 function recordHtml(d) {
-  const s = d.stats;
-  const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
-  const summary = `<section class="card"><div class="card-head"><h2>My picks — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE} · never mixed with AI #1</span></div>
-    <div class="body">${RECORDED_NOTE}<div class="levels rec-stats">
-      ${stat("Total P&L (closed)", money(s.net), cls(s.net))}${stat("Open trades now", `${s.open}${s.open ? ` · ${money(s.open_pnl)}` : ""}`, s.open ? cls(s.open_pnl) : "")}${stat("Money in open trades", money(d.open.reduce((a, t) => a + tradeMoney(t), 0)))}
-      ${stat("Closed trades", s.closed)}${stat("Won / lost", `${s.wins} / ${s.losses}`)}
-      ${stat("Win rate", s.win_rate != null ? s.win_rate.toFixed(0) + "%" : "—")}${stat("Average a trade", money(s.avg), cls(s.avg))}
-      ${stat("Best", money(s.best), cls(s.best))}${stat("Worst", money(s.worst), cls(s.worst))}</div></div></section>`;
-  const open = d.open.length ? d.open.map(openTradeHtml).join("")
-    : `<section class="card"><div class="body"><p class="muted">No open trades. On the Plan tab, ask the AI strategist and press <b>Take this trade</b> to record one here.</p></div></section>`;
-  const hist = !d.closed.length ? `<p class="muted pad">Closed trades appear here with their profit or loss.</p>`
-    : `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Taken</th><th>Closed</th><th>Trade</th><th>Legs: entry → exit</th><th>NIFTY in → out</th><th>Why closed</th><th>Gross</th><th>Charges</th><th>Net P&L</th><th></th></tr></thead><tbody>
-      ${d.closed.map((t) => `<tr><td>${esc(t.taken_at)}</td><td>${esc(t.closed_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
-        <td class="small">${paidTxt(t)}<br>${provTxt(t)}</td>
-        <td class="num">${fmt0(t.spot_at_entry)} → ${fmt0(t.spot_at_exit)}</td><td class="small">${esc(t.reason)}</td>
-        <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
-        <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 10)}`).join("")}</tbody></table></div>`;
-  return `<div data-view="you">` + summary + `<h3 class="sub-h rec-h">My picks — open</h3>` + open +
-    `<section class="card"><div class="card-head"><h2>My picks — history</h2><a class="btn small-btn" href="/api/trades.csv" download>Download CSV (both views)</a></div>${hist}</section>` +
-    (d.you.not_taken?.length ? `<section class="card"><div class="card-head"><h2>My picks — refused Takes</h2><span class="small muted">${d.you.not_taken.length} · listed with the reason, never counted</span></div>
-      <div class="oc-scroll"><table class="t rec-hist">${NOT_TAKEN_HEAD}<tbody>${notTakenRowsHtml(d.you.not_taken)}</tbody></table></div></section>` : "") +
-    `</div><div data-view="ai">` + aiRecordHtml(d.ai) + `</div>`;
+  const views = [["you", "My picks", d.you], ["ai", "AI #1", d.ai]];
+  return `<div class="rec-top">
+      <p class="rec-note">Paper trades, 1 lot each — no real order is placed · recorded trades, not a test (not registered before entry) · P&L after charges, ${COST_NOTE} · a handful of trades proves nothing either way</p>
+      <div class="seg" role="tablist">${views.map(([k, label, v]) => `<button class="seg-btn ${S.recView === k ? "on" : ""}" data-view-btn="${k}" role="tab">${label}<span class="count">${v.stats.open + v.stats.closed}</span></button>`).join("")}</div>
+      <a class="btn small-btn" href="/api/trades.csv" download>Download CSV</a></div>`
+    + views.map(([k, , v]) => `<div class="rec-view" data-view="${k}" ${S.recView === k ? "" : "hidden"}>${viewHtml(k, v)}</div>`).join("");
 }
 
 async function loadRecord() {
@@ -1591,92 +1646,16 @@ async function loadRecord() {
     if (row) row.hidden = !on;
     b.textContent = on ? "Hide" : "Details";
   }));
-  el.querySelectorAll("details.rec-detail-box").forEach((d) => (d.ontoggle = () => (d.open ? S.openDetail.add(d.dataset.id) : S.openDetail.delete(d.dataset.id))));
+  el.querySelectorAll("[data-view-btn]").forEach((b) => (b.onclick = () => {
+    S.recView = b.dataset.viewBtn; store("recView", S.recView);
+    el.querySelectorAll(".rec-view").forEach((x) => (x.hidden = x.dataset.view !== S.recView));
+    el.querySelectorAll("[data-view-btn]").forEach((x) => x.classList.toggle("on", x === b));
+  }));
 }
 
 
 // Every AI suggestion, recorded automatically and settled by rule (target / stop / expiry).
-// Not-taken rows (the AI's refused pick, or your refused Take): listed with the reason, never counted.
-const NOT_TAKEN_HEAD = `<thead><tr><th>Asked</th><th>Trade</th><th>AI confidence</th><th>Legs</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead>`;
-function notTakenRowsHtml(list) {
-  return (list || []).map((t) => `<tr class="muted"><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
-      <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
-      <td class="small">${paidTxt(t)}<br>${provTxt(t)}${t.v2 ? `<br>${v2Txt(t)}` : ""}</td><td class="num small">${levelsTxt(t)}</td>
-      <td class="small"><b>not taken</b>${t.attempts > 1 ? ` · ${t.attempts} attempts` : ""}<br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
-      <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`).join("");
-}
-
-function aiRecordHtml(ai) {
-  if (!ai) return "";
-  const s = ai.stats;
-  const legsTxt = paidTxt;
-  const all = [...ai.open, ...ai.closed];
-  const rows = all.map((t) => {
-    const live = t.status === "open" ? t.live || {} : null;
-    return `<tr><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
-      <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
-      <td class="small">${legsTxt(t)}<br>${provTxt(t)}<br>${v2Txt(t)}</td><td class="num small">${levelsTxt(t)}</td>
-      <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
-      <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
-      <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`;
-  }).join("") + notTakenRowsHtml(ai.not_taken);
-  return `<section class="card"><div class="card-head"><h2>AI #1 — track record</h2> <span class="small muted">the AI's #1 of each run, recorded by itself · 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE} · never mixed with My picks</span></div>
-    <div class="body">${RECORDED_NOTE}
-      <div class="levels rec-stats">
-        <div class="lv"><span>Suggestions</span><b>${s.closed + s.open}</b><small>${s.open} still open</small></div>
-        <div class="lv"><span>Won / lost</span><b>${s.wins} / ${s.losses}</b><small>${s.win_rate != null ? s.win_rate.toFixed(0) + "% won" : "none settled yet"}</small></div>
-        <div class="lv"><span>Total P&L (settled)</span><b class="${cls(s.net)}">${money(s.net)}</b><small>average ${money(s.avg)}</small></div>
-        <div class="lv"><span>Open now</span><b class="${cls(s.open_pnl)}">${money(s.open_pnl)}</b><small>before charges · ${COST_NOTE}</small></div></div>
-      <p class="small muted">Of these, the trades v2 counted (its own entry, held to expiry in v2): ${ai.v2_stats ? `${ai.v2_stats.closed + ai.v2_stats.open} (${ai.v2_stats.open} open), settled P&L here ${money(ai.v2_stats.net)}` : "—"}. Not-taken picks are listed but never counted.</p>
-      <p class="small muted">A handful of trades proves nothing either way.</p>
-    </div>
-    ${all.length || ai.not_taken?.length ? `<div class="oc-scroll"><table class="t rec-hist"><thead><tr><th>Asked</th><th>Trade</th><th>AI confidence</th><th>Legs: entry → exit</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-      : `<p class="muted pad">Every suggestion from the AI strategist will appear here.</p>`}</section>`;
-}
-
-function recLevels(t, l) {        // target / stop cells of a recorded leg, by its role in Dhan
-  const role = legRole(t.strategy, t.legs, l), lg = { action: l.action, price: l.entry };
-  if (role === "hedge") return `<td class="num muted">none</td><td class="num muted">none</td>`;
-  if (role === "super" && legLevelsOk(lg, l.target, l.stop)) return `<td class="num up">${fmt(l.target)}</td><td class="num down">${fmt(l.stop)}</td>`;
-  return `<td class="num ref">(${fmt(l.target)})</td><td class="num ref">(${fmt(l.stop)})</td>`;
-}
-
 const tradeMoney = (t) => (t.debit ? -t.net_entry * t.lot * t.lots : t.max_loss_per_lot * t.lots);
-
-function openTradeHtml(t) {
-  const v = t.live || {}, down = t.index_target < t.index_stop, name = NAMES[t.symbol] || t.symbol;
-  const flags = [...new Set([...(t.alerts || []).map((a) => a.kind), ...(v.flags || [])])];
-  const banners = flags.map((f) => {
-    const a = (t.alerts || []).find((x) => x.kind === f), [txt, c] = FLAG_TEXT[f];
-    const extra = f === "expired" ? "The expiry has passed: close it to settle at the expiry value."
-      : `${a ? `at ${esc(a.at)} (${esc(name)} ${fmt0(a.spot)})` : "now"} — no live price for a leg yet; it closes itself at the next one.`;
-    return `<div class="rec-flag ${c}"><b>${txt}</b> ${extra}</div>`;
-  }).join("");
-  const plan = { underlying_target: t.index_target, underlying_stop: t.index_stop, underlying_entry_low: t.entry_low, underlying_entry_high: t.entry_high };
-  const lad = v.spot != null && t.index_target != null ? ladder(plan, v.spot, down) : "";
-  return `<section class="card rec-open"><div class="card-head"><h2>${esc(name)} · ${esc(STRAT_NAMES[t.strategy] || t.strategy)}</h2>
-      <div class="rec-pnl ${cls(v.pnl)}">${v.pnl != null ? money(v.pnl) : "—"}<small>P&L now, before charges · ${COST_NOTE}</small></div></div>
-    <div class="body">
-      <div class="small muted">Taken ${esc(t.taken_at)} · expiry ${esc(t.expiry)} · 1 lot (${t.lot} qty) · money in it <b>${rupee(tradeMoney(t))}</b> (${lotMoney(t.debit).label}) · ${esc(name)} at entry ${fmt0(t.spot_at_entry)}${v.spot != null ? `, now <b>${fmt0(v.spot)}</b>` : ""}
-        ${v.as_of ? ` · prices from NSE as of ${esc(v.as_of.slice(-8))}${nseAge(v.as_of)}` : ""}</div>
-      ${v.market_closed ? `<div class="small warn-c">Market band hai: yeh last prices hain (NSE ~15:40 pe rok deta hai). P&L, target aur stop kal 9:15 se phir chalenge; band market mein trade na band hota hai na khulta.</div>` : ""}
-      ${t.note ? `<div class="small warn-c">${esc(t.note)}</div>` : ""}${banners}${v.error ? `<div class="notice">${esc(v.error)}</div>` : ""}
-      ${lad}
-      <table class="t legs"><thead><tr><th>Leg</th><th>Entry</th><th title="What you could close it at now: a bought option at the bid, a sold one at the ask — not the last traded price">Now (to close)</th><th>Target</th><th>Stop loss</th><th>P&L</th></tr></thead><tbody>
-        ${t.legs.map((l, i) => {
-          const now = v.legs?.[i]?.now, p = now != null ? (now - l.entry) * (l.action === "BUY" ? 1 : -1) * t.lot : null;
-          return `<tr><td><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> ${esc(contractName(t.symbol, t.expiry, l))}</td>
-            <td class="num">${fmt(l.entry)}</td><td class="num"><b>${fmt(now)}</b></td>${recLevels(t, l)}
-            <td class="num ${cls(p)}">${p != null ? money(p) : "—"}</td></tr>`;
-        }).join("")}</tbody></table>
-      <div class="rec-actions"><span class="small muted">${t.range ? `Range trade: it earns while ${esc(name)} stays between <b>${fmt0(t.range[0])}</b> and <b>${fmt0(t.range[1])}</b> until expiry; it closes itself if ${esc(name)} leaves that range.`
-          : `Book profit if ${esc(name)} reaches <b class="up">${fmt0(t.index_target)}</b> · exit if it reaches <b class="down">${fmt0(t.index_stop)}</b>.`}
-        Worst case at expiry ${money(t.max_loss_per_lot)}.</span>
-        <span><button class="btn primary small-btn rec-close" data-id="${t.id}">Close trade</button>
-        <button class="btn small-btn rec-del" data-id="${t.id}">Remove</button></span></div>
-      <details class="rec-detail-box" data-id="${t.id}" ${S.openDetail.has(t.id) ? "open" : ""}><summary>Full details: what was bought and sold, at what price, when</summary>${tradeDetailHtml(t)}</details>
-    </div></section>`;
-}
 
 // ---------- the AI's ranked trades: which one the detail card shows ----------
 S.view = {};

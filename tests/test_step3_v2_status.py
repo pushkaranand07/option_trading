@@ -139,4 +139,4 @@ def test_your_refused_take_is_kept_under_my_picks_outside_the_stats(world):
     o = tr.overview(lambda *a: chain())
     [row] = o["you"]["not_taken"]
     assert "entry zone" in row["reason"] and row["source"] == "you" and o["you"]["stats"]["open"] == 0
-    assert "notTakenRowsHtml(d.you.not_taken" in APP and "notTakenRowsHtml(ai.not_taken" in APP
+    assert "notTakenRowsHtml(v.not_taken)" in APP and 'viewHtml(k, v)' in APP          # both views, one builder
