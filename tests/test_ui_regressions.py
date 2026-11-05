@@ -149,3 +149,21 @@ def test_each_warning_appears_once_on_the_record_page_with_both_views_full():
     page = text(html)
     assert page.count("cost model unverified") == 1 and page.count("recorded trades, not a test") == 1
     assert 'data-view="you"' in html and 'data-view="ai"' in html                   # both views are on the page, one shown
+
+
+@pytest.mark.unit
+def test_the_calendar_shows_each_day_invested_and_profit_in_its_own_view():
+    day4 = [closed_trade(id="a"), closed_trade(id="b", net_entry=-143.85, net_pnl=3028.0, legs=[{"action": "BUY", "type": "CE", "strike": 23850.0, "entry": 143.85, "exit": 191.6}])]
+    day5 = [closed_trade(id="c", taken_at="2026-11-05 09:41", closed_at="2026-11-05 09:56", net_entry=-105.10, net_pnl=1899.0,
+                         legs=[{"action": "BUY", "type": "CE", "strike": 24450.0, "entry": 105.10, "exit": 135.35}])]
+    open5 = [closed_trade(id="d", status="open", taken_at="2026-11-05 09:47", net_entry=-146.85, closed_at=None, net_pnl=None, live={"pnl": 130.0},
+                          legs=[{"action": "BUY", "type": "CE", "strike": 24400.0, "entry": 146.85}])]
+    html = render("recordHtml(ARGS[0])", record(you={"closed": day4 + day5, "open": open5, "stats": stats(6516, closed=3, wins=3)},
+                                                ai={"closed": [closed_trade(id="x", net_pnl=-500.0)], "stats": stats(-500, wins=0, losses=1)}))
+    you, ai = text(view(html, "you")), text(view(html, "ai"))
+    assert "Day by day" in you and "November 2026" in you
+    # 4 Nov: two trades, ₹9,109.75 + ₹9,350.25 = ₹18,460 in, ₹1,589 + ₹3,028 = ₹4,617 out of closed trades
+    assert re.search(r"\b4\b.*?₹4,617.*?₹18,460.*?2 trades", you)
+    # 5 Nov: one closed (₹1,899) and one open (₹130 now); ₹6,831.50 + ₹9,545.25 = ₹16,376.75 in
+    assert re.search(r"\b5\b.*?₹1,899.*?₹16,376\.75.*?2 trades.*?₹130 open", you)
+    assert "−₹500" in ai and "₹4,617" not in ai                                     # each view has its own calendar

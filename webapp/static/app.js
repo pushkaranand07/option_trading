@@ -1591,6 +1591,43 @@ function notTakenRowsHtml(list) {
       <td class="acts">${moreBtn(t)}${delBtn(t)}</td></tr>${detailRow(t, 5)}`).join("");
 }
 
+// Day by day: a month calendar (Mon-Fri). Each trading day shows the net P&L of its closed trades, what went in (the
+// money for the trades taken that day: premium paid, or a credit spread's margin), how many, and the P&L now of those
+// still open. Trades count on the day they were taken; not-taken rows never count.
+function calendarHtml(v) {
+  const days = {};
+  for (const t of [...v.open, ...v.closed]) {
+    const d = (t.taken_at || "").slice(0, 10);
+    if (!d) continue;
+    const x = (days[d] ||= { n: 0, inv: 0, net: 0, closed: 0, open: 0, openPnl: 0 });
+    x.n += 1;
+    if (t.net_entry != null && t.lot) x.inv += tradeMoney(t);
+    if (t.status === "closed") { x.closed += 1; x.net += t.net_pnl || 0; } else { x.open += 1; x.openPnl += t.live?.pnl || 0; }
+  }
+  const months = [...new Set(Object.keys(days).map((d) => d.slice(0, 7)))].sort().reverse();
+  if (!months.length) return "";
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  return months.map((ym) => {
+    const [y, m] = ym.split("-").map(Number), last = new Date(y, m, 0).getDate(), cells = [];
+    let total = { n: 0, inv: 0, net: 0 }, lead = null;
+    for (let d = 1; d <= last; d++) {
+      const wd = (new Date(y, m - 1, d).getDay() + 6) % 7;            // Monday 0 ... Sunday 6
+      if (wd > 4) continue;
+      if (lead === null) { lead = wd; for (let i = 0; i < wd; i++) cells.push(`<div class="cal-day blank"></div>`); }
+      const x = days[`${ym}-${String(d).padStart(2, "0")}`];
+      if (!x) { cells.push(`<div class="cal-day"><span class="cal-n">${d}</span></div>`); continue; }
+      total = { n: total.n + x.n, inv: total.inv + x.inv, net: total.net + x.net };
+      cells.push(`<div class="cal-day has ${x.closed ? cls(x.net) : ""}"><span class="cal-n">${d}</span>
+        <b class="${cls(x.net)}">${x.closed ? money(x.net) : "—"}</b><small>${rupee(x.inv)} in · ${plural(x.n, "trade")}</small>
+        ${x.open ? `<small class="${cls(x.openPnl)}">${money(x.openPnl)} open</small>` : ""}</div>`);
+    }
+    const title = new Date(y, m - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+    return `<section class="card rec-sec"><div class="card-head"><h2>Day by day · ${title}</h2>
+        <span class="small muted">month: ${rupee(total.inv)} in · net ${money(total.net)} on closed trades · ${plural(total.n, "trade")}</span></div>
+      <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri"].map((w) => `<div class="cal-wd">${w}</div>`).join("")}${cells.join("")}</div></section>`;
+  }).join("");
+}
+
 function viewHtml(who, v) {
   const s = v.stats, ai = who === "ai";
   const inOpen = v.open.reduce((a, t) => a + (t.net_entry != null ? tradeMoney(t) : 0), 0);
@@ -1605,7 +1642,7 @@ function viewHtml(who, v) {
     ? `<p class="rec-v2 warn-c">Market band hai: these are the last prices (NSE stops near 15:40). P&L, targets and stops resume at 9:15; nothing opens or closes while the market is closed.</p>` : "";
   const table = (head, rows) => `<div class="tbl"><table class="t rec-t">${head}<tbody>${rows}</tbody></table></div>`;
   const sec = (title, n, body, note = "") => `<section class="card rec-sec"><div class="card-head"><h2>${title}<span class="count">${n}</span></h2>${note}</div>${body}</section>`;
-  return kpis + v2 + closedNow
+  return kpis + v2 + closedNow + calendarHtml(v)
     + sec("Open", v.open.length, v.open.length ? table(OPEN_HEAD, v.open.map(openRowHtml).join(""))
       : `<p class="empty">Nothing open.${ai ? "" : " Take a trade on the Plan tab to see it here."}</p>`)
     + sec("History", v.closed.length, v.closed.length ? table(HIST_HEAD, v.closed.map(histRowHtml).join("")) : `<p class="empty">Closed trades appear here with their profit or loss.</p>`)
