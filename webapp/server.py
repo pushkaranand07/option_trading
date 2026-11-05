@@ -60,7 +60,14 @@ async def _call(fn, *args):
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    """The page, with its script and styles named by their current version (the files' modified time), and itself
+    never cached: after an update the browser loads the new app.js instead of running a cached one."""
+    from fastapi.responses import HTMLResponse
+
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    for name in ("app.js", "style.css"):
+        html = html.replace(f'/static/{name}"', f'/static/{name}?v={int((STATIC / name).stat().st_mtime)}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/status")
