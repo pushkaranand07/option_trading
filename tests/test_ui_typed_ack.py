@@ -42,10 +42,10 @@ def test_the_backtest_table_by_side_line_and_btst_note_show_no_past_win_rate():
 
 @pytest.mark.unit
 def test_recorded_trade_summaries_keep_their_numbers_and_carry_the_line():
-    assert "recorded trades, not a test (not registered before entry); ${COST_NOTE}" in APP
-    for part in (_fn_any("async function loadJournal("), _fn_any("function recordHtml("), _function("aiRecordHtml")):
-        assert "${RECORDED_NOTE}" in part
-    assert 'stat("Win rate"' in APP and "win_rate.toFixed(0)" in APP       # the numbers stay
+    assert "recorded trades, not a test (not registered before entry); ${COST_NOTE}" in APP     # RECORDED_NOTE, for My Trades
+    assert "${RECORDED_NOTE}" in _fn_any("async function loadJournal(")
+    assert "recorded trades, not a test (not registered before entry)" in _function("recordHtml")   # the Trade Record: once, at the top
+    assert 'kpi("Won / lost"' in APP and "win_rate.toFixed(0)" in APP      # the numbers stay
 
 
 @pytest.mark.unit
@@ -89,7 +89,7 @@ def test_a_run_stays_fixed_until_the_next_run():
 @pytest.mark.unit
 def test_every_trade_shows_the_money_one_lot_needs():
     assert "lotMoney(c.priced.debit, c.priced.outlay_per_lot)" in _function("tradeCard") and "1 lot <b>${rupee(m.v)}</b>" in _function("tradeCard")
-    assert "Money for 1 lot" in _function("stratHtml") and "money in it" in _function("openTradeHtml")
+    assert "Money for 1 lot" in _function("stratHtml") and "in them" in _function("viewHtml") and "Money, 1 lot" in _function("tradeDetailHtml")
     assert '"≈ margin (Dhan sets exact)"' in _function("lotMoney")
 
 

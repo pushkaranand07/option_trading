@@ -139,3 +139,13 @@ def test_a_fingerprint_mismatch_gives_the_red_banner_and_a_clean_state_gives_non
     assert clean["v2"] is None and clean["calendar"] is None
     page = (ROOT / "webapp" / "static" / "index.html").read_text(encoding="utf-8")
     assert re.search(r'id="v2Warn"[^>]*class="notice danger"', page)
+
+
+@pytest.mark.unit
+def test_each_warning_appears_once_on_the_record_page_with_both_views_full():
+    full = {"closed": [closed_trade()], "stats": stats(1589)}
+    html = render("recordHtml(ARGS[0])", record(you=full | {"not_taken": [not_taken("outside this trade's entry zone", "you")]},
+                                                ai=full | {"not_taken": [not_taken("the quotes are 130 s old (limit 120 s)", "ai")]}))
+    page = text(html)
+    assert page.count("cost model unverified") == 1 and page.count("recorded trades, not a test") == 1
+    assert 'data-view="you"' in html and 'data-view="ai"' in html                   # both views are on the page, one shown

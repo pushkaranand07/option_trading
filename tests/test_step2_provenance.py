@@ -122,6 +122,6 @@ def test_v2_counting_a_different_trade_or_a_pre_start_day_is_not_counted(prov):
 @pytest.mark.unit
 def test_the_trade_record_page_has_two_views_and_downloads_the_server_csv():
     assert "My picks" in APP and "AI #1" in APP and '"/api/trades.csv"' in APP
-    ai = APP[APP.index("function aiRecordHtml("):]
-    assert "v2Txt(t)" in ai[:ai.index("\n}\n")] and "ai.v2_stats" in ai[:ai.index("\n}\n")]
+    view = APP[APP.index("function viewHtml("):]
+    assert "v.v2_stats" in view[:view.index("\n}\n")] and "v2Txt(t)" in APP[APP.index("const tradeCell = "):][:500]
     assert "t.v2.counted" in APP[APP.index("const v2Txt"):][:300]
