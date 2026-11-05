@@ -58,7 +58,7 @@ def test_every_record_row_can_open_its_detail():
     assert "tradeDetailHtml(t" in _js("function openTradeHtml(")
     assert "${tradeDetailHtml(t)}" in APP[APP.index("const detailRow = "):][:250]          # each detail row holds the detail
     assert "detailRow(t, 8)" in _js("function aiRecordHtml(") and "detailRow(t, 8)" in _js("function notTakenRowsHtml(")   # taken and not-taken rows
-    assert "detailRow(t, 10)" in APP[APP.index("async function loadRecord("):APP.index("function aiRecordHtml(")]
+    assert "detailRow(t, 10)" in APP[APP.index("function recordHtml("):APP.index("function aiRecordHtml(")]
     assert '".rec-more"' in APP and "S.openDetail" in APP
 
 
@@ -67,6 +67,6 @@ def test_each_row_says_what_was_bought_or_sold_at_what_price_and_for_how_much():
     paid = _js("function paidTxt(")
     for part in ('"Kharida"', '"Becha"', "l.entry", "rupee(px * qty)", '"becha"', '"wapas kharida"', "kul ${t.debit ? \"diya\" : \"mila\"}"):
         assert part in paid, part
-    assert "${paidTxt(t)}" in APP[APP.index("async function loadRecord("):APP.index("function aiRecordHtml(")]
+    assert "${paidTxt(t)}" in APP[APP.index("function recordHtml("):APP.index("function aiRecordHtml(")]
     assert "const legsTxt = paidTxt;" in _js("function aiRecordHtml(")
     assert "<th>Amount (entry × qty)</th>" in _js("function tradeDetailHtml(")

@@ -53,6 +53,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 
 // ---------- status + quotes ----------
 const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; el.textContent = text || ""; } };
+// The page-wide banners' text from /api/status (null: no banner).
+const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
+  v2: st?.v2?.fingerprint_problem ? `v2 forward test: ${st.v2.fingerprint_problem}.` : null });
 // Did today's v2 answer count: YES / NO / NOT YET (the server says why).
 function v2LineHtml() {
   const v = S.status?.v2; if (!v) return "";
@@ -66,8 +69,9 @@ async function loadStatus() {
     const mp = $("#marketPill");
     mp.textContent = S.status.market_open ? "● Market open" : "Market closed";
     mp.classList.toggle("open", S.status.market_open);
-    banner("#calWarn", S.status.calendar_warning);
-    banner("#v2Warn", S.status.v2?.fingerprint_problem && `v2 forward test: ${S.status.v2.fingerprint_problem}.`);
+    const b = bannerTexts(S.status);
+    banner("#calWarn", b.calendar);
+    banner("#v2Warn", b.v2);
     document.querySelectorAll(".v2-line").forEach((e) => (e.innerHTML = v2LineHtml()));
   } catch (e) { console.warn(e); }
 }
@@ -1537,10 +1541,9 @@ const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "do
 const levelsTxt = (t) => (t.range ? `range ${fmt0(t.range[0])}–${fmt0(t.range[1])}` : `${fmt0(t.index_target)} / ${fmt0(t.index_stop)}`);
 const legShort = (l) => `${l.action === "BUY" ? "B" : "S"} ${fmt0(l.strike).replace(/,/g, "")} ${l.type}`;
 
-async function loadRecord() {
-  const el = $("#recordBody");
-  let d;
-  try { d = await api("/api/trades"); } catch (e) { el.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
+// The whole Trade Record from /api/trades, as HTML: "My picks" in [data-view="you"], "AI #1" in [data-view="ai"].
+// A pure function, so tests/test_ui_regressions.py can check what the page shows.
+function recordHtml(d) {
   const s = d.stats;
   const stat = (k, v, c = "") => `<div class="lv"><span>${k}</span><b class="${c}">${v}</b></div>`;
   const summary = `<section class="card"><div class="card-head"><h2>My picks — summary</h2><span class="small muted">trades you took · 1 lot each · after charges · ${COST_NOTE} · never mixed with AI #1</span></div>
@@ -1558,10 +1561,18 @@ async function loadRecord() {
         <td class="num">${fmt0(t.spot_at_entry)} → ${fmt0(t.spot_at_exit)}</td><td class="small">${esc(t.reason)}</td>
         <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
         <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 10)}`).join("")}</tbody></table></div>`;
-  el.innerHTML = summary + `<h3 class="sub-h rec-h">My picks — open</h3>` + open +
+  return `<div data-view="you">` + summary + `<h3 class="sub-h rec-h">My picks — open</h3>` + open +
     `<section class="card"><div class="card-head"><h2>My picks — history</h2><a class="btn small-btn" href="/api/trades.csv" download>Download CSV (both views)</a></div>${hist}</section>` +
     (d.you.not_taken?.length ? `<section class="card"><div class="card-head"><h2>My picks — refused Takes</h2><span class="small muted">${d.you.not_taken.length} · listed with the reason, never counted</span></div>
-      <div class="oc-scroll"><table class="t rec-hist">${NOT_TAKEN_HEAD}<tbody>${notTakenRowsHtml(d.you.not_taken)}</tbody></table></div></section>` : "") + aiRecordHtml(d.ai);
+      <div class="oc-scroll"><table class="t rec-hist">${NOT_TAKEN_HEAD}<tbody>${notTakenRowsHtml(d.you.not_taken)}</tbody></table></div></section>` : "") +
+    `</div><div data-view="ai">` + aiRecordHtml(d.ai) + `</div>`;
+}
+
+async function loadRecord() {
+  const el = $("#recordBody");
+  let d;
+  try { d = await api("/api/trades"); } catch (e) { el.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
+  el.innerHTML = recordHtml(d);
   el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
     if (!confirm("Close this dummy trade at the current prices?")) return;
     b.disabled = true;

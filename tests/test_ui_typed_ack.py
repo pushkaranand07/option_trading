@@ -43,7 +43,7 @@ def test_the_backtest_table_by_side_line_and_btst_note_show_no_past_win_rate():
 @pytest.mark.unit
 def test_recorded_trade_summaries_keep_their_numbers_and_carry_the_line():
     assert "recorded trades, not a test (not registered before entry); ${COST_NOTE}" in APP
-    for part in (_fn_any("async function loadJournal("), _fn_any("async function loadRecord("), _function("aiRecordHtml")):
+    for part in (_fn_any("async function loadJournal("), _fn_any("function recordHtml("), _function("aiRecordHtml")):
         assert "${RECORDED_NOTE}" in part
     assert 'stat("Win rate"' in APP and "win_rate.toFixed(0)" in APP       # the numbers stay
 
