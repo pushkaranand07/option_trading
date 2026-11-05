@@ -167,3 +167,17 @@ def test_the_calendar_shows_each_day_invested_and_profit_in_its_own_view():
     # 5 Nov: one closed (₹1,899) and one open (₹130 now); ₹6,831.50 + ₹9,545.25 = ₹16,376.75 in
     assert re.search(r"\b5\b.*?₹1,899.*?₹16,376\.75.*?2 trades.*?₹130 open", you)
     assert "−₹500" in ai and "₹4,617" not in ai                                     # each view has its own calendar
+
+
+@pytest.mark.unit
+def test_a_picked_calendar_day_shows_only_that_days_trades_with_a_way_back():
+    d4 = closed_trade(id="a", reason="closed on the fourth")
+    d5 = closed_trade(id="c", taken_at="2026-11-05 09:41", closed_at="2026-11-05 09:56", reason="closed on the fifth")
+    data = record(you={"closed": [d4, d5], "stats": stats(3178, closed=2, wins=2)})
+    everything = text(view(render("recordHtml(ARGS[0])", data), "you"))
+    assert "closed on the fourth" in everything and "closed on the fifth" in everything
+    html = render("S.recDay = { you: '2026-11-05' }; recordHtml(ARGS[0])", data)
+    picked = text(view(html, "you"))
+    assert "closed on the fifth" in picked and "closed on the fourth" not in picked
+    assert "05 Nov" in picked and "Show all" in picked
+    assert 'data-day="2026-11-04"' in view(html, "you") and 'data-day="2026-11-05"' in view(html, "you")   # the days with trades can be picked

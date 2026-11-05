@@ -1548,6 +1548,7 @@ const legShort = (l) => `${l.action === "BUY" ? "B" : "S"} ${fmt0(l.strike).repl
 // The warnings appear once, at the top, as text. Each view: four numbers, then Open, History and Not taken, one line a
 // trade; Details opens the full record of a trade. "My picks" is [data-view="you"], "AI #1" is [data-view="ai"].
 S.recView = store("recView") === "ai" ? "ai" : "you";
+S.recDay = {};                            // a calendar day picked in a view: its sections show that day's trades only
 const when = (x) => {                     // "2026-11-05 09:41" -> "05 Nov 09:41"
   if (!x) return "—";
   const [d, t] = String(x).split(" "), [, m, dd] = d.split("-"), mon = MONTHS[+m - 1] || "";
@@ -1594,7 +1595,7 @@ function notTakenRowsHtml(list) {
 // Day by day: a month calendar (Mon-Fri). Each trading day shows the net P&L of its closed trades, what went in (the
 // money for the trades taken that day: premium paid, or a credit spread's margin), how many, and the P&L now of those
 // still open. Trades count on the day they were taken; not-taken rows never count.
-function calendarHtml(v) {
+function calendarHtml(v, who) {
   const days = {};
   for (const t of [...v.open, ...v.closed]) {
     const d = (t.taken_at || "").slice(0, 10);
@@ -1617,9 +1618,11 @@ function calendarHtml(v) {
       const x = days[`${ym}-${String(d).padStart(2, "0")}`];
       if (!x) { cells.push(`<div class="cal-day"><span class="cal-n">${d}</span></div>`); continue; }
       total = { n: total.n + x.n, inv: total.inv + x.inv, net: total.net + x.net };
-      cells.push(`<div class="cal-day has ${x.closed ? cls(x.net) : ""}"><span class="cal-n">${d}</span>
+      const day = `${ym}-${String(d).padStart(2, "0")}`;
+      cells.push(`<button class="cal-day has ${x.closed ? cls(x.net) : ""} ${S.recDay[who] === day ? "pick" : ""}" data-day="${day}" data-view-of="${who}"
+          title="Show the trades of this day"><span class="cal-n">${d}</span>
         <b class="${cls(x.net)}">${x.closed ? money(x.net) : "—"}</b><small>${rupee(x.inv)} in · ${plural(x.n, "trade")}</small>
-        ${x.open ? `<small class="${cls(x.openPnl)}">${money(x.openPnl)} open</small>` : ""}</div>`);
+        ${x.open ? `<small class="${cls(x.openPnl)}">${money(x.openPnl)} open</small>` : ""}</button>`);
     }
     const title = new Date(y, m - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
     return `<section class="card rec-sec"><div class="card-head"><h2>Day by day · ${title}</h2>
@@ -1628,24 +1631,27 @@ function calendarHtml(v) {
   }).join("");
 }
 
-function viewHtml(who, v) {
-  const s = v.stats, ai = who === "ai";
-  const inOpen = v.open.reduce((a, t) => a + (t.net_entry != null ? tradeMoney(t) : 0), 0);
+function viewHtml(who, all) {
+  const s = all.stats, ai = who === "ai", day = S.recDay[who];
+  const onDay = (list) => (list || []).filter((t) => !day || (t.taken_at || "").startsWith(day));
+  const v = { ...all, open: onDay(all.open), closed: onDay(all.closed), not_taken: onDay(all.not_taken) };
+  const dayBar = day ? `<div class="rec-day">Showing the trades of <b>${when(day)}</b> · <button class="btn small-btn rec-day-clear" data-view-of="${who}">Show all ✕</button></div>` : "";
+  const inOpen = all.open.reduce((a, t) => a + (t.net_entry != null ? tradeMoney(t) : 0), 0);
   const kpi = (label, val, c, sub) => `<div class="kpi"><span>${label}</span><b class="${c || ""}">${val}</b><small>${sub}</small></div>`;
   const kpis = `<div class="kpis">
     ${kpi("Net P&L, closed", money(s.net), cls(s.net), `${s.closed} closed · average ${money(s.avg)}`)}
     ${kpi("Open now", s.open ? `${s.open} · ${money(s.open_pnl)}` : "0", s.open ? cls(s.open_pnl) : "", s.open ? `${rupee(inOpen)} in them` : "nothing open")}
     ${kpi("Won / lost", `${s.wins} / ${s.losses}`, "", s.win_rate != null ? `${s.win_rate.toFixed(0)}% won` : "none closed yet")}
     ${kpi("Best / worst", s.closed ? `${money(s.best)} / ${money(s.worst)}` : "—", "", ai ? "the AI's #1 of each run, recorded by itself" : "trades you took")}</div>`;
-  const v2 = ai && v.v2_stats ? `<p class="rec-v2">v2 counted ${v.v2_stats.closed + v.v2_stats.open} of these (its own entry, held to expiry in v2); settled P&L here ${money(v.v2_stats.net)}.</p>` : "";
-  const closedNow = v.open.some((t) => t.live?.market_closed)
+  const v2 = ai && all.v2_stats ? `<p class="rec-v2">v2 counted ${v.v2_stats.closed + v.v2_stats.open} of these (its own entry, held to expiry in v2); settled P&L here ${money(v.v2_stats.net)}.</p>` : "";
+  const closedNow = all.open.some((t) => t.live?.market_closed)
     ? `<p class="rec-v2 warn-c">Market band hai: these are the last prices (NSE stops near 15:40). P&L, targets and stops resume at 9:15; nothing opens or closes while the market is closed.</p>` : "";
   const table = (head, rows) => `<div class="tbl"><table class="t rec-t">${head}<tbody>${rows}</tbody></table></div>`;
   const sec = (title, n, body, note = "") => `<section class="card rec-sec"><div class="card-head"><h2>${title}<span class="count">${n}</span></h2>${note}</div>${body}</section>`;
-  return kpis + v2 + closedNow + calendarHtml(v)
+  return kpis + v2 + closedNow + calendarHtml(all, who) + dayBar
     + sec("Open", v.open.length, v.open.length ? table(OPEN_HEAD, v.open.map(openRowHtml).join(""))
-      : `<p class="empty">Nothing open.${ai ? "" : " Take a trade on the Plan tab to see it here."}</p>`)
-    + sec("History", v.closed.length, v.closed.length ? table(HIST_HEAD, v.closed.map(histRowHtml).join("")) : `<p class="empty">Closed trades appear here with their profit or loss.</p>`)
+      : `<p class="empty">${day ? `No open trades from ${when(day)}.` : `Nothing open.${ai ? "" : " Take a trade on the Plan tab to see it here."}`}</p>`)
+    + sec("History", v.closed.length, v.closed.length ? table(HIST_HEAD, v.closed.map(histRowHtml).join("")) : `<p class="empty">${day ? `No closed trades from ${when(day)}.` : "Closed trades appear here with their profit or loss."}</p>`)
     + (v.not_taken?.length ? sec(ai ? "Not taken" : "Refused Takes", v.not_taken.length, table(NOT_TAKEN_HEAD, notTakenRowsHtml(v.not_taken)),
       `<span class="small muted">listed with the reason, never counted</span>`) : "");
 }
@@ -1664,7 +1670,12 @@ async function loadRecord() {
   const el = $("#recordBody");
   let d;
   try { d = await api("/api/trades"); } catch (e) { el.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
-  el.innerHTML = recordHtml(d);
+  S.recData = d;
+  paintRecord(el);
+}
+
+function paintRecord(el) {
+  el.innerHTML = recordHtml(S.recData);
   el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
     if (!confirm("Close this dummy trade at the current prices?")) return;
     b.disabled = true;
@@ -1683,6 +1694,13 @@ async function loadRecord() {
     if (row) row.hidden = !on;
     b.textContent = on ? "Hide" : "Details";
   }));
+  el.querySelectorAll("[data-day]").forEach((b) => (b.onclick = () => {
+    const who = b.dataset.viewOf;
+    S.recDay[who] = S.recDay[who] === b.dataset.day ? null : b.dataset.day;      // a second click shows everything again
+    paintRecord(el);
+    el.querySelector(`[data-view="${who}"] .rec-day`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }));
+  el.querySelectorAll(".rec-day-clear").forEach((b) => (b.onclick = () => { S.recDay[b.dataset.viewOf] = null; paintRecord(el); }));
   el.querySelectorAll("[data-view-btn]").forEach((b) => (b.onclick = () => {
     S.recView = b.dataset.viewBtn; store("recView", S.recView);
     el.querySelectorAll(".rec-view").forEach((x) => (x.hidden = x.dataset.view !== S.recView));
