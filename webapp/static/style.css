@@ -438,3 +438,14 @@ a.btn { display: inline-block; text-decoration: none; color: inherit; }
 .rec-t .row-flag { margin-top: 3px; font-size: 12px; }
 .rec-t tr.not-taken td { color: var(--muted); }
 .rec-t tr.rec-detail > td { background: var(--panel-2); text-align: left; }
+.cal-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 18px 16px; }
+.cal-wd { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding-left: 2px; }
+.cal-day { min-height: 82px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.cal-day.blank { border: 0; background: transparent; }
+.cal-day:not(.has) { min-height: 40px; }
+.cal-day.has.up { background: var(--up-soft); border-color: transparent; }
+.cal-day.has.down { background: var(--down-soft); border-color: transparent; }
+.cal-n { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cal-day b { display: block; margin-top: 2px; font-size: 16px; font-variant-numeric: tabular-nums; }
+.cal-day small { display: block; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) { .cal-grid { gap: 4px; padding: 0 8px 12px; } .cal-day { padding: 6px; min-height: 70px; } .cal-day b { font-size: 13px; } }
