@@ -45,7 +45,7 @@ def test_recorded_trade_summaries_keep_their_numbers_and_carry_the_line():
     assert "recorded trades, not a test (not registered before entry); ${COST_NOTE}" in APP     # RECORDED_NOTE, for My Trades
     assert "${RECORDED_NOTE}" in _fn_any("async function loadJournal(")
     assert "recorded trades, not a test (not registered before entry)" in _function("recordHtml")   # the Trade Record: once, at the top
-    assert 'kpi("Won / lost"' in APP and "win_rate.toFixed(0)" in APP      # the numbers stay
+    assert 'kpi("Won / lost (bets)"' in APP and "bet_win_rate.toFixed(0)" in APP      # the numbers stay (step 5: per bet)
 
 
 @pytest.mark.unit
@@ -76,7 +76,7 @@ def test_the_plan_tab_has_one_ai_list_and_no_other_trade_card():
     card = _function("tradeCard")
     assert "c.ai_why" in card and "takeCell(c" in card and "underlying_entry_low" in card and "limit <b>${fmt(l.price)}</b>" in card
     take = _function("takeRanked")
-    assert "S.strat[sym]?.result?.trades?.[i]" in take and '"/api/trades"' in take
+    assert "S.strat[sym]?.result?.trades?.[i]" in take and "takePost(sym, i)" in take and '"/api/trades"' in _function("takePost")
 
 
 @pytest.mark.unit
