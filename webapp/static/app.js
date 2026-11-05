@@ -1592,9 +1592,14 @@ function notTakenRowsHtml(list) {
       <td class="acts">${moreBtn(t)}${delBtn(t)}</td></tr>${detailRow(t, 5)}`).join("");
 }
 
-// Day by day: a month calendar (Mon-Fri). Each trading day shows the net P&L of its closed trades, what went in (the
-// money for the trades taken that day: premium paid, or a credit spread's margin), how many, and the P&L now of those
-// still open. Trades count on the day they were taken; not-taken rows never count.
+// Day by day: a month calendar, one month at a time, with buttons to the month before and after. Each trading day shows
+// the net P&L of its closed trades, what went in (the money for the trades taken that day: premium paid, or a credit
+// spread's margin), how many, and the P&L now of those still open; a day with trades opens its trades. Trades count on
+// the day they were taken; not-taken rows never count. Saturdays and Sundays are shown, dimmed (no session).
+S.recMonth = {};                          // the month shown in each view's calendar, "YYYY-MM"; default: this month
+const monthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const shiftMonth = (ym, k) => { const [y, m] = ym.split("-").map(Number); return monthKey(new Date(y, m - 1 + k, 1)); };
+const monthName = (ym) => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" }); };
 function calendarHtml(v, who) {
   const days = {};
   for (const t of [...v.open, ...v.closed]) {
@@ -1605,30 +1610,26 @@ function calendarHtml(v, who) {
     if (t.net_entry != null && t.lot) x.inv += tradeMoney(t);
     if (t.status === "closed") { x.closed += 1; x.net += t.net_pnl || 0; } else { x.open += 1; x.openPnl += t.live?.pnl || 0; }
   }
-  const months = [...new Set(Object.keys(days).map((d) => d.slice(0, 7)))].sort().reverse();
-  if (!months.length) return "";
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  return months.map((ym) => {
-    const [y, m] = ym.split("-").map(Number), last = new Date(y, m, 0).getDate(), cells = [];
-    let total = { n: 0, inv: 0, net: 0 }, lead = null;
-    for (let d = 1; d <= last; d++) {
-      const wd = (new Date(y, m - 1, d).getDay() + 6) % 7;            // Monday 0 ... Sunday 6
-      if (wd > 4) continue;
-      if (lead === null) { lead = wd; for (let i = 0; i < wd; i++) cells.push(`<div class="cal-day blank"></div>`); }
-      const x = days[`${ym}-${String(d).padStart(2, "0")}`];
-      if (!x) { cells.push(`<div class="cal-day"><span class="cal-n">${d}</span></div>`); continue; }
-      total = { n: total.n + x.n, inv: total.inv + x.inv, net: total.net + x.net };
-      const day = `${ym}-${String(d).padStart(2, "0")}`;
-      cells.push(`<button class="cal-day has ${x.closed ? cls(x.net) : ""} ${S.recDay[who] === day ? "pick" : ""}" data-day="${day}" data-view-of="${who}"
-          title="Show the trades of this day"><span class="cal-n">${d}</span>
-        <b class="${cls(x.net)}">${x.closed ? money(x.net) : "—"}</b><small>${rupee(x.inv)} in · ${plural(x.n, "trade")}</small>
-        ${x.open ? `<small class="${cls(x.openPnl)}">${money(x.openPnl)} open</small>` : ""}</button>`);
-    }
-    const title = new Date(y, m - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
-    return `<section class="card rec-sec"><div class="card-head"><h2>Day by day · ${title}</h2>
-        <span class="small muted">month: ${rupee(total.inv)} in · net ${money(total.net)} on closed trades · ${plural(total.n, "trade")}</span></div>
-      <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri"].map((w) => `<div class="cal-wd">${w}</div>`).join("")}${cells.join("")}</div></section>`;
-  }).join("");
+  const ym = S.recMonth[who] || monthKey(), [y, m] = ym.split("-").map(Number), last = new Date(y, m, 0).getDate();
+  const now = new Date(), today = `${monthKey(now)}-${String(now.getDate()).padStart(2, "0")}`;
+  const cells = [], total = { n: 0, inv: 0, net: 0 };
+  for (let i = 0; i < (new Date(y, m - 1, 1).getDay() + 6) % 7; i++) cells.push(`<div class="cal-day blank"></div>`);
+  for (let d = 1; d <= last; d++) {
+    const day = `${ym}-${String(d).padStart(2, "0")}`, x = days[day], wknd = (new Date(y, m - 1, d).getDay() + 6) % 7 > 4;
+    const mark = `${wknd ? " wknd" : ""}${day === today ? " today" : ""}`;
+    if (!x) { cells.push(`<div class="cal-day${mark}"><span class="cal-n">${d}</span></div>`); continue; }
+    total.n += x.n; total.inv += x.inv; total.net += x.net;
+    cells.push(`<button class="cal-day has ${x.closed ? cls(x.net) : ""}${mark} ${S.recDay[who] === day ? "pick" : ""}" data-day="${day}" data-view-of="${who}"
+        title="Show the trades of this day"><span class="cal-n">${d}</span>
+      <b class="${cls(x.net)}">${x.closed ? money(x.net) : "—"}</b><small>${rupee(x.inv)} in · ${plural(x.n, "trade")}</small>
+      ${x.open ? `<small class="${cls(x.openPnl)}">${money(x.openPnl)} open</small>` : ""}</button>`);
+  }
+  const nav = (k, label) => `<button class="btn small-btn" data-month-nav="${k}" data-view-of="${who}">${label}</button>`;
+  return `<section class="card rec-sec"><div class="card-head"><h2>Day by day</h2>
+      <div class="cal-nav">${nav(-1, `‹ ${monthName(shiftMonth(ym, -1))}`)}<b>${monthName(ym)}</b>${nav(1, `${monthName(shiftMonth(ym, 1))} ›`)}${ym !== monthKey() ? nav(0, "Today") : ""}</div></div>
+    <p class="cal-total">${total.n ? `${monthName(ym)}: ${rupee(total.inv)} in · net ${money(total.net)} on closed trades · ${plural(total.n, "trade")}` : `No trades in ${monthName(ym)}.`}</p>
+    <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w) => `<div class="cal-wd">${w}</div>`).join("")}${cells.join("")}</div></section>`;
 }
 
 function viewHtml(who, all) {
@@ -1699,6 +1700,11 @@ function paintRecord(el) {
     S.recDay[who] = S.recDay[who] === b.dataset.day ? null : b.dataset.day;      // a second click shows everything again
     paintRecord(el);
     el.querySelector(`[data-view="${who}"] .rec-day`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }));
+  el.querySelectorAll("[data-month-nav]").forEach((b) => (b.onclick = () => {
+    const who = b.dataset.viewOf, k = +b.dataset.monthNav;
+    S.recMonth[who] = k ? shiftMonth(S.recMonth[who] || monthKey(), k) : monthKey();     // 0: back to this month
+    paintRecord(el);
   }));
   el.querySelectorAll(".rec-day-clear").forEach((b) => (b.onclick = () => { S.recDay[b.dataset.viewOf] = null; paintRecord(el); }));
   el.querySelectorAll("[data-view-btn]").forEach((b) => (b.onclick = () => {
