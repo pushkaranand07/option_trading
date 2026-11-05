@@ -7,6 +7,7 @@ then open http://localhost:8000
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import Literal
@@ -24,6 +25,7 @@ from pydantic import BaseModel  # noqa: E402
 
 from webapp import (  # noqa: E402
     ai,
+    ai_test,
     latency,
     market_data as md,
     morning,
@@ -39,6 +41,7 @@ STATIC = Path(__file__).parent / "static"
 app = FastAPI(title="Pulse Trader")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 md.start_refresh_ahead()
+logger = logging.getLogger(__name__)
 
 
 @app.middleware("http")
@@ -79,8 +82,17 @@ def status():
         "market_open": signals.market_open(),
         "calendar_warning": ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
                              "so a market holiday would show as open." if signals.nse_calendar().source == "weekends only" else None),
+        "v2": ai_test.today_status(),
         "indices": [{"symbol": k, "name": v[0]} for k, v in md.INDICES.items()],
     }
+
+
+def v2_startup_check() -> str | None:
+    """At startup: does the code still match the frozen v2 test? A mismatch is logged and shown on every page."""
+    why = ai_test.fingerprint_problem()
+    if why:
+        logger.error("v2 forward test: %s", why)
+    return why
 
 
 @app.get("/api/latency")
@@ -331,8 +343,12 @@ def trade_take(body: dict = Body(...)):
     """Take trade ``candidate`` of AI run ``run_id`` as a dummy one-lot trade, priced by the server from a fresh
     chain now. Any price in the body is ignored."""
     try:
-        return trade_record.take_from_run(str(body.get("run_id") or ""), int(body.get("candidate")))
-    except (trade_record.TradeError, KeyError, TypeError, ValueError) as exc:
+        run_id, candidate = str(body.get("run_id") or ""), int(body.get("candidate"))
+        return trade_record.take_from_run(run_id, candidate)
+    except trade_record.TradeError as exc:
+        trade_record.record_refused(run_id, candidate, exc, "you")       # kept under My picks, outside the stats
+        raise HTTPException(400, f"Not taken: {exc}") from exc
+    except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(400, f"Not taken: {exc}") from exc
 
 
@@ -359,3 +375,6 @@ async def journal(name: str, horizon: str = "all"):
         return await run_in_threadpool(quant.journal, name, horizon)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+v2_startup_check()          # a mismatch is logged at startup and shown on every page (never auto-updated)

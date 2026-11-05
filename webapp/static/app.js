@@ -52,6 +52,13 @@ $("#themeBtn").onclick = () => {
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyChartTheme());
 
 // ---------- status + quotes ----------
+const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; el.textContent = text || ""; } };
+// Did today's v2 answer count: YES / NO / NOT YET (the server says why).
+function v2LineHtml() {
+  const v = S.status?.v2; if (!v) return "";
+  const c = { YES: "up", NO: "down", "NOT YET": "warn" }[v.state] || "muted";
+  return `v2 aaj ka answer counted: <b class="${c}">${esc(v.state)}</b>${v.reason ? ` — ${esc(v.reason)}` : ""}`;
+}
 async function loadStatus() {
   try {
     S.status = await api("/api/status");
@@ -59,8 +66,9 @@ async function loadStatus() {
     const mp = $("#marketPill");
     mp.textContent = S.status.market_open ? "● Market open" : "Market closed";
     mp.classList.toggle("open", S.status.market_open);
-    const cw = $("#calWarn");
-    if (cw) { cw.hidden = !S.status.calendar_warning; cw.textContent = S.status.calendar_warning || ""; }
+    banner("#calWarn", S.status.calendar_warning);
+    banner("#v2Warn", S.status.v2?.fingerprint_problem && `v2 forward test: ${S.status.v2.fingerprint_problem}.`);
+    document.querySelectorAll(".v2-line").forEach((e) => (e.innerHTML = v2LineHtml()));
   } catch (e) { console.warn(e); }
 }
 
@@ -1201,7 +1209,8 @@ function renderStrat(sym) {
       <button class="btn ${have ? "primary" : ""} strat-go" data-mode="quick" ${busy || (have ? "" : "disabled")}>Quick analysis</button>
       <span class="small muted">${st.running ? `<span class="spinner"></span> ${esc(STAGE[st.mode]?.[st.stage] || "Starting…")} — started ${esc(st.started || "")}` : researchLine}</span></div>
     <div class="small muted">Complete: news, yesterday's market, sentiment and the bull / bear debate, then the 8 trades (10-15 min, once a day). Quick: today's research plus the live chart, today's moves and the option chain, then the 8 trades (1-2 min).
-      ${res && !st.running ? `The 8 trades below are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.` : ""}</div>`;
+      ${res && !st.running ? `The 8 trades below are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.` : ""}</div>
+    <div class="small v2-line">${v2LineHtml()}</div>`;
   const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
     + (res ? aiListHtml(sym, res) : "")
@@ -1549,7 +1558,9 @@ async function loadRecord() {
         <td class="num ${cls(t.gross_pnl)}">${money(t.gross_pnl)}</td><td class="num">${money(t.charges)}</td><td class="num"><b class="${cls(t.net_pnl)}">${money(t.net_pnl)}</b></td>
         <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 10)}`).join("")}</tbody></table></div>`;
   el.innerHTML = summary + `<h3 class="sub-h rec-h">My picks — open</h3>` + open +
-    `<section class="card"><div class="card-head"><h2>My picks — history</h2><a class="btn small-btn" href="/api/trades.csv" download>Download CSV (both views)</a></div>${hist}</section>` + aiRecordHtml(d.ai);
+    `<section class="card"><div class="card-head"><h2>My picks — history</h2><a class="btn small-btn" href="/api/trades.csv" download>Download CSV (both views)</a></div>${hist}</section>` +
+    (d.you.not_taken?.length ? `<section class="card"><div class="card-head"><h2>My picks — refused Takes</h2><span class="small muted">${d.you.not_taken.length} · listed with the reason, never counted</span></div>
+      <div class="oc-scroll"><table class="t rec-hist">${NOT_TAKEN_HEAD}<tbody>${notTakenRowsHtml(d.you.not_taken)}</tbody></table></div></section>` : "") + aiRecordHtml(d.ai);
   el.querySelectorAll(".rec-close").forEach((b) => (b.onclick = async () => {
     if (!confirm("Close this dummy trade at the current prices?")) return;
     b.disabled = true;
@@ -1573,6 +1584,16 @@ async function loadRecord() {
 
 
 // Every AI suggestion, recorded automatically and settled by rule (target / stop / expiry).
+// Not-taken rows (the AI's refused pick, or your refused Take): listed with the reason, never counted.
+const NOT_TAKEN_HEAD = `<thead><tr><th>Asked</th><th>Trade</th><th>AI confidence</th><th>Legs</th><th>Target / stop</th><th>Status</th><th>P&L</th><th></th></tr></thead>`;
+function notTakenRowsHtml(list) {
+  return (list || []).map((t) => `<tr class="muted"><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
+      <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
+      <td class="small">${paidTxt(t)}<br>${provTxt(t)}${t.v2 ? `<br>${v2Txt(t)}` : ""}</td><td class="num small">${levelsTxt(t)}</td>
+      <td class="small"><b>not taken</b><br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
+      <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`).join("");
+}
+
 function aiRecordHtml(ai) {
   if (!ai) return "";
   const s = ai.stats;
@@ -1586,11 +1607,7 @@ function aiRecordHtml(ai) {
       <td class="small">${live ? `open · ${esc(NAMES[t.symbol] || t.symbol)} ${fmt0(live.spot)}` : `${esc(t.reason)}<br><span class="muted">${esc(t.closed_at)}</span>`}</td>
       <td class="num"><b class="${cls(live ? live.pnl : t.net_pnl)}">${money(live ? live.pnl : t.net_pnl)}</b>${live ? `<br><span class="small muted">now</span>` : ""}</td>
       <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`;
-  }).join("") + (ai.not_taken || []).map((t) => `<tr class="muted"><td>${esc(t.taken_at)}</td><td><b>${esc(NAMES[t.symbol] || t.symbol)}</b><br><span class="small muted">${esc(STRAT_NAMES[t.strategy] || t.strategy)} · ${esc(t.expiry)}</span></td>
-      <td class="small muted">AI: ${esc(t.ai_confidence || "—")}</td>
-      <td class="small">${t.legs.map((l) => `${legShort(l)} ${fmt(l.shown_price)}`).join("<br>")}<br>${provTxt(t)}<br>${v2Txt(t)}</td><td class="num small">${levelsTxt(t)}</td>
-      <td class="small"><b>not taken</b><br><span class="muted">${esc(t.reason)}</span></td><td class="num">—</td>
-      <td>${moreBtn(t)} <button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record">✕</button></td></tr>${detailRow(t, 8)}`).join("");
+  }).join("") + notTakenRowsHtml(ai.not_taken);
   return `<section class="card"><div class="card-head"><h2>AI #1 — track record</h2> <span class="small muted">the AI's #1 of each run, recorded by itself · 1 lot, settled at its target, stop or expiry · after charges · ${COST_NOTE} · never mixed with My picks</span></div>
     <div class="body">${RECORDED_NOTE}
       <div class="levels rec-stats">

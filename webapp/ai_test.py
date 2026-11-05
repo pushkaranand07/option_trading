@@ -32,6 +32,9 @@ CHAINS = ROOT / "reports" / "ai_test" / "v2" / "chains"
 IST = pytz.timezone("Asia/Kolkata")
 SYMBOL = "NIFTY"
 WINDOW = (time(9, 30), time(15, 0))
+# The spec's "starts" is a rule: "the first weekday session after this file is on main". The frozen file reached main
+# with PR #98, merged 2026-11-04 13:50 IST, so the first counted session is 2026-11-05. Everything else reads this.
+V2_FIRST_SESSION = date(2026, 11, 5)
 
 
 def read_spec(path: Path | None = None) -> dict:
@@ -55,6 +58,52 @@ def prompt_fingerprint() -> str:
     parts = {"system": lf(st.RANK_SYSTEM), "schema": st.RankedAnswer.model_json_schema(), "strategies": {k: v[0] for k, v in st.STRATEGIES.items()},
              "top": st.TOP_AI, "code": {f.__name__: lf(inspect.getsource(f)) for f in code}}
     return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def fingerprint_problem(spec: dict | None = None) -> str | None:
+    """Why answers would not count because the code or model differs from the frozen spec, or None. Never fixes it:
+    the fingerprint in the spec is only ever changed by freezing a new test."""
+    spec = spec or read_spec()
+    if prompt_fingerprint() != spec["version"]["prompt_sha256"]:
+        return "the prompt fingerprint differs from the frozen spec: fingerprinted code changed, so no answer counts until it is undone or a new test is frozen"
+    if model_settings() != spec["version"]["model"]:
+        return "the model settings differ from the frozen spec, so no answer counts until they are restored or a new test is frozen"
+    return None
+
+
+def today_status(now: datetime | None = None) -> dict:
+    """Did today's answer count: YES, NO, NOT YET or NO SESSION, with the reason."""
+    from webapp import signals, trade_record
+
+    now = (now or datetime.now(IST)).astimezone(IST)
+    day, fp = now.date(), fingerprint_problem()
+    out = {"day": day.isoformat(), "fingerprint_problem": fp}
+    if day < V2_FIRST_SESSION:
+        return out | {"state": "NO", "reason": f"before v2 started ({V2_FIRST_SESSION})"}
+    if not signals.nse_calendar().is_trading_day(day):
+        return out | {"state": "NO SESSION", "reason": "no NSE session today"}
+    rows = registry.read(REGISTRY)
+    mine = [r for r in rows if r.get("date") == day.isoformat() and r.get("spec_hash") == SPEC_SHA256]
+    reg = next((r for r in mine if r["type"] == "strategist"), None)
+    if reg:
+        at = reg["timestamp"][11:16]
+        if reg["outcome"] != "trade":
+            return out | {"state": "YES", "reason": f"the first answer, at {at}, counted as {reg['outcome']} (an answer, not a trade); later runs today do not count"}
+        entry = next((r for r in rows if r.get("type") == "strategist_entry" and r.get("registration") == reg["hash"]), None)
+        if entry is None:
+            return out | {"state": "NO", "reason": f"registered at {at}, but no entry was written"}
+        if entry["status"] != "entered":
+            return out | {"state": "NO", "reason": f"void entry at {at}: {entry.get('reason', 'no reason recorded')}"}
+        return out | {"state": "YES", "reason": f"the first answer, at {at}, counted: {reg['structure']} entered at {trade_record._legs_txt(entry['legs'])}; later runs today do not count"}
+    if any(r["type"] == "missed" for r in mine):
+        return out | {"state": "NO", "reason": "recorded as missed"}
+    if fp:
+        return out | {"state": "NO", "reason": f"fingerprint mismatch: {fp}"}
+    if now.time() < WINDOW[0]:
+        return out | {"state": "NOT YET", "reason": "the window opens at 09:30; the first run between 09:30 and 15:00 counts"}
+    if now.time() <= WINDOW[1]:
+        return out | {"state": "NOT YET", "reason": "run an analysis before 15:00: the first one counts"}
+    return out | {"state": "NO", "reason": "no answer between 09:30 and 15:00: today will be recorded as missed"}
 
 
 def model_settings() -> dict:
@@ -83,8 +132,8 @@ def record(result: dict, path: Path | None = None, chains: Path | None = None, n
         return None
     if "stop" in spec and now.date() > date.fromisoformat(spec["stop"]["date"]):
         return None
-    if prompt_fingerprint() != spec["version"]["prompt_sha256"] or model_settings() != spec["version"]["model"]:
-        logger.warning("the prompt or model differs from the test's: this answer does not count; a change starts a new test")
+    if why := fingerprint_problem(spec):
+        logger.warning("this answer does not count: %s", why)
         return None
     rows = registry.read(path)
     day = now.date()

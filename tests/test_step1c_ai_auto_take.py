@@ -78,4 +78,6 @@ def test_a_pick_with_no_live_quote_is_kept_as_not_taken(world, run_ai):
 def test_the_page_lists_the_not_taken_picks_with_their_reason():
     ai = APP[APP.index("function aiRecordHtml("):]
     ai = ai[:ai.index("\n}\n")]
-    assert "ai.not_taken" in ai and "not taken" in ai and "t.reason" in ai
+    rows = APP[APP.index("function notTakenRowsHtml("):]                     # since step 3: one builder for every not-taken row
+    rows = rows[:rows.index("\n}\n")]
+    assert "notTakenRowsHtml(ai.not_taken)" in ai and "not taken" in rows and "t.reason" in rows

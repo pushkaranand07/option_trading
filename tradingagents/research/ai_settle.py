@@ -111,11 +111,17 @@ def _expiry(text: str) -> date:
     raise ValueError(f"unknown expiry format: {text}")
 
 
-def settle(path: Path, chains: Path, settlements: dict[date, float], sessions: set[date], spec_hash: str, approved: bool = False) -> dict:
+def _registrations(rows: list[dict], spec_hash: str, starts: date | None) -> list[dict]:
+    """One test version's answers: its spec hash, from its first counted session on (rows before it never count)."""
+    return [r for r in rows if r["type"] == "strategist" and r["spec_hash"] == spec_hash and (starts is None or date.fromisoformat(r["date"]) >= starts)]
+
+
+def settle(path: Path, chains: Path, settlements: dict[date, float], sessions: set[date], spec_hash: str, approved: bool = False,
+           starts: date | None = None) -> dict:
     """Every row of one test version settled where its expiry has a settlement price. A broken hash chain raises."""
     registry.verify(path)
     all_rows = registry.read(path)
-    regs = [r for r in all_rows if r["type"] == "strategist" and r["spec_hash"] == spec_hash]
+    regs = _registrations(all_rows, spec_hash, starts)
     if not approved and any(r["symbol"] != SYNTHETIC for r in regs):
         raise RealRowsRefused("real rows are refused until the user approves running on them")
     entries = {r["registration"]: r for r in all_rows if r["type"] == "strategist_entry"}
@@ -184,11 +190,11 @@ def evaluate(settled: list[dict], spec_hash: str) -> dict:
     return out | {"status": "verdict", "checks": checks, "verdict": "pass" if all(checks.values()) else "fail", "meaning_if_fail": "no large edge found; a smaller edge is not ruled out", "no_second_look": True}
 
 
-def interim_counts(path: Path, spec_hash: str, sessions: set[date], approved: bool = False) -> dict:
+def interim_counts(path: Path, spec_hash: str, sessions: set[date], approved: bool = False, starts: date | None = None) -> dict:
     """The one interim check: counts and missed days only. It reads no price and computes no return."""
     registry.verify(path)
     rows = registry.read(path)
-    regs = [r for r in rows if r["type"] == "strategist" and r["spec_hash"] == spec_hash]
+    regs = _registrations(rows, spec_hash, starts)
     if not approved and any(r["symbol"] != SYNTHETIC for r in regs):
         raise RealRowsRefused("real rows are refused until the user approves running on them")
     keys = {r["hash"] for r in regs}
