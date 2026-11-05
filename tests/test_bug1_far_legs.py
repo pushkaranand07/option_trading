@@ -35,7 +35,7 @@ def chain(rows, spot=24557.6):
 @pytest.fixture
 def condor(tmp_path, monkeypatch):
     monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
-    monkeypatch.setattr(tr, "_market_open", lambda: True)
+    monkeypatch.setattr(tr, "_market_open", lambda *a: True)
     t = tr.take(CONDOR, source="ai")
     monkeypatch.setattr(oc, "chain", lambda *a, **k: chain(NEAR))                 # the display window: the puts fell out
     return t

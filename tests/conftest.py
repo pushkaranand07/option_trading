@@ -44,6 +44,27 @@ def _own_file_locations():
 _own_file_locations()
 
 
+def pytest_addoption(parser):
+    parser.addoption("--clock", default=None, metavar="ISO",
+                     help="run the whole suite with the clock starting at this time, e.g. 2026-11-05T20:00:00+05:30 "
+                          "(proves no test depends on the hour it happens to run)")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _suite_clock(request):
+    """With --clock, every test sees the clock start at that time and run on (time-machine, tick=True)."""
+    when = request.config.getoption("--clock")
+    if not when:
+        yield
+        return
+    from datetime import datetime
+
+    import time_machine
+
+    with time_machine.travel(datetime.fromisoformat(when), tick=True):
+        yield
+
+
 def pytest_configure(config):
     for marker in ("unit", "integration", "smoke"):
         config.addinivalue_line("markers", f"{marker}: {marker}-level tests")

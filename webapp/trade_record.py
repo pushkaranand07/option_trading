@@ -53,12 +53,13 @@ class TradeError(Exception):
         self.details = details or {}      # what was known when it was refused (index at the Take, in the zone or not)
 
 
-def _market_open() -> bool:
-    """NSE's regular session. Outside it the chain shows the last prices (NSE keeps refreshing them until about
-    15:40), which no order could get: no trade is entered, closed or settled at them, except at expiry."""
+def _market_open(at: datetime | None = None) -> bool:
+    """NSE's regular session, now or at the moment ``at``: the one place the trade record asks. Outside it the chain
+    shows the last prices (NSE keeps refreshing them until about 15:40), which no order could get: no trade is entered,
+    closed or settled at them, except at expiry, and a row entered then is not counted."""
     from webapp import signals
 
-    return signals.market_open()
+    return signals.market_open(at)
 
 
 CLOSED_MSG = "Market band hai: abhi ke prices pe asli order nahi lag sakta. 9:15 ke baad karna."
@@ -122,8 +123,15 @@ def _save(trades: list[dict]) -> None:
     tmp.replace(STORE)
 
 
+def _clock() -> datetime:
+    """The trade record's one clock: IST, from signals.now_ist() (the same clock the session check reads)."""
+    from webapp import signals
+
+    return signals.now_ist()
+
+
 def _now() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
+    return _clock().strftime("%Y-%m-%d %H:%M")
 
 
 RANGE = ("iron_condor",)        # range trades: profit while the index stays between the sold strikes
@@ -314,7 +322,7 @@ def _same_bet(trades: list[dict], row: dict) -> dict | None:
 
 def _expired(trade: dict, today: date | None = None) -> bool:
     exp = datetime.strptime(trade["expiry"], "%d-%b-%Y").date()
-    now = datetime.now()
+    now = _clock()
     today = today or now.date()
     return today > exp or (today == exp and (now.hour, now.minute) >= (15, 30))
 
@@ -564,10 +572,8 @@ def _outside_session(t: dict) -> bool:
     """Entered while the market was closed: its taken_at (IST) falls outside the NSE session. Listed, never counted."""
     import pytz
 
-    from webapp import signals
-
     when = pytz.timezone("Asia/Kolkata").localize(datetime.strptime(t["taken_at"], "%Y-%m-%d %H:%M"))
-    return not signals.market_open(when)
+    return not _market_open(when)
 
 
 def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dict:

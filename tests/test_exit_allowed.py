@@ -18,7 +18,7 @@ INSIDE = (22600, _q(130, 129, 131), _q(88, 87, 89))
 def market(tmp_path, monkeypatch):
     monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
     state = {"open": True}
-    monkeypatch.setattr(tr, "_market_open", lambda: state["open"])
+    monkeypatch.setattr(tr, "_market_open", lambda *a: state["open"])
     return state
 
 
