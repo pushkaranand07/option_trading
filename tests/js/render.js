@@ -21,4 +21,4 @@ vm.createContext(ctx);
 vm.runInContext(app, ctx, { filename: "app.js" });
 const input = fs.readFileSync(0, "utf8");
 vm.runInContext(`var ARGS = ${input || "[]"};`, ctx);
-process.stdout.write(String(vm.runInContext(process.argv[2], ctx)));
+Promise.resolve(vm.runInContext(process.argv[2], ctx)).then((x) => process.stdout.write(String(x)));   // an async call is awaited

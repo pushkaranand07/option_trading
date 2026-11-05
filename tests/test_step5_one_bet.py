@@ -206,3 +206,67 @@ def test_the_question_and_the_grouping_use_the_same_find_bet():
     import inspect
     assert "find_bet(" in inspect.getsource(tr.take) and "find_bet(" in inspect.getsource(tr._group_bets)
     assert "_bet_side" not in inspect.getsource(tr.take)                           # no second copy of the rule
+
+
+# ---------------------------------------------------------------- the page: numbers per bet, the row tag, the calendar, the question
+
+from tests.test_ui_regressions import closed_trade, record, render, stats as trade_stats, text, view  # noqa: E402
+
+BET = {"bets": 1, "bets_open": 1, "bet_wins": 0, "bet_losses": 0, "bet_win_rate": None}
+
+
+def two_trade_bet():
+    """A bullish bet: started 4 Nov with a trade still open, a second trade added on 5 Nov and closed (+₹500)."""
+    a = closed_trade(id="a", status="open", taken_at="2026-11-04 14:00", closed_at=None, net_pnl=None, live={"pnl": 120.0},
+                     bet_id="a", bet_index=1, bet_size=2, bet_started="2026-11-04 14:00")
+    b = closed_trade(id="b", taken_at="2026-11-05 09:15", closed_at="2026-11-05 10:00", net_pnl=500.0, added_to_bet="a",
+                     bet_id="a", bet_index=2, bet_size=2, bet_started="2026-11-04 14:00")
+    s = trade_stats(500, closed=1, wins=1, open_=1) | BET | {"open_pnl": 120.0}
+    return record(you={"open": [a], "closed": [b], "stats": s})
+
+
+@pytest.mark.unit
+def test_the_numbers_show_trades_and_bets_won_lost_by_bet_and_open_apart():
+    t = text(view(render("recordHtml(ARGS[0])", two_trade_bet()), "you"))
+    assert "2 trades · 1 bet" in t and "1 bet open" in t
+    assert "Won / lost (bets) 0 / 0" in t and "no bet closed yet" in t
+    assert "Net P&L, closed ₹500 1 closed trade · open: ₹120 (not in net)" in t                 # the open P&L on its own line
+
+
+@pytest.mark.unit
+def test_each_trade_says_its_place_in_the_bet_and_an_added_trade_says_so():
+    t = text(view(render("recordHtml(ARGS[0])", two_trade_bet()), "you"))
+    assert "bet 1/2 · shuru 04 Nov 14:00" in t and "bet 2/2 · shuru 04 Nov 14:00" in t
+    assert t.count("added to existing bet") == 1
+
+
+@pytest.mark.unit
+def test_the_calendar_counts_a_bet_on_its_first_day_and_says_where_the_pnl_shows():
+    html = view(render("S.recMonth = { you: '2026-11' }; recordHtml(ARGS[0])", two_trade_bet()), "you")
+    cells = {d: text(c) for d, c in __import__("re").findall(r'data-day="(2026-11-0[45])"(.*?)</button>', html, flags=__import__("re").S)}
+    assert "1 bet" in cells["2026-11-04"] and "0 new bets" in cells["2026-11-05"]
+    assert "P&L shows on the day each trade was taken" in cells["2026-11-05"] and "bet started 04 Nov" in cells["2026-11-05"]
+
+
+TAKE = """(async () => {
+  const sent = [];
+  fetch = async (p, o) => { const b = JSON.parse(o.body); sent.push(b);
+    return b.confirm ? { ok: true, status: 200, json: async () => ({ id: "t2" }) }
+      : { ok: false, status: 409, json: async () => ({ detail: { message: "Is disha (bullish) ka ek NIFTY bet pehle se chal raha hai", bet_id: "t1" } }) }; };
+  confirm = (m) => { sent.push("asked: " + m); return ANSWER; };
+  S.strat.NIFTY = { result: { run_id: "r1", trades: [] } };
+  const t = await takePost("NIFTY", 1);
+  return JSON.stringify({ sent, t });
+})()"""
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("answer", [True, False])
+def test_a_409_asks_the_question_and_ok_sends_the_take_again_with_confirm(answer):
+    out = __import__("json").loads(render(TAKE.replace("ANSWER", str(answer).lower())))
+    assert out["sent"][0] == {"run_id": "r1", "candidate": 1}
+    assert out["sent"][1] == "asked: Is disha (bullish) ka ek NIFTY bet pehle se chal raha hai"
+    if answer:
+        assert out["sent"][2] == {"run_id": "r1", "candidate": 1, "confirm": True} and out["t"] == {"id": "t2"}
+    else:
+        assert len(out["sent"]) == 2 and out["t"] is None                               # cancel: nothing sent, nothing recorded

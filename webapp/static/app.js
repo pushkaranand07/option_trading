@@ -15,7 +15,11 @@ function store(k, v) {
 async function api(path, opts) {
   const r = await fetch(path, opts);
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+  if (!r.ok) {                            // a detail may be an object (409: {message, ...}); the message is what is shown
+    const e = new Error((typeof body.detail === "object" ? body.detail?.message : body.detail) || `HTTP ${r.status}`);
+    e.status = r.status; e.detail = body.detail;
+    throw e;
+  }
   return body;
 }
 
@@ -1459,14 +1463,22 @@ S.takenRank = {};
 const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
 // A Take sends only the run and the trade's place in it: the server prices the entry from a fresh chain now and
 // refuses (with the reason shown here) a run from another day, a closed market, NIFTY outside the entry zone or a
-// leg with no live bid / ask.
-const takeBody = (sym, i) => JSON.stringify({ run_id: S.strat[sym]?.result?.run_id || null, candidate: i });
+// leg with no live bid / ask. A Take that would join a bet already running in the same direction comes back 409:
+// the page asks, and only an OK sends it again with confirm (the server writes nothing until then).
+const takeBody = (sym, i, extra = {}) => JSON.stringify({ run_id: S.strat[sym]?.result?.run_id || null, candidate: i, ...extra });
+async function takePost(sym, i) {
+  const post = (extra) => api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: takeBody(sym, i, extra) });
+  try { return await post(); } catch (e) {
+    if (e.status !== 409) throw e;
+    return confirm(e.message) ? post({ confirm: true }) : null;                 // cancel: nothing recorded
+  }
+}
 async function takeRanked(sym, i, btn) {
   const c = S.strat[sym]?.result?.trades?.[i];
   if (!c) return;
   btn.disabled = true;
   try {
-    await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: takeBody(sym, i) });
+    if (!(await takePost(sym, i))) { btn.disabled = false; return; }
     S.takenRank[takeKey(c)] = true; renderStrat(sym); loaded.record = false;
   } catch (e) { alert(e.message); btn.disabled = false; }
 }
@@ -1475,7 +1487,8 @@ async function takeTrade(sym) {
   const res = curRes(sym); if (!res) return;
   const btn = $(`.plan-card[data-sym="${sym}"] .take-trade`); if (btn) btn.disabled = true;
   try {
-    const t = await api("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: takeBody(sym, S.view[sym]) });
+    const t = await takePost(sym, S.view[sym]);
+    if (!t) { if (btn) btn.disabled = false; return; }
     res._taken = t.id; S.takenRank[takeKey(res)] = true; renderStrat(sym); loaded.record = false;
   } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
@@ -1560,7 +1573,10 @@ const OPEN_HEAD = `<thead><tr><th>Taken</th><th>Trade</th><th>Bought / sold</th>
 const HIST_HEAD = `<thead><tr><th>Taken → closed</th><th>Trade</th><th>Bought / sold</th><th class="num">NIFTY in → out</th><th>Why closed</th><th class="num">Net P&L</th><th></th></tr></thead>`;
 const NOT_TAKEN_HEAD = `<thead><tr><th>Tried</th><th>Trade</th><th>Would have bought / sold</th><th>Why not taken</th><th></th></tr></thead>`;
 const delBtn = (t) => `<button class="btn small-btn rec-del" data-id="${t.id}" title="Remove from the record (a trade taken by mistake)">✕</button>`;
-const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.strategy)}</b><div class="small muted">${esc(NAMES[t.symbol] || t.symbol)} · ${esc(t.expiry)}${t.source === "ai" && t.ai_confidence ? ` · AI ${esc(t.ai_confidence)}` : ""}</div>${t.v2 ? `<div class="row-flag">${v2Txt(t)}</div>` : ""}${t.outside_session ? `<div class="row-flag warn-c">entered while market closed: not counted</div>` : ""}${extra}</td>`;
+// A trade's place in its bet (a bet: the same source, index and direction; see trade_record.find_bet).
+const betTxt = (t) => (t.bet_size > 1 ? `<div class="row-flag muted">bet ${t.bet_index}/${t.bet_size} · shuru ${when(t.bet_started)}</div>` : "")
+  + (t.added_to_bet ? `<div class="row-flag warn-c">added to existing bet</div>` : "");
+const tradeCell = (t, extra = "") => `<td><b>${esc(STRAT_NAMES[t.strategy] || t.strategy)}</b><div class="small muted">${esc(NAMES[t.symbol] || t.symbol)} · ${esc(t.expiry)}${t.source === "ai" && t.ai_confidence ? ` · AI ${esc(t.ai_confidence)}` : ""}</div>${betTxt(t)}${t.v2 ? `<div class="row-flag">${v2Txt(t)}</div>` : ""}${t.outside_session ? `<div class="row-flag warn-c">entered while market closed: not counted</div>` : ""}${extra}</td>`;
 
 function openRowHtml(t) {
   const v = t.live || {}, name = NAMES[t.symbol] || t.symbol;
@@ -1601,6 +1617,7 @@ function notTakenRowsHtml(list) {
 // the net P&L of its closed trades, what went in (the money for the trades taken that day: premium paid, or a credit
 // spread's margin), how many, and the P&L now of those still open; a day with trades opens its trades. Trades count on
 // the day they were taken; not-taken rows never count. Saturdays and Sundays are shown, dimmed (no session).
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 S.recMonth = {};                          // the month shown in each view's calendar, "YYYY-MM"; default: this month
 const monthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const shiftMonth = (ym, k) => { const [y, m] = ym.split("-").map(Number); return monthKey(new Date(y, m - 1 + k, 1)); };
@@ -1610,30 +1627,33 @@ function calendarHtml(v, who) {
   for (const t of [...v.open, ...v.closed]) {
     const d = (t.taken_at || "").slice(0, 10);
     if (!d || t.outside_session) continue;                                // entered while the market was closed: not counted
-    const x = (days[d] ||= { n: 0, inv: 0, net: 0, closed: 0, open: 0, openPnl: 0 });
+    const x = (days[d] ||= { n: 0, inv: 0, net: 0, closed: 0, open: 0, openPnl: 0, bets: 0, earlier: new Set() });
     x.n += 1;
+    if (!t.bet_index || t.bet_index === 1) x.bets += 1;                     // a bet counts on the day of its first trade
+    else if ((t.bet_started || "").slice(0, 10) !== d) x.earlier.add(when((t.bet_started || "").slice(0, 10)));
     if (t.net_entry != null && t.lot) x.inv += tradeMoney(t);
     if (t.status === "closed") { x.closed += 1; x.net += t.net_pnl || 0; } else { x.open += 1; x.openPnl += t.live?.pnl || 0; }
   }
-  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const ym = S.recMonth[who] || monthKey(), [y, m] = ym.split("-").map(Number), last = new Date(y, m, 0).getDate();
   const now = new Date(), today = `${monthKey(now)}-${String(now.getDate()).padStart(2, "0")}`;
-  const cells = [], total = { n: 0, inv: 0, net: 0 };
+  const cells = [], total = { n: 0, inv: 0, net: 0, bets: 0 };
   for (let i = 0; i < (new Date(y, m - 1, 1).getDay() + 6) % 7; i++) cells.push(`<div class="cal-day blank"></div>`);
   for (let d = 1; d <= last; d++) {
     const day = `${ym}-${String(d).padStart(2, "0")}`, x = days[day], wknd = (new Date(y, m - 1, d).getDay() + 6) % 7 > 4;
     const mark = `${wknd ? " wknd" : ""}${day === today ? " today" : ""}`;
     if (!x) { cells.push(`<div class="cal-day${mark}"><span class="cal-n">${d}</span></div>`); continue; }
-    total.n += x.n; total.inv += x.inv; total.net += x.net;
+    total.n += x.n; total.inv += x.inv; total.net += x.net; total.bets += x.bets;
+    const tip = `Show the trades of this day. P&L shows on the day each trade was taken; a bet counts on the day of its first trade.`
+      + (x.earlier.size ? ` Here: trades of a bet started ${[...x.earlier].join(", ")}.` : "");
     cells.push(`<button class="cal-day has ${x.closed ? cls(x.net) : ""}${mark} ${S.recDay[who] === day ? "pick" : ""}" data-day="${day}" data-view-of="${who}"
-        title="Show the trades of this day"><span class="cal-n">${d}</span>
-      <b class="${cls(x.net)}">${x.closed ? money(x.net) : "—"}</b><small>${rupee(x.inv)} in · ${plural(x.n, "trade")}</small>
+        title="${esc(tip)}"><span class="cal-n">${d}</span>
+      <b class="${cls(x.net)}">${x.closed ? money(x.net) : "—"}</b><small>${rupee(x.inv)} in · ${plural(x.n, "trade")} · ${x.bets ? plural(x.bets, "bet") : "0 new bets"}</small>
       ${x.open ? `<small class="${cls(x.openPnl)}">${money(x.openPnl)} open</small>` : ""}</button>`);
   }
   const nav = (k, label) => `<button class="btn small-btn" data-month-nav="${k}" data-view-of="${who}">${label}</button>`;
   return `<section class="card rec-sec"><div class="card-head"><h2>Day by day</h2>
       <div class="cal-nav">${nav(-1, `‹ ${monthName(shiftMonth(ym, -1))}`)}<b>${monthName(ym)}</b>${nav(1, `${monthName(shiftMonth(ym, 1))} ›`)}${ym !== monthKey() ? nav(0, "Today") : ""}</div></div>
-    <p class="cal-total">${total.n ? `${monthName(ym)}: ${rupee(total.inv)} in · net ${money(total.net)} on closed trades · ${plural(total.n, "trade")}` : `No trades in ${monthName(ym)}.`}</p>
+    <p class="cal-total">${total.n ? `${monthName(ym)}: ${rupee(total.inv)} in · net ${money(total.net)} on closed trades · ${plural(total.n, "trade")} · ${plural(total.bets, "bet")}` : `No trades in ${monthName(ym)}.`}</p>
     <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w) => `<div class="cal-wd">${w}</div>`).join("")}${cells.join("")}</div></section>`;
 }
 
@@ -1645,9 +1665,10 @@ function viewHtml(who, all) {
   const inOpen = all.open.reduce((a, t) => a + (t.net_entry != null ? tradeMoney(t) : 0), 0);
   const kpi = (label, val, c, sub) => `<div class="kpi"><span>${label}</span><b class="${c || ""}">${val}</b><small>${sub}</small></div>`;
   const kpis = `<div class="kpis">
-    ${kpi("Net P&L, closed", money(s.net), cls(s.net), `${s.closed} closed · average ${money(s.avg)}`)}
+    ${kpi("Net P&L, closed", money(s.net), cls(s.net), `${plural(s.closed, "closed trade")} · open: ${money(s.open_pnl)} (not in net)`)}
+    ${kpi("Trades · bets", `${plural(s.open + s.closed, "trade")} · ${plural(s.bets, "bet")}`, "", `${plural(s.bets_open, "bet")} open · same view, one bet`)}
     ${kpi("Open now", s.open ? `${s.open} · ${money(s.open_pnl)}` : "0", s.open ? cls(s.open_pnl) : "", s.open ? `${rupee(inOpen)} in them` : "nothing open")}
-    ${kpi("Won / lost", `${s.wins} / ${s.losses}`, "", s.win_rate != null ? `${s.win_rate.toFixed(0)}% won` : "none closed yet")}
+    ${kpi("Won / lost (bets)", `${s.bet_wins} / ${s.bet_losses}`, "", s.bet_win_rate != null ? `${s.bet_win_rate.toFixed(0)}% of closed bets won` : "no bet closed yet")}
     ${kpi("Best / worst", s.closed ? `${money(s.best)} / ${money(s.worst)}` : "—", "", ai ? "the AI's #1 of each run, recorded by itself" : "trades you took")}</div>`;
   const v2 = ai && all.v2_stats ? `<p class="rec-v2">v2 counted ${v.v2_stats.closed + v.v2_stats.open} of these (its own entry, held to expiry in v2); settled P&L here ${money(v.v2_stats.net)}.</p>` : "";
   const closedNow = all.open.some((t) => t.live?.market_closed)
