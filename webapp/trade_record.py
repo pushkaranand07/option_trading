@@ -155,7 +155,8 @@ def _provenance(run: dict, run_id: str, candidate: int) -> dict:
     """Where a trade came from: the run (id, time, Complete or Quick, its research) and its place in the AI's list."""
     c = run["trades"][candidate]
     return {"run_id": run_id, "candidate": candidate, "run_day": run.get("day"), "run_asked_at": run.get("asked_at"), "spot_at_run": c.get("spot"),
-            "mode": run.get("mode"), "ai_rank": c.get("rank"), "research_source": (run.get("agents") or {}).get("source")}
+            "mode": run.get("mode"), "ai_rank": c.get("rank"), "research_source": (run.get("agents") or {}).get("source"),
+            "ai_why": c.get("ai_why")}
 
 
 def record_ai_pick(run_id: str, chain_fn=None) -> dict:
@@ -434,7 +435,7 @@ def _v2_link(t: dict, days: dict) -> dict:
 CSV_HEADER = ["view", "source", "status", "taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "run_id", "candidate",
               "ai_rank", "mode", "run_asked_at", "research_source", "spot_at_run", "spot_at_take", "in_entry_zone",
               "index_target", "index_stop", "close_reason", "refusal_reason", "is_v2_counted", "v2_entry", "gross_pnl",
-              "charges", "net_pnl"]
+              "charges", "net_pnl", "ai_reason"]
 MODES = {"quick": "Quick", "full": "Complete"}
 
 
@@ -474,7 +475,8 @@ def history_csv() -> str:
                     known("in_entry_zone"), _cell(t.get("index_target")), _cell(t.get("index_stop")),
                     _cell(t.get("reason")) if t["status"] == "closed" else "", _cell(t.get("reason")) if t["status"] == "not_taken" else "",
                     _cell(bool(link and link["counted"])), _cell(link and link["entry"]),
-                    _money(t.get("gross_pnl")), _money(t.get("charges")) if t["status"] == "closed" else "", _money(t.get("net_pnl"))])
+                    _money(t.get("gross_pnl")), _money(t.get("charges")) if t["status"] == "closed" else "", _money(t.get("net_pnl")),
+                    known("ai_why")])
     return buf.getvalue()
 
 
