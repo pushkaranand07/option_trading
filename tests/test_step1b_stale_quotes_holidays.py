@@ -23,12 +23,12 @@ def stamped(ts, **kw):
 # ---------------------------------------------------------------- (1) stale quotes
 
 @pytest.mark.unit
-def test_quotes_59_s_old_are_taken_61_s_old_are_refused(world):
-    world["live"]["chain"] = stamped("05-Nov-2026 09:59:01")                      # the clock reads 10:00:00
+def test_quotes_119_s_old_are_taken_121_s_old_are_refused(world):
+    world["live"]["chain"] = stamped("05-Nov-2026 09:58:01")                      # the clock reads 10:00:00
     assert take(world).status_code == 200
-    world["live"]["chain"] = stamped("05-Nov-2026 09:58:59")
+    world["live"]["chain"] = stamped("05-Nov-2026 09:57:59")
     r = take(world, candidate=1)
-    assert r.status_code == 400 and "61 s old" in r.json()["detail"]
+    assert r.status_code == 400 and "121 s old" in r.json()["detail"]
 
 
 @pytest.mark.unit
