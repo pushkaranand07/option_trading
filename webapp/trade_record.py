@@ -31,6 +31,21 @@ _lock = threading.Lock()
 logger = logging.getLogger(__name__)
 
 
+def _event(what: str, t: dict, why: str = "", level: int = logging.INFO) -> None:
+    """One line in events.log beside the trade record (and the server log): when, which row, what happened, why.
+    A failure to write it is logged as a warning and never stops the trade itself."""
+    line = (f"{datetime.now():%Y-%m-%d %H:%M:%S} {t.get('id')} {t.get('source', 'you')} {what} {t.get('strategy')} "
+            f"{t.get('symbol')} {t.get('expiry')}" + (f" | {why}" if why else ""))
+    logger.log(level, line)
+    try:
+        path = STORE.parent / "events.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError as exc:
+        logger.warning("events.log not written (%s): %s", exc, line)
+
+
 class TradeError(Exception):
     def __init__(self, message: str = "", details: dict | None = None):
         super().__init__(message)
@@ -215,6 +230,7 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
         else:
             trades.append(row)
         _save(trades)
+    _event("refused" if row.get("attempts", 1) == 1 else "refused_again", row, f"{row['reason']} (attempt {row.get('attempts', 1)})")
     return row
 
 
@@ -257,6 +273,8 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
             same["later_taken"] = {"at": trade["taken_at"][-5:], "id": trade["id"]}
         trades.append(trade)
         _save(trades)
+    _event("taken", trade, "entry " + "; ".join(f"{x['action']} {float(x['strike']):.0f} {x['type']} {x['entry']}" for x in trade["legs"])
+           + (f"; refused earlier as {same['id']}" if same else ""))
     return trade
 
 
@@ -546,6 +564,7 @@ def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dic
              net_pnl=gross - fee)
     for leg, x in zip(t["legs"], exits, strict=True):
         leg["exit"] = x
+    _event("closed", t, f"{reason}; net {t['net_pnl']:.2f}")
     return t
 
 
@@ -560,7 +579,7 @@ def _auto_settle(t: dict, v: dict) -> bool:
         if any(a["kind"] == "exit_pending" for a in t["alerts"]):
             return False
         t["alerts"].append({"kind": "exit_pending", "at": _now(), "spot": v["spot"], "legs": v["pending"]})
-        logger.warning("exit pending: trade %s reached its %s but has no quote for %s", t["id"], hit, ", ".join(v["pending"]))
+        _event("exit_pending", t, f"exit pending: reached its {hit} but has no quote for {', '.join(v['pending'])}", logging.WARNING)
         return True
     if hit and v["pnl"] is not None:
         _settle(t, [x["now"] for x in v["legs"]], v["spot"], "range broken" if t.get("range") else f"{hit} reached")
@@ -638,6 +657,7 @@ def delete(trade_id: str) -> None:
         if len(keep) == len(trades):
             raise TradeError("Unknown trade.")
         _save(keep)
+    _event("removed", next(t for t in trades if t["id"] == trade_id), "removed from the record by you")
 
 
 # ---------------------------------------------------------------- background monitor
