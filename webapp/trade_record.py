@@ -168,22 +168,33 @@ def record_ai_pick(run_id: str, chain_fn=None) -> dict:
     try:
         return take_from_run(run_id, 0, chain_fn, source="ai")
     except TradeError as exc:
-        run = st.load_run(run_id) or {}
-        c = (run.get("trades") or [None])[0]
-        if c is None:
+        row = record_refused(run_id, 0, exc, "ai")
+        if row is None:
             raise
-        plan = c["plan"]
-        row = {"id": uuid.uuid4().hex[:10], "taken_at": _now(), "status": "not_taken", "reason": str(exc), "source": "ai",
-               "symbol": c["symbol"], "expiry": c["expiry"], "strategy": plan["strategy"], "bias": plan.get("bias"),
-               "index_target": plan.get("underlying_target"), "index_stop": plan.get("underlying_stop"),
-               "legs": [{"action": x["action"], "type": x["type"], "strike": x["strike"], "shown_price": x["price"]} for x in c["priced"]["legs"]],
-               "ai_confidence": plan.get("confidence"), **_provenance(run, run_id, 0),
-               "spot_at_take": exc.details.get("spot_at_take"), "in_entry_zone": exc.details.get("in_entry_zone")}
-        with _lock:
-            trades = _load()
-            trades.append(row)
-            _save(trades)
         return row
+
+
+def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) -> dict | None:
+    """Keep a refused Take (yours, or the AI's pick) as a "not taken" row with its reason, outside the stats. None
+    when the run or the trade is not on file (nothing to show)."""
+    from webapp import strategist as st
+
+    run = st.load_run(run_id or "") or {}
+    cands = run.get("trades") or []
+    if not 0 <= candidate < len(cands):
+        return None
+    c, plan = cands[candidate], cands[candidate]["plan"]
+    row = {"id": uuid.uuid4().hex[:10], "taken_at": _now(), "status": "not_taken", "reason": str(exc), "source": source,
+           "symbol": c["symbol"], "expiry": c["expiry"], "strategy": plan["strategy"], "bias": plan.get("bias"),
+           "index_target": plan.get("underlying_target"), "index_stop": plan.get("underlying_stop"),
+           "legs": [{"action": x["action"], "type": x["type"], "strike": x["strike"], "shown_price": x["price"]} for x in c["priced"]["legs"]],
+           "ai_confidence": plan.get("confidence"), **_provenance(run, run_id, candidate),
+           "spot_at_take": exc.details.get("spot_at_take"), "in_entry_zone": exc.details.get("in_entry_zone")}
+    with _lock:
+        trades = _load()
+        trades.append(row)
+        _save(trades)
+    return row
 
 
 def take(result: dict, source: str = "you", provenance: dict | None = None, shown: dict | None = None) -> dict:
@@ -386,7 +397,7 @@ def overview(chain_fn=None) -> dict:
 
 # ---------------------------------------------------------------- the v2 link and the CSV
 
-V2_FIRST_SESSION = "2026-11-05"   # v2 counts from the first weekday session after its spec reached main (PR #95, 2026-11-04 13:03 IST)
+from webapp.ai_test import V2_FIRST_SESSION  # noqa: E402  (one definition, beside the spec it comes from)
 
 
 def _leg_key(legs: list[dict]) -> list:
@@ -422,7 +433,7 @@ def _v2_link(t: dict, days: dict) -> dict:
     day = t.get("run_day") or (t.get("taken_at") or "")[:10]     # the run's IST session; old rows: the day taken
     r = days.get(day)
     out = {"registered_that_day": bool(r), "same_trade": False, "counted": False, "entry": None, "status": None}
-    if day < V2_FIRST_SESSION:                           # shown for comparison, never counted
+    if day < V2_FIRST_SESSION.isoformat():               # shown for comparison, never counted
         return out | {"note": f"before v2 started ({V2_FIRST_SESSION})", "entry": r and r["entry"], "status": r and r["status"]}
     if not r:
         return out | {"note": "v2 registered nothing that day"}

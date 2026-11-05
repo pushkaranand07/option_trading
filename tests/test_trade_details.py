@@ -57,7 +57,7 @@ def test_the_detail_shows_each_leg_in_words_with_its_prices_and_quantity():
 def test_every_record_row_can_open_its_detail():
     assert "tradeDetailHtml(t" in _js("function openTradeHtml(")
     assert "${tradeDetailHtml(t)}" in APP[APP.index("const detailRow = "):][:250]          # each detail row holds the detail
-    assert _js("function aiRecordHtml(").count("detailRow(t, 8)") == 2                  # taken and not-taken AI rows
+    assert "detailRow(t, 8)" in _js("function aiRecordHtml(") and "detailRow(t, 8)" in _js("function notTakenRowsHtml(")   # taken and not-taken rows
     assert "detailRow(t, 10)" in APP[APP.index("async function loadRecord("):APP.index("function aiRecordHtml(")]
     assert '".rec-more"' in APP and "S.openDetail" in APP
 

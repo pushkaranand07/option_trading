@@ -179,7 +179,9 @@ def test_a_failed_chain_fetch_refuses_and_never_uses_the_old_prices(world):
     world["live"]["chain"] = RuntimeError("NSE timed out")
     r = take(world)
     assert r.status_code == 400 and "NSE timed out" in r.json()["detail"]
-    assert not tr.STORE.exists()
+    rows = tr._load()                                    # since step 3 a refused Take is kept, as not taken and with no entry
+    assert [t["status"] for t in rows] == ["not_taken"] and "NSE timed out" in rows[0]["reason"]
+    assert all("entry" not in leg for leg in rows[0]["legs"])
 
 
 @pytest.mark.unit
