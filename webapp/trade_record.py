@@ -53,6 +53,10 @@ class TradeError(Exception):
         self.details = details or {}      # what was known when it was refused (index at the Take, in the zone or not)
 
 
+class BetExists(TradeError):
+    """Your Take would add to a bet already running in the same direction: the page asks first (nothing written)."""
+
+
 def _market_open(at: datetime | None = None) -> bool:
     """NSE's regular session, now or at the moment ``at``: the one place the trade record asks. Outside it the chain
     shows the last prices (NSE keeps refreshing them until about 15:40), which no order could get: no trade is entered,
@@ -152,7 +156,7 @@ def _as_range_trade(t: dict) -> None:
         leg["target"] = leg["stop"] = None
 
 
-def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you") -> dict:
+def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you", confirm: bool = False) -> dict:
     """Your Take on candidate ``candidate`` of AI run ``run_id``, priced here and now: the run must be today's
     (IST), the market open, the index inside the candidate's entry zone, and every leg quoted on both sides in a
     fresh chain. The entry is that chain's ask for a bought leg and bid for a sold one; the run's price is kept
@@ -194,7 +198,8 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
     days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - signals.now_ist().date()).days
     fresh = c | {"spot": spot, "priced": priced, "levels": st.trade_levels(sp, priced, ch, days), "charges_per_lot": st.charges(priced, 1)}
     shown = {(x["strike"], x["type"], x["action"]): x["price"] for x in c["priced"]["legs"]}
-    return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone, "quote_age_s": age}, shown=shown)
+    return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone, "quote_age_s": age},
+                shown=shown, confirm=confirm)
 
 
 def _provenance(run: dict, run_id: str, candidate: int) -> dict:
@@ -254,9 +259,12 @@ def record_refused(run_id: str, candidate: int, exc: TradeError, source: str) ->
     return row
 
 
-def take(result: dict, source: str = "you", provenance: dict | None = None, shown: dict | None = None) -> dict:
+def take(result: dict, source: str = "you", provenance: dict | None = None, shown: dict | None = None,
+         confirm: bool = False) -> dict:
     """Record the strategist's proposal (``recommend``'s result) as an open one-lot paper trade.
-    ``source``: "you" (taken on the Plan tab) or "ai" (every suggestion, recorded automatically)."""
+    ``source``: "you" (taken on the Plan tab) or "ai" (every suggestion, recorded automatically).
+    A trade that would join a bet already running (find_bet): yours raises BetExists unless ``confirm``; the AI's is
+    recorded. Either way the row carries added_to_bet and the event log says who added it."""
     plan, priced = result.get("plan") or {}, result.get("priced")
     if result.get("rejected") or not priced or plan.get("strategy") in (None, "no_trade"):
         raise TradeError("There is no trade to take in this suggestion.")
@@ -290,13 +298,75 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
         same = _same_bet(trades, trade)
         if same and same["status"] == "open":            # already held: one row
             return same
+        grouped = [dict(t) for t in trades]              # copies: the bet fields are read time only, never saved
+        _group_bets(grouped)
+        bet = find_bet(grouped, trade)
+        if bet and source == "you" and not confirm:
+            started = next(t["taken_at"] for t in grouped if t["id"] == bet)
+            raise BetExists(f"Is disha ({direction_of(trade['strategy'])}) ka ek {trade['symbol']} bet pehle se chal raha hai "
+                            f"(bet {bet}, shuru {started}). Isi bet mein ek aur trade jodna hai?",
+                            {"bet_id": bet, "bet_started": started})
+        if bet:
+            trade["added_to_bet"] = bet
         if same:                                         # refused before, taken now: both rows stay, the refusal linked
             same["later_taken"] = {"at": trade["taken_at"][-5:], "id": trade["id"]}
         trades.append(trade)
         _save(trades)
     _event("taken", trade, "entry " + "; ".join(f"{x['action']} {float(x['strike']):.0f} {x['type']} {x['entry']}" for x in trade["legs"])
            + (f"; refused earlier as {same['id']}" if same else ""))
+    if bet:
+        _event(f"{'override' if source == 'you' else 'auto'}: added to bet {bet}", trade)
     return trade
+
+
+def direction_of(strategy: str) -> str:
+    """The one direction function: bullish, bearish or neutral, from the strategist's own map. A strategy outside
+    it (no_trade, anything new) is an error, never a default."""
+    from webapp.strategist import DIRECTION
+
+    try:
+        return DIRECTION[strategy]
+    except (KeyError, TypeError):
+        raise ValueError(f"strategy {strategy!r} has no direction: add it to strategist.DIRECTION") from None
+
+
+BET_FIELDS = ("bet_id", "bet_index", "bet_size", "bet_started")   # read-time only, never saved
+
+
+def _bet_side(t: dict) -> tuple:
+    """What a bet is: whose (you / ai), which index, which direction. The expiry is not part of it."""
+    return t.get("source", "you"), t["symbol"], direction_of(t["strategy"])
+
+
+def _in_a_bet(t: dict) -> bool:
+    """Taken trades only: a not-taken row and a row entered outside the session are in no bet (never counted)."""
+    return t["status"] in ("open", "closed") and not _outside_session(t)
+
+
+def find_bet(trades: list[dict], row: dict) -> str | None:
+    """The bet ``row`` joins, as its bet_id, or None for a new bet; the one check that both the grouping and the
+    "add to this bet?" question use. A trade joins a bet when, at its taken_at, a trade of the same source, symbol and
+    direction was open (overnight too), or was taken the same day; trades already grouped carry their bet_id, so
+    a chain of overlaps is one bet. The earliest such bet wins."""
+    at, side = row["taken_at"], _bet_side(row)
+    for t in trades:
+        if t is row or t.get("id") == row.get("id") or not _in_a_bet(t) or t["taken_at"] > at or _bet_side(t) != side:
+            continue
+        if t["status"] == "open" or (t.get("closed_at") or "") > at or t["taken_at"][:10] == at[:10]:
+            return t.get("bet_id") or t["id"]
+    return None
+
+
+def _group_bets(trades: list[dict]) -> None:
+    """Read time: give every trade in a bet its bet_id (its first trade's id), place, size and start."""
+    done, members = [], {}
+    for t in sorted((x for x in trades if _in_a_bet(x)), key=lambda x: x["taken_at"]):
+        t["bet_id"] = find_bet(done, t) or t["id"]
+        done.append(t)
+        members.setdefault(t["bet_id"], []).append(t)
+    for ms in members.values():
+        for i, t in enumerate(ms, 1):
+            t.update(bet_index=i, bet_size=len(ms), bet_started=ms[0]["taken_at"])
 
 
 def _bet_key(t: dict) -> tuple:
@@ -419,10 +489,24 @@ def _remember_flags(trade: dict, view: dict) -> bool:
     return bool(new)
 
 
+def _bet_stats(closed: list[dict], open_: list[dict]) -> dict:
+    """Bets, not trades: a bet with any trade open is open (outside won / lost); a closed bet is won when the sum of
+    its trades' net is above zero."""
+    bets: dict[str, list[dict]] = {}
+    for t in closed + open_:
+        bets.setdefault(t.get("bet_id") or t["id"], []).append(t)
+    still_open = {b for b, ms in bets.items() if any(t["status"] == "open" for t in ms)}
+    sums = [sum(t["net_pnl"] for t in ms) for b, ms in bets.items() if b not in still_open]
+    won = len([x for x in sums if x > 0])
+    return {"bets": len(bets), "bets_open": len(still_open), "bet_wins": won, "bet_losses": len(sums) - won,
+            "bet_win_rate": won / len(sums) * 100 if sums else None}
+
+
 def _stats(closed: list[dict], open_: list[dict]) -> dict:
+    """Net is closed trades only; the open trades' P&L is open_pnl, a line of its own."""
     nets = [t["net_pnl"] for t in closed]
     wins = [x for x in nets if x > 0]
-    return {"closed": len(closed), "open": len(open_), "net": sum(nets), "wins": len(wins),
+    return _bet_stats(closed, open_) | {"closed": len(closed), "open": len(open_), "net": sum(nets), "wins": len(wins),
             "losses": len([x for x in nets if x <= 0]), "win_rate": len(wins) / len(nets) * 100 if nets else None,
             "avg": sum(nets) / len(nets) if nets else None, "best": max(nets, default=None),
             "worst": min(nets, default=None), "open_pnl": sum((t.get("live") or {}).get("pnl") or 0 for t in open_)}
@@ -451,9 +535,10 @@ def overview(chain_fn=None) -> dict:
             changed |= _auto_settle(t, v)
             t["live"] = v
         if changed:
-            _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session")} for t in trades])
+            _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session", *BET_FIELDS)} for t in trades])
     for t in trades:                                     # read-time only, never saved
         t["outside_session"] = t["status"] != "not_taken" and _outside_session(t)
+    _group_bets(trades)
     counted = lambda rows: [t for t in rows if not t["outside_session"]]  # noqa: E731
     out = {}
     for who in ("you", "ai"):

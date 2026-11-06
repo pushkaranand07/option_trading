@@ -41,7 +41,8 @@ def test_with_the_market_closed_a_close_is_refused_with_the_exit_message(market)
 @pytest.mark.unit
 def test_a_trade_past_expiry_settles_with_the_market_closed_by_hand_and_by_the_monitor(market):
     by_hand = tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650})
-    by_monitor = tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22660, "plan": RESULT["plan"] | {"underlying_target": 22470}})
+    by_monitor = tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22660, "plan": RESULT["plan"] | {"underlying_target": 22470}},
+                         confirm=True)                                           # a second bearish one: added to the bet on OK
     market["open"] = False
     assert tr.close(by_hand["id"])["reason"] == "expired"
     o = tr.overview(lambda *a: pytest.fail("no chain after expiry"))

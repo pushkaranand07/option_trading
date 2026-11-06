@@ -209,10 +209,12 @@ def _js(name):
 
 @pytest.mark.unit
 def test_the_page_sends_only_the_run_and_the_candidate():
-    for fn in ("async function takeRanked(", "async function takeTrade("):
+    for fn in ("async function takeRanked(", "async function takeTrade("):     # both post through takePost (step 5: the 409 question)
         body = _js(fn)
-        assert "body: takeBody(" in body and "JSON.stringify(c)" not in body and "JSON.stringify(res)" not in body, fn
-    assert 'const takeBody = (sym, i) => JSON.stringify({ run_id: S.strat[sym]?.result?.run_id || null, candidate: i });' in APP
+        assert "takePost(sym, " in body and "JSON.stringify(c)" not in body and "JSON.stringify(res)" not in body, fn
+    assert "body: takeBody(sym, i, extra)" in _js("async function takePost(")
+    assert ('const takeBody = (sym, i, extra = {}) => JSON.stringify({ run_id: S.strat[sym]?.result?.run_id || null, candidate: i, ...extra });'
+            in APP)                                                                 # extra: only { confirm: true }, after an OK
 
 
 @pytest.mark.unit
