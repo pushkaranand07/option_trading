@@ -1,72 +1,65 @@
-# Pulse — India market research & options trading assistant
+# Pulse — NSE research and paper-trading tool
 
-**Built by [Pushkar Anand](https://github.com/pushkaranand07).**
+**Status: research, unproven.** No trading strategy or signal in this repository has passed its tests. It records
+paper trades only and places no orders. It is not financial advice and must not be used to size real-money trades.
 
-Pulse is a personal research system for trading NIFTY, BANKNIFTY and large NSE stocks. Every weekday it reads the
-market before the open, builds a plan, and during the session tells you — in plain English — whether there is a trade
-worth taking, what one lot costs and loses at the stop, and why. A team of AI agents adds a news and sentiment
-view, and a strict research layer tests every trading idea on years of NSE data before anything is trusted.
+Current numbers (6 Nov 2026, from the repository's own data — see [Current results](#current-results)):
 
-> **Research and decision support only — not investment advice.** Pulse never places orders. You decide and trade
-> yourself (built for manual trading on Dhan). Past results do not guarantee future ones, and no strategy wins every time.
+- **Research models:** no edge found under the stated conditions, **1,532 trials** ([docs/models_v1_refit_report.md](docs/models_v1_refit_report.md)).
+- **Forward test of the AI strategist (v2):** 2 counted sessions so far. The test needs at least 50 settled trades
+  before any number is reported, and its stop date is **1 Nov 2027**.
+- **Paper record, AI #1:** 4 bets closed, 1 won and 3 lost. **Your picks:** 2 bets closed, 2 won. Both samples are far
+  too small to show skill or its absence.
+
+Built by [Pushkar Anand](https://github.com/pushkaranand07), for one person trading by hand on Dhan.
 
 ---
 
 ## What it does
 
-| | |
+One web app (FastAPI and a single page) with nine tabs:
+
+| Tab | What it does now |
 |---|---|
-| **Morning plan (8:30 AM)** | For NIFTY and BANKNIFTY: trend, last session, expected range for the day, market mood, put-call ratio, foreign-investor positioning, and the AI agents' read of news and sentiment |
-| **Live call (9:45 AM – 3:15 PM)** | "Wait", "No trade right now" with the reason, or "Take this trade" — option, entry, stop, target, and **what one lot costs and loses at the stop** |
-| **Risk & volatility** | Calm / choppy / stress regime, expected move for 5 / 10 / 21 days in % and ₹, whether options are cheap or expensive |
-| **Options** | Live option chain, and what each strike really costs to trade (bid-ask spreads measured from NSE every evening) |
-| **AI analysis** | A team of LLM agents — analysts, bull and bear researchers, trader, risk team, portfolio manager — debates one instrument and gives a rating (Buy, Overweight, Hold, Underweight or Sell) with reasons |
-| **Trade Record** | Take the AI's suggested trade as a dummy 1-lot trade; it is monitored live, closes itself when the index reaches its target or stop, and is kept in a profit-and-loss history |
-| **Market Map 2021 → today** | Every SEBI / NSE / RBI / Budget change and market event since 2021, with its measured impact on NIFTY, India VIX and options trading |
-| **Research** | Every trading idea tested, with a plain-English verdict: what works, what failed, and why |
-| **My Trades** | Add your Dhan tradebook and see what actually makes or loses money in your own trades — by holding period, buying vs selling, stock, entry time and reason |
+| **Plan** | The morning plan for NIFTY and BANKNIFTY (trend, last session, expected range, mood, PCR, FII positioning, the AI agents' read). Then the **AI strategist**: you press *Complete analysis* (a fresh multi-agent research run) or *Quick analysis* (reuses today's research). The app builds and prices defined-risk option candidates from the live NSE chain, and one LLM call ranks 8 of them, best first, each with a reason. Each card has a *Take (dummy, 1 lot)* button. |
+| **Trade Record** | Paper trades, 1 lot each, in two views: **My picks** (your Takes) and **AI #1** (the AI's top pick of each run, recorded by itself during market hours). The entry is the fresh chain's ask for a bought leg and bid for a sold leg, at the moment of the Take. A monitor marks open trades every 60 seconds and closes them at the target, the stop or expiry. Trades of the same source, index and direction count as one **bet**. Also: a month calendar, refused Takes with their reason, a full detail per trade, and a CSV download. |
+| **Today** | Index and stock charts with quotes. |
+| **Risk & Volatility** | Calm / choppy / stress regime, the expected move over 5, 10 and 21 days, implied vs forecast volatility. |
+| **Options** | Live option chain and measured bid-ask spreads. |
+| **AI Analysis** | The multi-agent LLM debate on one instrument (analysts, bull and bear researchers, trader, risk team), ending in a rating with reasons. |
+| **Market Map** | SEBI / NSE / RBI / Budget changes and market events since 2021, with their measured effect on NIFTY, India VIX and options. |
+| **Research** | Every research test, with its verdict. |
+| **My Trades** | Upload a Dhan tradebook and see your own results by holding period, side, stock, entry time and reason. |
 
-All of it lives in one web app with nine simple tabs: **Plan · Trade Record · Today · Risk & Volatility · Options · AI Analysis ·
-Market Map · Research · My Trades**.
+There is no live "take this trade now" call on the page any more. The intraday rule still feeds the strategist's
+context ([webapp/strategist.py](webapp/strategist.py) `build_context`).
 
----
-
-## How it works
+## Architecture
 
 ```
- NSE archives & APIs ──► point-in-time data store ──► research layer ─────────► web app (9 tabs)
- (F&O, OI, delivery,      (every value dated by when    (volatility, regime,      ▲
-  index closes, quotes,    it was actually known)         backtests, verdicts)     │
-  board meetings)                                                                  │
- Yahoo / Dhan prices ─────────────────────────────────► live intraday rule ───────┤
- News, fundamentals ──► AI agent team (LLM) ──────────► rating and reasoning ─────┘
-                                                                        8:30 AM morning job · 7:30 PM nightly job
+NSE archives (F&O, OI, delivery, indices) ──► point-in-time Parquet store ──► research layer (volatility, regime,
+                                                                              backtests, gates)      │
+NSE live option chain ──► candidates priced at bid / ask ──► one LLM ranks 8 ──► Plan tab cards ──► Take
+News, fundamentals ──► multi-agent research (once a day) ───────┘                                   │
+                                                                                                     ▼
+                               Trade Record (reports/trade_record/trades.json, events.log) ◄── monitor (60 s)
+                               Forward test v2 registry (reports/ai_test/v2/registry.jsonl, hash-chained)
 ```
 
-- **Data you can trust.** Official NSE files (F&O bhavcopy, participant open interest, delivery, index closes,
-  option quotes, board meetings) from 2018 (F&O and index files from 2015), including weekend special sessions (Budget days, Muhurat). Every
-  value is stored with the date it became known, so no test can peek into the future.
-- **Honest research.** Walk-forward testing, real Dhan brokerage and statutory charges, measured slippage, comparison
-  against random entry, a deflated Sharpe ratio that counts every attempt, and rules frozen in git before testing.
-- **Two scheduled jobs (Windows Task Scheduler).** 8:30 AM builds the morning plan; 7:30 PM downloads the day's NSE
-  data, refreshes forecasts, regime, the Market Map, paper trading and option quotes.
+Key files:
 
-## What the research has found
-
-| | Verdict |
+| File | Role |
 |---|---|
-| GARCH volatility forecasts → expected move | ✅ **In use** — beat simple historical volatility on 31 of 31 symbols, out of sample |
-| Market regime (calm / choppy / stress) | ✅ **In use** — separates future volatility (11.5% vs 15.1%); not a direction signal |
-| Measured option spreads | ✅ **In use** — real costs, measured every evening |
-| AI agents quoting the research numbers | ✅ **Checked** — 10 full analyses, no number invented |
-| More than a dozen trading ideas (trend rules, machine-learning models, option-selling strategies, a pretrained AI forecaster) | ❌ **None has passed yet** — each looked good somewhere and failed on unseen years or after real costs |
+| [webapp/server.py](webapp/server.py) | FastAPI app, all endpoints; starts the trade monitor |
+| [webapp/strategist.py](webapp/strategist.py) | Candidate structures, pricing, target / stop levels, the ranking prompt and call |
+| [webapp/trade_record.py](webapp/trade_record.py) | Paper trades: entry and exit gates, marking, settling, bets, stats, CSV |
+| [webapp/option_chain.py](webapp/option_chain.py) | NSE option chain (display window and full chain) |
+| [webapp/ai_test.py](webapp/ai_test.py) | Forward test v2: registration before entry, prompt fingerprint |
+| [webapp/build_info.py](webapp/build_info.py) | The running commit; the page warns when the server runs older code |
+| [webapp/static/app.js](webapp/static/app.js) | The page (plain JS, no build step) |
+| `tradingagents/` | Multi-agent framework, NSE data vendors, analytics and research code |
 
-That last row is the system doing its job: catching ideas that only work in a backtest before real money is at risk.
-Details for every test: [docs/](docs/README.md).
-
----
-
-## Quick start (Windows)
+## Setup (Windows)
 
 **Requirements:** Python 3.13, Git, PowerShell.
 
@@ -75,103 +68,153 @@ git clone https://github.com/pushkaranand07/option_trading.git
 cd option_trading
 py -3.13 -m venv .venv
 .venv\Scripts\python.exe -m pip install -e ".[dev,quant]" -r webapp\requirements.txt
-copy .env.example .env      # then add your keys (see below)
+copy .env.example .env      # then add your keys
 ```
 
-**Keys in `.env`** (names only — never commit values):
+**Keys in `.env`** (names only; never commit values):
 
 | For | Variables |
 |---|---|
-| The AI agents (one provider) | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME` — or `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, … |
+| The LLM (one provider) | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME`, or `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, … |
 | Which models | `TRADINGAGENTS_LLM_PROVIDER`, `TRADINGAGENTS_DEEP_THINK_LLM`, `TRADINGAGENTS_QUICK_THINK_LLM` |
-| Live quotes and option chain (optional) | `DHAN_CLIENT_ID`, `DHAN_ACCESS_TOKEN` |
+| Live quotes (optional) | `DHAN_CLIENT_ID`, `DHAN_ACCESS_TOKEN` |
 | Macro data (optional) | `FRED_API_KEY` |
 
-**Build the NSE data store** (one-time; the download is slow and resumable):
+**Build the NSE data store** (one time; slow, resumable):
 
 ```powershell
-.venv\Scripts\python.exe scripts\quant_backfill.py           # NSE archives, 2018 → yesterday
-.venv\Scripts\python.exe scripts\quant_build_store.py        # point-in-time Parquet store
-.venv\Scripts\python.exe scripts\quant_daily_update.py       # forecasts, regime, Market Map, …
+.venv\Scripts\python.exe scripts\quant_backfill.py
+.venv\Scripts\python.exe scripts\quant_build_store.py
+.venv\Scripts\python.exe scripts\quant_daily_update.py
 ```
 
-**Run the app:**
+**Run:**
 
 ```powershell
 .venv\Scripts\python.exe -m uvicorn webapp.server:app --port 8000
 ```
 
-Open **http://localhost:8000** — the Plan tab opens first.
+Open http://localhost:8000. The server has no login: keep it on localhost. Restart it after every pull or merge;
+until you do, the page shows a "server runs older code" warning.
 
-**Schedule the daily jobs:** see [docs/development/scheduled-job-operations.md](docs/development/scheduled-job-operations.md)
-(8:30 AM morning plan, 7:30 PM nightly update).
+**Scheduled jobs** (Windows Task Scheduler, [docs/development/scheduled-job-operations.md](docs/development/scheduled-job-operations.md)):
+`scripts\morning_plan.cmd` (8:30 AM) and `scripts\quant_daily_update.cmd` (7:30 PM: NSE data, forecasts, regime,
+Market Map, research paper ledger, option quotes).
 
-## A trading day with Pulse
-
-| Time (IST) | What happens |
-|---|---|
-| 8:30 AM | Morning plan built (data + AI view, about 20 minutes) |
-| 9:00 – 9:15 | Pre-open; the Plan tab counts down |
-| 9:15 – 9:45 | **Wait** — the first half hour is watched, not traded |
-| 9:45 AM – 3:15 PM | Live call every 15 seconds: no trade, or a trade with its per-lot cost and loss |
-| 3:15 PM | Exit intraday trades |
-| 3:30 PM | Close (index derivatives close at 3:45 PM from 7-Dec-2026) |
-| 7:30 PM | Nightly update: NSE data, forecasts, Market Map, paper trading, option quotes |
-
----
-
-## Other ways to use it
+**Other commands:**
 
 ```powershell
-# One full AI analysis from the command line
-.venv\Scripts\python.exe -m cli.main
-
-# Your own trades, by holding period (file stays in reports/journal/)
-.venv\Scripts\python.exe scripts\trade_journal.py reports\journal\tradebook.xlsx --horizon intraday
-
-# The Market Map as a standalone page
-.venv\Scripts\python.exe scripts\market_map.py      # → reports\market_map\india-market-map.html
+.venv\Scripts\python.exe -m cli.main                                    # one multi-agent analysis in the terminal
+.venv\Scripts\python.exe scripts\trade_journal.py <tradebook.xlsx> --horizon intraday
+.venv\Scripts\python.exe scripts\market_map.py                          # → reports\market_map\india-market-map.html
+.venv\Scripts\python.exe scripts\ai_test_backup.py --dest <folder>      # dated copy of the forward-test registry
 ```
 
-## Project layout
+## How evaluation works
+
+- **Research models** (`tradingagents/analytics`, `scripts/quant_*`, `scripts/research_*`): point-in-time data,
+  walk-forward splits frozen before testing, costs included, a random-entry comparison and a deflated Sharpe ratio
+  that counts every attempt ([tradingagents/analytics/gates.py](tradingagents/analytics/gates.py)).
+- **Paper entries are priced honestly:** a Take is refused unless the run is today's, the market is open, the index
+  is inside the trade's entry zone, the quotes are under 120 seconds old and every leg has a live bid and ask. The run's
+  price is kept beside the filled one. A refused Take is listed with its reason and never counted.
+- **Provenance:** every trade row stores its run, candidate, mode, research source, AI rank, quote age, the commit the
+  server was running and when the server started. Rows entered while the market was closed are shown but not counted.
+- **Forward test v2** ([docs/ai_strategist_test_v2.json](docs/ai_strategist_test_v2.json), frozen):
+  - What counts: the AI's #1 from the first answer of each session, 09:30–15:00 IST, NIFTY.
+  - Registered before entry in an append-only, hash-chained registry. A changed prompt or model (the fingerprint)
+    stops a run from counting.
+  - Baseline: the same structure at the same strike distances in a random direction, priced from the saved entry chain.
+  - Pass rule: the 2.5th percentile of a bootstrap by expiry week must be above 0.
+  - Timeline: an interim check on 1 May 2027 (counts only), the stop on 1 Nov 2027.
+  - Power: about 260 trades are reachable by the stop. That gives about 48% power at an edge of 20% of max risk and
+    about 92% at 30%. **The test can detect only very large edges.**
+- **Trade Record stats are not the test.** The AI #1 view records every run's top pick (several a day). Win / loss is
+  per bet, and net P&L counts closed trades only.
+
+## Current results
+
+As of **6 Nov 2026**, read from `reports/` (git-ignored, on the author's machine):
+
+| | Trades | Bets | Bets won / lost | Net P&L, closed | Open P&L |
+|---|---|---|---|---|---|
+| AI #1 (paper) | 12 | 5 (1 open) | 1 / 3 | ₹934.70 | ₹4,842.50 |
+| My picks (paper) | 11 | 3 (1 open) | 2 / 0 | ₹17,058.47 | ₹243.75 |
+
+- **Forward test v2:** 3 registrations, of which 2 count (5 and 6 Nov; 4 Nov was before the start). Both are
+  bull call spreads on the 9 Nov expiry. No performance figure is allowed before the stop date.
+- **Research:** GARCH volatility forecasts beat historical volatility out of sample on 31 of 31 symbols, and the
+  regime model separates future volatility (11.5% vs 15.1%). Both are used for the expected move and regime only,
+  not as direction signals. Every direction or return idea tested so far failed (model suite v1 closed at 1,532
+  trials).
+
+None of this is evidence of an edge. Five closed bets cannot tell skill from luck.
+
+## Known limitations
+
+- **No proven edge.** See above. The forward test may end without an answer.
+- **Paper fills are not broker fills.** Exits are checked every 60 seconds, not triggered on the exchange like a Dhan
+  Super order. Premium targets and stops assume the same implied volatility and the same day. The cost model has
+  not been checked against real Dhan contract notes.
+- **The monitor runs inside the server process,** with no supervisor and no heartbeat. If the server stops, trades
+  are not settled.
+- **Single process, JSON file store.** Run one worker only. `overview()` fetches prices while holding the store lock.
+- **No authentication.** Bind to localhost only.
+- **Backups:** the forward-test backup script runs by hand and may point at the same disk.
+- **Data sources:** NSE's public endpoints are unofficial and can change or block.
+- **Old rows:** some trade rows from 4 Nov 2026 predate fixes (a reopened iron condor, a 15:33 row not counted).
+  They are kept as they were, with notes.
+
+## Project structure
 
 | Path | What is there |
 |---|---|
-| `webapp/` | The Pulse web app (FastAPI + one page, nine tabs) and the morning plan |
-| `tradingagents/agents/`, `tradingagents/graph/` | The AI agent team and how they debate |
-| `tradingagents/dataflows/vendors/nse/` | NSE data: calendar (holidays, special sessions), derivatives, flows, indices |
-| `tradingagents/analytics/` | Research layer: data store, volatility, regime, backtests, costs, gates, paper trading, journal |
-| `option_backtester/` | Options backtesting engine |
-| `scripts/` | Data download, store build, research runs, daily and morning jobs, Market Map, trade journal |
-| `docs/` | Full documentation: architecture, features, guides, and one change record per change (PA_01 …) |
-| `tests/` | About 1,500 unit tests |
-
-## Documentation
-
-Start at **[docs/README.md](docs/README.md)** — what the system is, how each part works, how to use it, and why
-every decision was made. Progress and open items: [docs/PROGRESS_TRACKER.md](docs/PROGRESS_TRACKER.md).
+| `webapp/` | The web app: server, strategist, trade record, morning plan, forward test |
+| `webapp/static/` | The page: `index.html`, `app.js`, `style.css` |
+| `tradingagents/agents/`, `tradingagents/graph/` | Multi-agent LLM framework (from TradingAgents) |
+| `tradingagents/dataflows/vendors/nse/` | NSE data: calendar, derivatives, flows, indices |
+| `tradingagents/analytics/` | Data store, volatility, regime, backtests, costs, gates, paper ledger, journal |
+| `tradingagents/research/` | Forward-test registry |
+| `option_backtester/` | Options backtesting engine (adapted from optopsy, AGPL v3) |
+| `scripts/` | Data download, store build, research runs, daily and morning jobs, forward-test settle and backup |
+| `docs/` | Architecture, features, frozen test specs, one change record per change (`PA_XX`) |
+| `tests/` | 2,078 tests (`pytest`); a Node harness renders the page in tests |
+| `cli/` | Terminal interface to the multi-agent analysis |
 
 ## Development
 
 ```powershell
-.venv\Scripts\python.exe -m pytest -q -m unit       # unit tests
-.venv\Scripts\python.exe -m ruff check .            # lint
-.venv\Scripts\python.exe scripts\check_doc_links.py # every docs link resolves
+.venv\Scripts\python.exe -m pytest -q                                   # the suite (integration tests excluded by default)
+.venv\Scripts\python.exe -m pytest -q --clock 2026-11-05T20:00:00+05:30 # the suite at a fixed IST time
+.venv\Scripts\python.exe -m ruff check .
+.venv\Scripts\python.exe scripts\check_doc_links.py
 ```
 
-One branch and one pull request per change, with its record in `docs/PA_XX-….md`
-([git workflow](docs/development/git-workflow.md)). This repository is public: data, keys, account details and
-personal trades are never committed.
+One branch and one pull request per change. This repository is public: data, keys, account details and personal
+trades are never committed (`reports/` is git-ignored).
 
----
+## Changes since the previous README (4 Nov 2026)
+
+From the git log, PRs #94 to #116:
+
+- **Plan:** the AI ranks 8 priced trades (Complete or Quick analysis), with a plain Hinglish line per trade; the old
+  live call and game-plan cards were removed.
+- **Honest entry:** Takes are priced from a fresh chain at bid / ask, with entry-zone, quote-age and market-hours
+  checks; the AI's #1 is recorded through the same path; refused Takes are kept with their reason.
+- **Provenance:** run, candidate, mode, research source, commit and server start on every row; an event log.
+- **Forward test v2** started 5 Nov 2026, with a startup check and a status banner.
+- **Trade Record redesign:** two views, a month calendar, detail per trade, CSV.
+- **Root-cause fixes:** far strikes priced from the full chain, one entry gate, one exit gate (market state only),
+  one session function and one clock, one same-trade check, rows outside the session not counted, "exit pending"
+  when a leg has no quote.
+- **One bet:** same source, index and direction form one bet; win / loss per bet; a confirm dialog before adding to
+  a running bet.
 
 ## Built on open source
 
-Pulse extends two open-source projects, as their licences require us to note:
-
-- The AI agent framework started from **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** by Tauric
-  Research — Apache License 2.0 ([LICENSE](LICENSE)).
-- `option_backtester/` is adapted from **[optopsy](https://github.com/michaelchu/optopsy)** — GNU AGPL v3
+- The multi-agent framework started from **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** by
+  Tauric Research, Apache License 2.0 ([LICENSE](LICENSE)).
+- `option_backtester/` is adapted from **[optopsy](https://github.com/michaelchu/optopsy)**, GNU AGPL v3
   ([option_backtester/LICENSE](option_backtester/LICENSE)).
 
-Market data: NSE India (official archives and APIs), Yahoo Finance, Dhan.
+Market data: NSE India (archives and public APIs), Yahoo Finance, Dhan.
