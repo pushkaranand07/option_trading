@@ -17,6 +17,8 @@ const ctx = {
   requestAnimationFrame: () => 0, ResizeObserver: function () { return el; }, alert() {}, confirm: () => false, window: null,
 };
 ctx.window = ctx;
+// RENDER_DROP=LightweightCharts,marked: run as if those libraries had failed to load (tests the page's fallbacks).
+for (const k of (process.env.RENDER_DROP || "").split(",").filter(Boolean)) delete ctx[k];
 vm.createContext(ctx);
 vm.runInContext(app, ctx, { filename: "app.js" });
 const input = fs.readFileSync(0, "utf8");

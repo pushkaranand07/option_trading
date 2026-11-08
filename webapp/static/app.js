@@ -41,6 +41,9 @@ const cls = (x) => (x > 0 ? "up" : x < 0 ? "down" : "muted");
 const sign = (x) => (x > 0 ? "+" : "");
 const pct = (x) => (x == null ? "—" : `${sign(x)}${x.toFixed(2)}%`);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Markdown from the AI as safe HTML; if marked or DOMPurify failed to load, the text is shown as it is, escaped.
+const mdHtml = (s) => (typeof marked !== "undefined" && typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(s || ""))
+  : `<pre class="report-raw">${esc(s)}</pre>`);
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const isIndex = (sym) => S.indices.some((i) => i.symbol === sym);
 const nameOf = (sym) => S.indices.find((i) => i.symbol === sym)?.name || sym;
@@ -289,22 +292,32 @@ function renderHistory(p) {
 }
 
 // ---------- chart ----------
-const chart = LightweightCharts.createChart($("#chart"), {
-  autoSize: true,
-  layout: { background: { type: "solid", color: "transparent" }, fontFamily: "Inter, system-ui, sans-serif" },
-  rightPriceScale: { borderVisible: false },
-  timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
-  crosshair: { mode: 0 },
-});
-const candleSeries = chart.addCandlestickSeries({ borderVisible: false });
-const volSeries = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
-chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+// Why no chart can be drawn (null: the chart library loaded). Without it the page still runs, minus its charts.
+const chartProblem = () => (typeof LightweightCharts === "undefined" || !LightweightCharts?.createChart
+  ? "Chart unavailable: the chart library did not load. Prices, plans and the record still work; reload the page to retry." : null);
+// The main chart says why; the smaller charts only say "Chart unavailable", so the reason shows once.
+const chartOff = (el, brief) => { if (el) el.innerHTML = `<div class="notice">${esc(brief ? "Chart unavailable." : chartProblem())}</div>`; return null; };
 const lineOpts = { lineWidth: 1.5, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false };
-const ema9Series = chart.addLineSeries(lineOpts);
-const ema21Series = chart.addLineSeries(lineOpts);
+let chart = null, candleSeries = null, volSeries = null, ema9Series = null, ema21Series = null;
+if (chartProblem()) chartOff($("#chart"));
+else {
+  chart = LightweightCharts.createChart($("#chart"), {
+    autoSize: true,
+    layout: { background: { type: "solid", color: "transparent" }, fontFamily: "Inter, system-ui, sans-serif" },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+    crosshair: { mode: 0 },
+  });
+  candleSeries = chart.addCandlestickSeries({ borderVisible: false });
+  volSeries = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
+  chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+  ema9Series = chart.addLineSeries(lineOpts);
+  ema21Series = chart.addLineSeries(lineOpts);
+}
 let planLines = [];
 
 function applyChartTheme() {
+  if (!chart) return;
   const up = cssVar("--up"), down = cssVar("--down");
   chart.applyOptions({ layout: { textColor: cssVar("--muted") }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } } });
   candleSeries.applyOptions({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down });
@@ -324,6 +337,7 @@ function ema(values, n) { const k = 2 / (n + 1); let prev; return values.map((v)
 
 let lastBars = [], firstLoad = true, candleBusy = false;
 function drawBars(bars) {
+  if (!chart) return;
   const up = cssVar("--up"), down = cssVar("--down"), t = (b) => b.time + IST_OFFSET;
   candleSeries.setData(bars.map((b) => ({ time: t(b), open: b.open, high: b.high, low: b.low, close: b.close })));
   volSeries.setData(bars.map((b) => ({ time: t(b), value: b.volume, color: (b.close >= b.open ? up : down) + "55" })));
@@ -333,6 +347,7 @@ function drawBars(bars) {
 }
 
 function drawPlanLines() {
+  if (!chart) return;
   planLines.forEach((l) => candleSeries.removePriceLine(l)); planLines = [];
   const s = S.plan?.signal;
   if (!s || s.side === "WAIT" || S.plan.symbol !== S.sym) return;
@@ -341,7 +356,7 @@ function drawPlanLines() {
 }
 
 async function loadCandles() {
-  if (candleBusy) return; candleBusy = true;
+  if (candleBusy || !chart) return; candleBusy = true;
   const sym = S.sym, tf = S.tf;
   try {
     const r = await api(`/api/candles/${encodeURIComponent(sym)}?tf=${tf}&limit=${tf === "1D" ? 600 : 900}`);
@@ -439,7 +454,7 @@ async function pollAI(jobId, sym) {
     $("#aiResult").innerHTML = `<div class="verdict" style="background:${cssVar(RATING_COLORS[job.rating] || "--muted")}"><h2>${esc(job.rating)}</h2><div>${esc(nameOf(job.symbol))} · finished ${job.finished}</div></div>
       <div class="report-tabs">${names.map((n, i) => `<button data-i="${i}" class="${i ? "" : "active"}">${esc(n)}</button>`).join("")}</div><div class="report" id="reportBody"></div>`;
     const show = (i) => {
-      $("#reportBody").innerHTML = DOMPurify.sanitize(marked.parse(job.reports[names[i]] || ""));
+      $("#reportBody").innerHTML = mdHtml(job.reports[names[i]] || "");
       document.querySelectorAll(".report-tabs button").forEach((b) => b.classList.toggle("active", +b.dataset.i === i));
     };
     $(".report-tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) show(+b.dataset.i); };
@@ -752,8 +767,8 @@ function morningHtml(sym, e) {
     : ai.error ? `<div class="notice">AI view failed: ${esc(ai.error)}</div>`
     : `<div class="ai-line"><span class="badge ${/Buy|Overweight/.test(ai.rating) ? "up" : /Sell|Underweight/.test(ai.rating) ? "down" : "warn"}">${esc(ai.rating)}</span>
         <span class="small muted">AI agents' view from news, sentiment and the bull/bear debate (${ai.minutes} min)</span></div>
-       <details class="ai-more"><summary>Read the AI's reasoning</summary><div class="report">${DOMPurify.sanitize(marked.parse(ai.decision || ""))}</div>
-         ${ai.news ? `<h3>News</h3><div class="report">${DOMPurify.sanitize(marked.parse(ai.news))}</div>` : ""}</details>`;
+       <details class="ai-more"><summary>Read the AI's reasoning</summary><div class="report">${mdHtml(ai.decision || "")}</div>
+         ${ai.news ? `<h3>News</h3><div class="report">${mdHtml(ai.news)}</div>` : ""}</details>`;
   const rows = [
     t && ["Trend", `<b>${esc(t.label)}</b> — ${esc(t.explain)}`],
     em && [S.morning.session.trading ? "Expected range today" : "Expected range next session", `<b>${fmt0(em.day_low)} – ${fmt0(em.day_high)}</b> (±${pc(em.day_pct)} from the last close ${fmt(em.close)}; about 2 days in 3 stay inside)`],
@@ -896,6 +911,7 @@ class PlanOverlay {
 function planChart(sym) {
   if (planCharts.has(sym)) return planCharts.get(sym);
   const card = $(`.plan-card[data-sym="${sym}"]`), el = card && $(".plan-chart", card); if (!el) return null;
+  if (chartProblem()) return chartOff(el, true);
   const ch = LightweightCharts.createChart(el, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--muted"),
       fontFamily: "Inter, system-ui, sans-serif" }, grid: { vertLines: { visible: false }, horzLines: { color: cssVar("--grid") } },
     rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
@@ -1459,6 +1475,7 @@ function renderTicket(sym) {
     </div></div>`;
   if (!d || d.error || !d.points?.length) return;
   const el = $(".ticket-chart", slot);
+  if (chartProblem()) return void chartOff(el, true);
   ticketChart = LightweightCharts.createChart(el, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--muted"),
       fontFamily: "Inter, system-ui, sans-serif" }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } },
     rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false }, crosshair: { mode: 0 } });
