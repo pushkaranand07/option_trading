@@ -12,12 +12,17 @@ function store(k, v) {
     localStorage.setItem("pulse." + k, v);
   } catch { return null; }
 }
+// The page's only fetch. A request that changes anything (not GET) carries X-Pulse-Request: 1, which the server
+// requires: another website open in the browser cannot add it, so it cannot take or close trades through this server.
 async function api(path, opts) {
+  const method = (opts?.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") opts = { ...opts, headers: { ...(opts.headers || {}), "X-Pulse-Request": "1" } };
   const r = await fetch(path, opts);
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {                            // a detail may be an object (409: {message, ...}); the message is what is shown
-    const e = new Error((typeof body.detail === "object" ? body.detail?.message : body.detail) || `HTTP ${r.status}`);
-    e.status = r.status; e.detail = body.detail;
+    const msg = (typeof body.detail === "object" ? body.detail?.message : body.detail) || `HTTP ${r.status}`;
+    const e = new Error(body.error_id ? `${msg} (error id ${body.error_id}; the server log has the details)` : msg);
+    e.status = r.status; e.detail = body.detail; e.errorId = body.error_id;
     throw e;
   }
   return body;
