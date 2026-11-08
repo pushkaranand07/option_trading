@@ -59,13 +59,15 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; el.textContent = text || ""; } };
 // The page-wide banners' text from /api/status (null: no banner).
 const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
-  v2: st?.v2?.fingerprint_problem ? `v2 forward test: ${st.v2.fingerprint_problem}.` : null,
+  v2: st?.v2?.fingerprint_problem ? `${ftName()} forward test: ${st.v2.fingerprint_problem}.` : null,
   code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null });
-// Did today's v2 answer count: YES / NO / NOT YET (the server says why).
+// The forward test's version as the server reports it (data keys keep the name "v2"; the test running is v3).
+const ftName = () => `v${S.status?.v2?.version || "3"}`;
+// Did today's answer count for the forward test: YES / NO / NOT YET (the server says why).
 function v2LineHtml() {
   const v = S.status?.v2; if (!v) return "";
   const c = { YES: "up", NO: "down", "NOT YET": "warn" }[v.state] || "muted";
-  return `v2 aaj ka answer counted: <b class="${c}">${esc(v.state)}</b>${v.reason ? ` — ${esc(v.reason)}` : ""}`;
+  return `${ftName()} aaj ka answer counted: <b class="${c}">${esc(v.state)}</b>${v.reason ? ` — ${esc(v.reason)}` : ""}`;
 }
 async function loadStatus() {
   try {
@@ -1565,7 +1567,7 @@ const moreBtn = (t) => `<button class="btn small-btn rec-more" data-id="${t.id}"
 const detailRow = (t, cols) => `<tr class="rec-detail" data-for="${t.id}" ${S.openDetail.has(t.id) ? "" : "hidden"}><td colspan="${cols}">${tradeDetailHtml(t)}</td></tr>`;
 
 // The v2 link of an AI #1 row; v2's own entry only on days v2 counts (before it started there is nothing to compare).
-const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">${esc(t.v2.note)}${t.v2.entry && !t.v2.note.startsWith("before v2") ? ` · v2 entry ${esc(t.v2.entry)}` : ""}</span>` : "");
+const v2Txt = (t) => (t.v2 ? `<span class="small ${t.v2.counted ? "up" : "muted"}">${esc(t.v2.note)}${t.v2.entry && !t.v2.note.startsWith("before v") ? ` · ${ftName()} entry ${esc(t.v2.entry)}` : ""}</span>` : "");
 
 const FLAG_TEXT = { target: ["Target reached", "up"], stop: ["Stop reached", "down"], expired: ["Expired", "warn"], exit_pending: ["Exit pending", "warn"] };
 // A range trade (iron condor) has a profit zone between its sold strikes, not one target and one stop.
@@ -1683,7 +1685,7 @@ function viewHtml(who, all) {
     ${kpi("Open now", s.open ? `${s.open} · ${money(s.open_pnl)}` : "0", s.open ? cls(s.open_pnl) : "", s.open ? `${rupee(inOpen)} in them` : "nothing open")}
     ${kpi("Won / lost (bets)", `${s.bet_wins} / ${s.bet_losses}`, "", s.bet_win_rate != null ? `${s.bet_win_rate.toFixed(0)}% of closed bets won` : "no bet closed yet")}
     ${kpi("Best / worst", s.closed ? `${money(s.best)} / ${money(s.worst)}` : "—", "", ai ? "the AI's #1 of each run, recorded by itself" : "trades you took")}</div>`;
-  const v2 = ai && all.v2_stats ? `<p class="rec-v2">v2 counted ${v.v2_stats.closed + v.v2_stats.open} of these (its own entry, held to expiry in v2); settled P&L here ${money(v.v2_stats.net)}.</p>` : "";
+  const v2 = ai && all.v2_stats ? `<p class="rec-v2">${ftName()} counted ${v.v2_stats.closed + v.v2_stats.open} of these (its own entry, held to expiry in ${ftName()}); settled P&L here ${money(v.v2_stats.net)}.</p>` : "";
   const closedNow = all.open.some((t) => t.live?.market_closed)
     ? `<p class="rec-v2 warn-c">Market band hai: these are the last prices (NSE stops near 15:40). P&L, targets and stops resume at 9:15; nothing opens or closes while the market is closed.</p>` : "";
   const table = (head, rows) => `<div class="tbl"><table class="t rec-t">${head}<tbody>${rows}</tbody></table></div>`;

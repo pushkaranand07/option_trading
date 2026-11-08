@@ -24,9 +24,9 @@ def stamped(ts, **kw):
 
 @pytest.mark.unit
 def test_quotes_119_s_old_are_taken_121_s_old_are_refused(world):
-    world["live"]["chain"] = stamped("05-Nov-2026 09:58:01")                      # the clock reads 10:00:00
+    world["live"]["chain"] = stamped("12-Nov-2026 09:58:01")                      # the clock reads 10:00:00
     assert take(world).status_code == 200
-    world["live"]["chain"] = stamped("05-Nov-2026 09:57:59")
+    world["live"]["chain"] = stamped("12-Nov-2026 09:57:59")
     r = take(world, candidate=1)
     assert r.status_code == 400 and "121 s old" in r.json()["detail"]
 
@@ -47,7 +47,7 @@ def test_a_chain_without_a_timestamp_is_refused(world):
 
 @pytest.mark.unit
 def test_quotes_ahead_of_this_clock_are_refused(world):
-    world["live"]["chain"] = stamped("05-Nov-2026 10:02:00")                      # two minutes in the future
+    world["live"]["chain"] = stamped("12-Nov-2026 10:02:00")                      # two minutes in the future
     r = take(world)
     assert r.status_code == 400 and "clock" in r.json()["detail"]
 

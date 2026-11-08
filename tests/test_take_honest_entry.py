@@ -14,7 +14,7 @@ from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
 from webapp import option_chain as oc, server, signals, strategist as st, trade_record as tr
 
 IST = pytz.timezone("Asia/Kolkata")
-THU = (2026, 11, 5)                                  # a weekday; the calendar below has no holidays
+THU = (2026, 11, 12)                                 # a weekday; the calendar below has no holidays
 EXPIRY = "27-Nov-2026"
 
 
@@ -51,8 +51,8 @@ def world(tmp_path, monkeypatch):
     cands = st.rank("NIFTY", built=(ctx, chain()), top=50)["candidates"]
     call = next(c for c in cands if c["plan"]["strategy"] == "long_call" and c["priced"]["legs"][0]["strike"] == 22600.0)
     spread = next(c for c in cands if c["plan"]["strategy"] == "bull_call_spread")
-    run = {"symbol": "NIFTY", "expiry": EXPIRY, "spot": 22600, "lot": 65, "trades": [call, spread], "asked_at": "2026-11-05 09:58",
-           "run_id": "run1", "day": "2026-11-05"}
+    run = {"symbol": "NIFTY", "expiry": EXPIRY, "spot": 22600, "lot": 65, "trades": [call, spread], "asked_at": "2026-11-12 09:58",
+           "run_id": "run1", "day": "2026-11-12"}
     st.save_run(run)
     return {"clock": clock, "live": live, "run": run, "call": call}
 

@@ -18,7 +18,7 @@ def stamped(ts, **kw):
 
 @pytest.mark.unit
 def test_quotes_100_s_old_are_taken_and_their_age_is_stored(world):
-    world["live"]["chain"] = stamped("05-Nov-2026 09:58:20")                      # the clock reads 10:00:00
+    world["live"]["chain"] = stamped("12-Nov-2026 09:58:20")                      # the clock reads 10:00:00
     r = take(world)
     assert r.status_code == 200, r.text
     assert r.json()["quote_age_s"] == 100
@@ -26,7 +26,7 @@ def test_quotes_100_s_old_are_taken_and_their_age_is_stored(world):
 
 @pytest.mark.unit
 def test_quotes_121_s_old_are_refused_and_the_refused_row_keeps_the_age(world):
-    world["live"]["chain"] = stamped("05-Nov-2026 09:57:59")
+    world["live"]["chain"] = stamped("12-Nov-2026 09:57:59")
     r = take(world)
     assert r.status_code == 400 and "121 s old (limit 120 s)" in r.json()["detail"]
     [row] = tr.overview(lambda *a: chain())["you"]["not_taken"]
@@ -37,7 +37,7 @@ def test_quotes_121_s_old_are_refused_and_the_refused_row_keeps_the_age(world):
 def test_repeated_refusals_of_one_trade_are_one_row_with_the_attempts(world):
     world["live"]["chain"] = chain(spot=world["call"]["plan"]["underlying_entry_high"] + 30)
     take(world)
-    world["live"]["chain"] = stamped("05-Nov-2026 09:57:00")
+    world["live"]["chain"] = stamped("12-Nov-2026 09:57:00")
     take(world)
     [row] = tr.overview(lambda *a: chain())["you"]["not_taken"]
     assert row["attempts"] == 2 and "s old" in row["reason"]                        # the last reason is kept
@@ -63,10 +63,10 @@ def test_the_interim_count_runs_on_the_real_registry_and_the_stop_stays_locked(s
     from datetime import date
 
     mod, path = script
-    register((2026, 11, 5))                                                     # a real (non-synthetic) NIFTY row
-    out = mod.run(path, path.parent, {}, {date(2026, 11, 5)}, ai_test.SPEC_SHA256, mode="interim")
+    register((2026, 11, 12))                                                     # a real (non-synthetic) NIFTY row
+    out = mod.run(path, path.parent, {}, {date(2026, 11, 12)}, ai_test.SPEC_SHA256, mode="interim")
     assert (out["questions"], out["trades"], out["entered"], out["void"]) == (1, 1, 1, 0)
     assert not any(k in out for k in ("net", "pnl", "mean", "report")) and LEGS
     with pytest.raises(ai_settle.RealRowsRefused):
-        mod.run(path, path.parent, {}, {date(2026, 11, 5)}, ai_test.SPEC_SHA256, mode="stop")
+        mod.run(path, path.parent, {}, {date(2026, 11, 12)}, ai_test.SPEC_SHA256, mode="stop")
     assert mod.REAL_RUN_APPROVED is False and mod.REAL_INTERIM_APPROVED is True

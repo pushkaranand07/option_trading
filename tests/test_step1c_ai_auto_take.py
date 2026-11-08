@@ -60,7 +60,7 @@ def test_a_pick_outside_its_entry_zone_is_kept_as_not_taken_with_the_reason(worl
 
 @pytest.mark.unit
 def test_a_pick_with_stale_quotes_is_kept_as_not_taken(world, run_ai):
-    world["live"]["chain"] = chain() | {"timestamp": "05-Nov-2026 09:57:00"}       # 3 minutes old at 10:00
+    world["live"]["chain"] = chain() | {"timestamp": "12-Nov-2026 09:57:00"}       # 3 minutes old at 10:00
     run_ai()
     [t] = ai_rows()
     assert t["status"] == "not_taken" and "s old" in t["reason"]
