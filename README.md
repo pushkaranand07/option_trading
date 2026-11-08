@@ -3,11 +3,11 @@
 **Status: research, unproven.** No trading strategy or signal in this repository has passed its tests. It records
 paper trades only and places no orders. It is not financial advice and must not be used to size real-money trades.
 
-Current numbers (6 Nov 2026, from the repository's own data — see [Current results](#current-results)):
+Current numbers, as of 6 Nov 2026 unless stated, from the repository's own data (see [Current results](#current-results)):
 
 - **Research models:** no edge found under the stated conditions, **1,532 trials** ([docs/models_v1_refit_report.md](docs/models_v1_refit_report.md)).
-- **Forward test of the AI strategist (v3):** started 9 Nov 2026, after v2 was closed on 8 Nov with 2 counted trades.
-  The test needs at least 50 settled trades before any number is reported, and its stop date is **1 Nov 2027**.
+- **Forward test of the AI strategist (v3):** started 9 Nov 2026 with 0 counted trades so far, after v2 was closed
+  on 8 Nov with 2 counted trades. The test needs at least 50 settled trades before any number is reported, and its stop date is **1 Nov 2027**.
 - **Paper record, AI #1:** 4 bets closed, 1 won and 3 lost. **Your picks:** 2 bets closed, 2 won. Both samples are far
   too small to show skill or its absence.
 
@@ -81,9 +81,9 @@ copy .env.example .env      # then add your keys
 | Live quotes (optional) | `DHAN_CLIENT_ID`, `DHAN_ACCESS_TOKEN` (market data only, see below) |
 | Macro data (optional) | `FRED_API_KEY` |
 
-`.env` is read only from the repository root (the folder with this README), never from a parent folder, so a copy or
-worktree below another project does not pick up its keys. Values already set in the environment win.
-`TRADINGAGENTS_NO_DOTENV=1` turns `.env` loading off (the tests run that way). [.env.example](.env.example) lists
+`.env` (and `.env.enterprise`, if present) is read only from the repository root (the folder with this README), never
+from a parent folder, so a copy or worktree below another project does not pick up its keys. Values already set in
+the environment win. `TRADINGAGENTS_NO_DOTENV=1` turns loading of both files off (the tests run that way). [.env.example](.env.example) lists
 every variable with a one-line comment.
 
 **Dhan is used for market data only.** Every Dhan request goes through

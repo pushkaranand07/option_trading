@@ -37,7 +37,14 @@ def test_the_readme_documents_restart_dhan_guard_and_env_loading():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("name", ["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT_NAME", "DHAN_CLIENT_ID",
+def test_the_readme_mentions_env_enterprise_and_dates_its_headline_numbers():
+    assert ".env.enterprise" in README
+    head = README[:README.index("## What it does")]
+    assert "as of 6 Nov 2026" in head and "v3" in head and "0 counted trades" in head
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("name", ["OPENAI_API_VERSION", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT_NAME", "DHAN_CLIENT_ID",
                                   "DHAN_ACCESS_TOKEN", "TRADINGAGENTS_NO_DOTENV", "TRADINGAGENTS_REPORTS_DIR", "DHAN_CALL_LOG"])
 def test_env_example_lists_each_variable_the_web_app_reads(name):
     assert re.search(rf"^#?{name}=", ENV, re.M), name
