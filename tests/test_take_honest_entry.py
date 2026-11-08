@@ -88,7 +88,8 @@ def take(w, candidate=0, run_id="run1", **extra):
             async def json(self):
                 return body
         return _call(server.trade_take, Request())
-    return _call(server.trade_take, body)
+    model = getattr(server, "TakeRequest", None)                # the typed body (audit track B); extra fields ignored
+    return _call(server.trade_take, model.model_validate(body) if model else body)
 
 
 def latest():

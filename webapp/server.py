@@ -11,21 +11,24 @@ import logging
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 import requests
-from dotenv import load_dotenv
+
+# The package loads the repo's own .env (ROOT/.env, never a parent's; nothing under pytest or with
+# TRADINGAGENTS_NO_DOTENV=1, audit H4) when imported; import it first so the keys are there for the modules below.
+import tradingagents  # noqa: F401,I001
 
 ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(ROOT / ".env")
 
-from fastapi import Body, FastAPI, HTTPException, Query, Request  # noqa: E402
+from fastapi import FastAPI, HTTPException, Query, Request  # noqa: E402
 from fastapi.concurrency import run_in_threadpool  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
 
 from webapp import (  # noqa: E402
@@ -44,10 +47,25 @@ from webapp import (  # noqa: E402
 )
 
 STATIC = Path(__file__).parent / "static"
-app = FastAPI(title="Pulse Trader")
-app.mount("/static", StaticFiles(directory=STATIC), name="static")
-md.start_refresh_ahead()
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start-up work, run when the server starts (not when the module is imported, so tests and scripts that import
+    it start no threads): the refresh-ahead thread, the trade monitor, and the v2 fingerprint check."""
+    for name, start in (("refresh-ahead", lambda: md.start_refresh_ahead()),
+                        ("trade monitor", lambda: trade_record.start_monitor()),
+                        ("v2 startup check", lambda: v2_startup_check())):
+        try:
+            start()
+        except Exception:                             # one failed start must not keep the page down
+            logger.exception("Start-up step failed: %s", name)
+    yield
+
+
+app = FastAPI(title="Pulse Trader", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 @app.middleware("http")
@@ -129,6 +147,11 @@ async def _call(fn, *args):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+async def _symbol(symbol: str) -> str:
+    """The instrument's canonical symbol, looked up off the event loop (md.instrument may parse the scrip master)."""
+    return (await _call(md.instrument, symbol))["symbol"]
+
+
 @app.get("/")
 def index():
     """The page, with its script and styles named by their current version (the files' modified time), and itself
@@ -184,7 +207,7 @@ async def quotes(symbols: str):
 @app.get("/api/candles/{symbol}")
 async def candles(symbol: str, tf: str = "5m", limit: Annotated[int, Query(ge=1, le=5000)] = 1500):
     df, source = await _call(md.candles, symbol, tf)
-    open_now = signals.market_open()
+    open_now = await run_in_threadpool(signals.market_open)            # reads the NSE calendar (may fetch it)
     age, stale = md.bar_age(df), md.stale_bars(df, tf, open_now)
     df = df.iloc[-limit:]
     bars = [{"time": int(ts.timestamp()), "open": r.open, "high": r.high, "low": r.low,
@@ -259,13 +282,14 @@ async def morning_plan(date: str | None = None):
     if date:
         from datetime import date as _date
         try:
-            saved = morning.load(_date.fromisoformat(date))
+            day = _date.fromisoformat(date)
         except ValueError as exc:
             raise HTTPException(400, "date must be YYYY-MM-DD") from exc
+        saved = await run_in_threadpool(morning.load, day)
         if saved is None:
             raise HTTPException(404, f"No saved plan for {date}")
         return saved | {"ai_job": morning.ai_status()}
-    plan = morning.load()
+    plan = await run_in_threadpool(morning.load)
     if plan is None:
         plan = await _call(morning.build, None, False)
     plan["ai_job"] = morning.ai_status()
@@ -276,7 +300,7 @@ async def morning_plan(date: str | None = None):
 async def morning_context(symbol: str):
     """The morning view for any instrument, built now (the 8:30 job covers NIFTY and BANKNIFTY, with AI)."""
     from datetime import date as _date
-    return {"context": await _call(morning.context, md.instrument(symbol)["symbol"], _date.today()), "ai": None}
+    return {"context": await _call(morning.context, await _symbol(symbol), _date.today()), "ai": None}
 
 
 @app.post("/api/morning/refresh")
@@ -299,7 +323,7 @@ def morning_ai():
 @app.get("/api/chain/{symbol}")
 async def nse_chain(symbol: str, expiry: str | None = None):
     try:
-        sym = md.instrument(symbol)["symbol"]
+        sym = await _symbol(symbol)
         await run_in_threadpool(known_expiry, sym, expiry, _nse_expiries())
         return await run_in_threadpool(nse_oc.chain, sym, expiry)
     except nse_oc.ChainError as exc:
@@ -323,7 +347,7 @@ async def nse_contract(id: str):
 async def trade_rank(symbol: str, expiry: str | None = None):
     """Pulse's ranked trades for the instrument: strikes, entry, target and stop for each, best first (no LLM)."""
     try:
-        sym = md.instrument(symbol)["symbol"]
+        sym = await _symbol(symbol)
         await run_in_threadpool(known_expiry, sym, expiry, _nse_expiries())
         return await run_in_threadpool(strategist.rank, sym, expiry)
     except nse_oc.ChainError as exc:
@@ -430,14 +454,12 @@ async def journal_upload(request: Request, name: str):
         raise HTTPException(415, f"Send the file with Content-Type {UPLOAD_TYPES[0]} (or text/csv / the .xlsx type).")
     data = await _read_capped(request, quant.MAX_UPLOAD)
     try:
-        return {"name": quant.save_upload(name, data)}
+        return {"name": await run_in_threadpool(quant.save_upload, name, data)}
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-# ---------- Trade Record: dummy trades taken from the AI strategist ----------
-
-trade_record.start_monitor()
+# ---------- Trade Record: dummy trades taken from the AI strategist (the monitor starts in the lifespan) ----------
 
 
 @app.get("/api/trades")
@@ -456,20 +478,20 @@ def trades_csv():
                     headers={"Content-Disposition": f'attachment; filename="trade_history_{_date.today()}.csv"'})
 
 
+class TakeRequest(BaseModel):
+    """The page sends only which trade of which run; any other field (a price, say) is ignored."""
+    run_id: str
+    candidate: int = Field(ge=0, strict=True)          # strict: true / 1.5 / "1" are refused, not coerced
+    confirm: bool = Field(default=False, strict=True)
+
+
 @app.post("/api/trades")
-def trade_take(body: dict = Body(...)):
+def trade_take(req: TakeRequest):
     """Take trade ``candidate`` of AI run ``run_id`` as a dummy one-lot trade, priced by the server from a fresh
     chain now. Any price in the body is ignored."""
-    raw = body.get("candidate")
+    run_id, candidate = req.run_id, req.candidate
     try:
-        if isinstance(raw, bool):
-            raise TypeError
-        candidate = int(raw)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(400, "Not taken: send run_id and candidate (the trade's number in the run, 0 or more).") from exc
-    run_id = str(body.get("run_id") or "")
-    try:
-        return trade_record.take_from_run(run_id, candidate, confirm=bool(body.get("confirm")))
+        return trade_record.take_from_run(run_id, candidate, confirm=req.confirm)
     except trade_record.BetExists as exc:                                  # ask first; nothing written
         raise HTTPException(409, {"message": str(exc), **exc.details}) from exc
     except trade_record.TradeError as exc:
@@ -500,6 +522,3 @@ async def journal(name: str, horizon: str = "all"):
         return await run_in_threadpool(quant.journal, name, horizon)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-
-
-v2_startup_check()          # a mismatch is logged at startup and shown on every page (never auto-updated)
