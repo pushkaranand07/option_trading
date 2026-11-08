@@ -81,6 +81,7 @@ def status():
         "azure": ai.azure_problem() is None,
         "azure_problem": ai.azure_problem(),
         "market_open": signals.market_open(),
+        "muhurat": signals.muhurat_today(),
         "calendar_warning": ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
                              "so a market holiday would show as open." if signals.nse_calendar().source == "weekends only" else None),
         "v2": ai_test.today_status(),
