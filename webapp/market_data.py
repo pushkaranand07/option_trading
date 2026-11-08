@@ -72,18 +72,22 @@ class _TTLCache:
         self._key_locks: dict = {}
         self._lock = threading.Lock()
 
-    def get(self, key, ttl: float, fn):
+    def get(self, key, ttl: float, fn, miss_ttl: float | None = None):
+        """``miss_ttl``: when given, a held value of None (a failed lookup) is kept only this long instead of ``ttl``."""
+        def fresh(hit, now):
+            return hit and now - hit[0] < (miss_ttl if miss_ttl is not None and hit[1] is None else ttl)
+
         now = _time.monotonic()
         with self._lock:
             self._uses[key] = (fn, ttl, now)
             hit = self._d.get(key)
-            if hit and now - hit[0] < ttl:
+            if fresh(hit, now):
                 return hit[1]
             key_lock = self._key_locks.setdefault(key, threading.Lock())
         with key_lock:
             with self._lock:
                 hit = self._d.get(key)
-                if hit and _time.monotonic() - hit[0] < ttl:     # another caller fetched it meanwhile
+                if fresh(hit, _time.monotonic()):                  # another caller fetched it meanwhile
                     return hit[1]
             return self._fetch(key, fn)
 
@@ -395,6 +399,7 @@ def _yahoo_quote(inst, session: date | None = None) -> dict | None:
 # ---------- previous close (audit M1) ----------
 
 PREV_CLOSE_TOLERANCE = 0.005     # sources further apart than 0.5% are reported in the quote row
+PREV_MISS_TTL = 30               # seconds a failed previous-close lookup is remembered before it is tried again
 
 
 def _valid_close(v) -> bool:
@@ -485,9 +490,9 @@ def prev_close(inst: dict, ltp_session_date: date, *, vendor: float | None = Non
 
 
 def _cached_reference(inst: dict, session: date, expected: date) -> tuple[float, str] | None:
-    """``_reference_close`` cached per symbol and session."""
+    """``_reference_close`` cached per symbol and session: 600 s when found, PREV_MISS_TTL when not."""
     return _cache.get(("prev", inst["symbol"], session.isoformat()), 600,
-                      lambda: _reference_close(inst, session, expected))
+                      lambda: _reference_close(inst, session, expected), miss_ttl=PREV_MISS_TTL)
 
 
 PREV_WORKERS = 8      # daily-bars downloads at once when a cold quote request needs several previous closes
