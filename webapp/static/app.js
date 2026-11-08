@@ -396,16 +396,18 @@ async function loadOptions() {
   const hideChain = (msg) => { notice.hidden = false; notice.textContent = msg; $(".oc-scroll", $("#ocTable").closest(".pad")).hidden = true; $("#expirySel").closest("label").hidden = true; };
   $(".oc-scroll", $("#ocTable").closest(".pad")).hidden = false; $("#expirySel").closest("label").hidden = false;
   if (!isIndex(S.sym)) { hideChain("The live option chain is shown for indices. Pick NIFTY, BANKNIFTY or another index above — the trading costs below work for stocks too."); return; }
+  if (S.status?.dhan === false) { S.expiry = null; hideChain(NEEDS_DHAN); return; }     // no request that can only fail
   try {
     const exps = await api("/api/expiries/" + S.sym);
     S.expiry = S.expiry && exps.includes(S.expiry) ? S.expiry : exps[0];
     $("#expirySel").innerHTML = exps.map((x) => `<option ${x === S.expiry ? "selected" : ""}>${x}</option>`).join("");
     notice.hidden = true; loadChain();
-  } catch (e) { hideChain(e.message.includes("Dhan") ? "The live option chain needs a Dhan connection (DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN in .env). The trading costs below work without it." : e.message); }
+  } catch (e) { hideChain(e.message.includes("Dhan") ? NEEDS_DHAN : e.message); }
 }
+const NEEDS_DHAN = "The live option chain needs a Dhan connection (DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN in .env). The trading costs below work without it.";
 let chainBusy = false, chainCentered = null;
 async function loadChain() {
-  if (chainBusy || !S.expiry) return; chainBusy = true;
+  if (chainBusy || !S.expiry || S.status?.dhan === false) return; chainBusy = true;
   const sym = S.sym, exp = S.expiry;
   try {
     const c = await api(`/api/optionchain/${sym}?expiry=${exp}`);
@@ -1032,7 +1034,7 @@ function pcReadout(sym, bar, e9, e21, time) {
   const ch = bar.open ? (bar.close - bar.open) / bar.open * 100 : 0;
   const when = new Date(time * 1000).toLocaleString("en-IN", { timeZone: "UTC", weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
   el.innerHTML = `${esc(when)} &nbsp; O <b>${fmt(bar.open)}</b> H <b>${fmt(bar.high)}</b> L <b>${fmt(bar.low)}</b> C <b>${fmt(bar.close)}</b>
-    <span class="${cls(ch)}">${pct(ch)}</span>${pcOn("ema") && e9 != null ? ` &nbsp; <span style="color:var(--ema9)">EMA 9 ${fmt(e9)}</span> &nbsp; <span style="color:var(--ema21)">EMA 21 ${fmt(e21)}</span>` : ""}`;
+    <span class="${cls(ch)}">${pct(ch)}</span>${pcOn("ema") && e9 != null ? ` &nbsp; <span style="color:var(--ema9-text)">EMA 9 ${fmt(e9)}</span> &nbsp; <span style="color:var(--ema21-text)">EMA 21 ${fmt(e21)}</span>` : ""}`;
 }
 
 function pcDayStarts(bars) {
@@ -1167,6 +1169,11 @@ const STRAT_NAMES = { no_trade: "No trade", long_call: "Buy a call", long_put: "
   bear_put_spread: "Bear put spread", bull_put_spread: "Bull put spread", bear_call_spread: "Bear call spread", iron_condor: "Iron condor" };
 const lakh = (x) => (x == null ? "—" : fmtInt(Math.round(x)));
 const stratJobs = JSON.parse(store("stratJobs") || "{}");
+
+// Every 15 s, only on the Plan tab during the live session (outside it the chain does not move).
+function pollNseChains() {
+  if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym));
+}
 
 async function loadNseChain(sym, expiry) {
   const slot = $(`.plan-card[data-sym="${sym}"] .chain-slot`); if (!slot) return;
@@ -1925,5 +1932,5 @@ function aiListHtml(sym, res) {
   setInterval(loadStatus, 60000);
   setInterval(() => { if (S.tab === "record") loadRecord(); }, 15000);
   setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
-  setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym)); }, 15000);
+  setInterval(pollNseChains, 15000);
 })();
