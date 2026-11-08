@@ -50,3 +50,11 @@ def ist(*a):
 ])
 def test_market_open_follows_the_nse_calendar(moment, is_open):
     assert sg.market_open(moment, calendar=CAL) is is_open
+
+
+@pytest.mark.unit
+def test_muhurat_open_is_shown_but_the_regular_market_stays_closed():
+    assert sg.muhurat_open(ist(2026, 11, 8, 14, 35), calendar=CAL) is True
+    assert sg.market_open(ist(2026, 11, 8, 14, 35), calendar=CAL) is False     # trade gates unchanged
+    assert sg.muhurat_open(ist(2026, 11, 8, 16, 0), calendar=CAL) is False
+    assert sg.muhurat_open(ist(2026, 11, 9, 11, 0), calendar=CAL) is False     # an ordinary session

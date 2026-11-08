@@ -53,6 +53,13 @@ KNOWN_SPECIAL_SESSIONS = frozenset({
     date(2023, 11, 12), date(2024, 1, 20), date(2024, 3, 2), date(2024, 5, 18), date(2025, 2, 1), date(2026, 2, 1),
 })
 
+# Muhurat session hours (IST) per year: pre-open, open, close of the equity market. NSE's holiday list gives only
+# the date (with a "*"); the hours come in a separate circular each year, so they are entered here by hand.
+# 2026-11-08: from press reports of NSE's circular (pre-open 14:05, trading 14:20-15:30); the circular itself not read.
+MUHURAT_HOURS: dict[date, tuple[time, time, time]] = {
+    date(2026, 11, 8): (time(14, 5), time(14, 20), time(15, 30)),
+}
+
 # Sessions NSE held (other files for the day exist; not on NSE's holiday list) whose archive file is gone:
 # every URL form returned 404 when re-requested (2026-10-27; 2013-10-09 on 2026-10-28, whose market activity report
 # and MTO file exist). They stay sessions; the file kinds listed are
@@ -159,15 +166,30 @@ class NSECalendar:
             return SessionState.NO_SESSION
         clock = local.time()
         if local.date() in self.muhurat_days:
-            # Closed during regular hours; the Muhurat hour itself is not modelled (its time varies).
+            # Closed during regular hours; the Muhurat hour is reported apart, by muhurat_state().
             return SessionState.PRE_MARKET if clock < MARKET_CLOSE else SessionState.POST_CLOSE
-        if clock < PRE_OPEN:
-            return SessionState.PRE_MARKET
-        if clock < MARKET_OPEN:
-            return SessionState.PRE_OPEN
-        if clock < MARKET_CLOSE:
-            return SessionState.OPEN
-        return SessionState.POST_CLOSE
+        return _state(clock, PRE_OPEN, MARKET_OPEN, MARKET_CLOSE)
+
+    def muhurat_hours(self, day: date) -> tuple[time, time, time] | None:
+        """(pre-open, open, close) of ``day``'s Muhurat session, or None: not a Muhurat day, or its hours not entered."""
+        return MUHURAT_HOURS.get(day) if day in self.muhurat_days else None
+
+    def muhurat_state(self, now: datetime) -> SessionState | None:
+        """The state of the Muhurat session at ``now``, or None when there is no Muhurat session with known hours today.
+        Kept apart from session_state, which drives the trade gates and the rule: those follow regular sessions only."""
+        local = to_ist(now)
+        hours = self.muhurat_hours(local.date())
+        return _state(local.time(), *hours) if hours else None
+
+
+def _state(clock: time, pre_open: time, open_: time, close: time) -> SessionState:
+    if clock < pre_open:
+        return SessionState.PRE_MARKET
+    if clock < open_:
+        return SessionState.PRE_OPEN
+    if clock < close:
+        return SessionState.OPEN
+    return SessionState.POST_CLOSE
 
 
 def _saved_holidays_path():

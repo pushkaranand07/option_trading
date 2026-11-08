@@ -72,8 +72,9 @@ async function loadStatus() {
     S.status = await api("/api/status");
     S.indices = S.status.indices;
     const mp = $("#marketPill");
-    mp.textContent = S.status.market_open ? "● Market open" : "Market closed";
-    mp.classList.toggle("open", S.status.market_open);
+    const mh = S.status.muhurat?.state === "open";
+    mp.textContent = S.status.market_open ? "● Market open" : mh ? "● Muhurat open" : "Market closed";
+    mp.classList.toggle("open", S.status.market_open || mh);
     const b = bannerTexts(S.status);
     banner("#calWarn", b.calendar);
     banner("#v2Warn", b.v2);
@@ -696,6 +697,7 @@ const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} mi
 function phase(sess) {
   const now = istNow();
   if (!sess || sess.date !== now.date) return { key: "stale", text: "Plan is not for today — refresh it." };
+  if (!sess.trading && sess.muhurat && S.status?.muhurat) return muhuratPhase(sess, S.status.muhurat, now.mins);
   if (!sess.trading) return { key: "closed", text: `Market closed today${sess.holiday ? ` (${sess.holiday.replace("*", "")})` : ""}. Next session: ${sess.next_session}.` };
   const m = now.mins, open = toMins(sess.open), first = toMins(sess.first_signal), close = toMins(sess.close);
   if (m < toMins(sess.pre_open)) return { key: "pre", text: `Before the market. Opens at ${sess.open} — in ${dur(open - m)}. Read the morning view below.` };
@@ -703,6 +705,17 @@ function phase(sess) {
   if (m < first) return { key: "wait", text: `Market open. The rule waits for the first half hour — trade signal from ${sess.first_signal} (in ${dur(first - m)}).` };
   if (m < close) return { key: "live", text: `Market open — closes at ${sess.close} (in ${dur(close - m)}). Exit intraday trades by 15:15.` };
   return { key: "after", text: `Market closed for today at ${sess.close}. Next session: ${sess.next_session}.` };
+}
+
+// Muhurat day: the one-hour session's own times. The rule, the AI plan and dummy trades follow regular sessions only.
+function muhuratPhase(sess, mu, m) {
+  const name = sess.holiday ? sess.holiday.replace("*", "") : "Diwali";
+  const pre = toMins(mu.pre_open), open = toMins(mu.open), close = toMins(mu.close);
+  const off = "The app's rule, AI plan and dummy trades follow regular sessions only.";
+  if (m < pre) return { key: "pre", text: `Muhurat trading today (${name}): pre-open ${mu.pre_open}, trading ${mu.open}–${mu.close} IST — in ${dur(open - m)}. ${off}` };
+  if (m < open) return { key: "preopen", text: `Muhurat pre-open auction. Trading starts at ${mu.open} — in ${dur(open - m)}.` };
+  if (m < close) return { key: "live", text: `Muhurat session open — closes at ${mu.close} (in ${dur(close - m)}). ${off}` };
+  return { key: "after", text: `Muhurat session closed at ${mu.close}. Next session: ${sess.next_session}.` };
 }
 
 function renderSession() {

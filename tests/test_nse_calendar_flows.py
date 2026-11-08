@@ -1,6 +1,6 @@
 """NSE calendar, session state and publication lag (P-03/P-04), and FII/DII flows."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 
 import pytest
 
@@ -169,3 +169,19 @@ def test_from_nse_knows_past_special_sessions_and_this_years_muhurat():
 def test_from_nse_keeps_known_special_sessions_when_nse_is_down():
     cal = NSECalendar.from_nse(_HolidayClient(fail=True))
     assert cal.is_trading_day(date(2025, 2, 1)) and not cal.is_trading_day(date(2025, 2, 2))
+
+
+@pytest.mark.unit
+def test_muhurat_hour_is_its_own_state_and_regular_hours_stay_closed():
+    cal = NSECalendar({date(2026, 11, 8): "Diwali Laxmi Pujan*"}, muhurat_days={date(2026, 11, 8)})
+    assert cal.muhurat_hours(date(2026, 11, 8)) == (time(14, 5), time(14, 20), time(15, 30))
+    assert cal.muhurat_state(ist(2026, 11, 8, 14, 0)) == SessionState.PRE_MARKET
+    assert cal.muhurat_state(ist(2026, 11, 8, 14, 10)) == SessionState.PRE_OPEN
+    assert cal.muhurat_state(ist(2026, 11, 8, 14, 35)) == SessionState.OPEN
+    assert cal.muhurat_state(ist(2026, 11, 8, 15, 35)) == SessionState.POST_CLOSE
+    # The regular session (trade gates, the rule) stays closed during the Muhurat hour.
+    assert cal.session_state(ist(2026, 11, 8, 14, 35)) == SessionState.PRE_MARKET
+    # Not a Muhurat day, or a Muhurat day whose hours nobody entered: no Muhurat state.
+    assert cal.muhurat_state(ist(2026, 11, 9, 14, 35)) is None
+    later = NSECalendar({date(2027, 10, 29): "Diwali Laxmi Pujan*"}, muhurat_days={date(2027, 10, 29)})
+    assert later.muhurat_hours(date(2027, 10, 29)) is None and later.muhurat_state(ist(2027, 10, 29, 14, 35)) is None

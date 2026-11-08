@@ -61,6 +61,24 @@ def market_open(at: datetime | None = None, calendar=None) -> bool:
     return (calendar or nse_calendar()).session_state(at) == SessionState.OPEN
 
 
+def muhurat_open(at: datetime | None = None, calendar=None) -> bool:
+    """True during today's Muhurat hour (when its hours are known). Display only: market_open() stays False then."""
+    from tradingagents.dataflows.vendors.nse.calendar import SessionState
+
+    return (calendar or nse_calendar()).muhurat_state(at or now_ist()) == SessionState.OPEN
+
+
+def muhurat_today(at: datetime | None = None, calendar=None) -> dict | None:
+    """Today's Muhurat session hours (HH:MM) and its state, or None."""
+    at = at or now_ist()
+    cal = calendar or nse_calendar()
+    hours = cal.muhurat_hours(at.date())
+    if not hours:
+        return None
+    pre, opn, close = (t.strftime("%H:%M") for t in hours)
+    return {"pre_open": pre, "open": opn, "close": close, "state": cal.muhurat_state(at).value}
+
+
 # ---------- intraday ----------
 
 def daily_trend(daily: pd.DataFrame) -> pd.Series:
