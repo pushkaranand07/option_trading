@@ -591,18 +591,18 @@ def overview(chain_fn=None) -> dict:
     as ``live["would_settle"]`` (the reason); refresh_open() does the settling."""
     live = exit_allowed() is None                        # closed market: last prices shown, nothing settled (expiry aside)
     problem = None
-    with _lock:
+    with _lock:                                          # the lock covers the file read only, never a chain fetch
         try:
             trades = _load()
         except StoreCorrupt as exc:                      # a read must not crash the page: an empty view that says why
             trades, problem = [], str(exc)
-        _repair_range_trades(trades)                     # shown repaired; saved only by refresh_open()
-        for t in trades:
-            if t["status"] == "open":
-                v = _live_mark(t, chain_fn, live)
-                d = _settle_decision(t, v)
-                v["would_settle"] = d[3] if d and d[0] == "settle" else None
-                t["live"] = v
+    _repair_range_trades(trades)                         # shown repaired; saved only by refresh_open()
+    for t in trades:
+        if t["status"] == "open":
+            v = _live_mark(t, chain_fn, live)
+            d = _settle_decision(t, v)
+            v["would_settle"] = d[3] if d and d[0] == "settle" else None
+            t["live"] = v
     return _view(trades, problem)
 
 
@@ -611,13 +611,17 @@ def refresh_open(chain_fn=None) -> dict:
     target, stop or expiry, write events.log. The monitor calls it; GET never does. Returns the same view as
     overview(). Raises StoreCorrupt (nothing written) when trades.json cannot be read."""
     live = exit_allowed() is None
-    with _lock:
+    with _lock:                                          # snapshot; the chains are fetched outside the lock
+        snapshot = _load()
+    _repair_range_trades(snapshot)                       # in memory, so a range trade is marked by its range
+    views = {t["id"]: _live_mark(t, chain_fn, live) for t in snapshot if t["status"] == "open"}
+    with _lock:                                          # read again and merge by id: rows changed meanwhile win
         trades = _load()
         changed = _repair_range_trades(trades)
         for t in trades:
-            if t["status"] != "open":
+            if t["status"] != "open" or t["id"] not in views:   # closed, removed or taken meanwhile: next time
                 continue
-            v = _live_mark(t, chain_fn, live)
+            v = views[t["id"]]
             t["live"] = v
             if not live and "expired" not in v["flags"]:
                 continue
@@ -837,23 +841,32 @@ def close(trade_id: str, chain_fn=None) -> dict:
     """Close an open trade at the live close-out prices (after expiry: at intrinsic value from the last index level)."""
     from webapp import option_chain as oc
 
-    with _lock:
-        trades = _load()
+    def find(trades: list[dict]) -> dict:
         t = next((x for x in trades if x["id"] == trade_id), None)
         if t is None:
             raise TradeError("Unknown trade.")
         if t["status"] != "open":
             raise TradeError("This trade is already closed.")
-        if _expired(t):
+        return t
+
+    with _lock:                                          # check first; the chain is fetched outside the lock
+        snap = find(_load())
+        expired = _expired(snap)
+    v = None
+    if not expired:
+        if why := exit_allowed():
+            raise TradeError(why)
+        v = mark(snap, chain_fn or oc.full_chain)
+        if v["error"] or v["pnl"] is None:
+            raise TradeError(v["error"] or "A leg has no live price; try again in a moment.")
+    with _lock:                                          # read again: closed or removed meanwhile is refused
+        trades = _load()
+        t = find(trades)
+        if v is None:
             spot = t.get("last_spot") or t["spot_at_entry"]
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
             reason = "expired"
-        elif why := exit_allowed():
-            raise TradeError(why)
         else:
-            v = mark(t, chain_fn or oc.full_chain)
-            if v["error"] or v["pnl"] is None:
-                raise TradeError(v["error"] or "A leg has no live price; try again in a moment.")
             exits, spot = [x["now"] for x in v["legs"]], v["spot"]
             reason = " + ".join(f"{a['kind']} reached" for a in t["alerts"]) or "closed by you"
         _settle(t, exits, spot, reason)
