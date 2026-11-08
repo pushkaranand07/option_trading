@@ -599,9 +599,15 @@ def expiries(symbol: str) -> list[str]:
                       lambda: dhan.post("/optionchain/expirylist", body).get("data", []))
 
 
-def option_chain(symbol: str, expiry: str | None = None, strikes_each_side: int = 15) -> dict:
+def option_chain(symbol: str, expiry: str | None = None, strikes_each_side: int = 15, *, strict: bool = False) -> dict:
+    """Dhan's chain for ``expiry`` (default: the nearest). ``strict``: an expiry Dhan doesn't list raises DataError
+    instead of being sent as given."""
     inst = instrument(symbol)
     _need_dhan_options(inst)
+    if strict and expiry:
+        valid = expiries(symbol) or []
+        if expiry not in valid:
+            raise DataError(f"unknown expiry {expiry}; valid: {', '.join(valid)}")
     expiry = expiry or (expiries(symbol) or [None])[0]
     if not expiry:
         raise DataError("Dhan returned no expiries.")
