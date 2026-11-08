@@ -69,3 +69,10 @@ def test_a_failing_source_lookup_is_an_error_state(reg, monkeypatch):
 def test_a_healthy_registry_still_gives_its_normal_answer(reg, monkeypatch):
     monkeypatch.setattr(ai_test, "fingerprint_problem", lambda: None)
     assert ai_test.today_status(NOW)["state"] == "NOT YET"
+
+
+@pytest.mark.unit
+def test_a_bad_now_is_an_error_state_dated_today_in_india(reg):
+    s = ai_test.today_status("2026-11-12 11:00")                     # not a datetime: astimezone fails
+    assert s["state"] == "ERROR" and "AttributeError" in s["reason"]
+    assert s["day"] == datetime.now(IST).date().isoformat() and s["version"] == ai_test.VERSION
