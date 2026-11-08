@@ -116,3 +116,21 @@ def test_the_nse_chain_is_not_polled_outside_the_live_session():
     assert out == []
     app = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "setInterval(pollNseChains, 15000)" in app
+
+
+# A rating's verdict box: one class per tone, each naming its fill and its text colour.
+VERDICT = re.compile(r"\.verdict\.v-([\w-]+)\s*\{[^}]*background:\s*var\(--([\w-]+)\);[^}]*color:\s*var\(--([\w-]+)\)")
+
+
+@pytest.mark.unit
+def test_every_rating_verdict_has_a_tone_class_whose_text_has_4_5_to_1_contrast_in_both_themes():
+    app = (STATIC / "app.js").read_text(encoding="utf-8")
+    tones = set(re.findall(r'"(\w+)"', re.search(r"const RATING_TONES = \{([^}]*)\}", app).group(1))) | {"muted"}   # unknown: muted
+    rules = {tone: (bg, fg) for tone, bg, fg in VERDICT.findall(CSS)}
+    assert tones <= set(rules), tones - set(rules)
+    assert 'class="verdict v-${' in app and "background:${cssVar(RATING" not in app      # no inline fill with white text
+    assert not re.search(r"\.verdict\s*\{[^}]*color:\s*#fff", CSS)
+    for theme, t in (("light", LIGHT), ("dark", DARK), ("dark (system)", DARK_MEDIA)):
+        c = {k: rgba(v) for k, v in t.items() if v.strip().startswith(("#", "rgba"))}
+        low = [f"{theme} {tone}: {ratio(c[fg], c[bg]):.2f}" for tone, (bg, fg) in rules.items() if ratio(c[fg], c[bg]) < 4.5]
+        assert not low, low

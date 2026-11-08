@@ -451,7 +451,8 @@ $("#aiBtn").onclick = async () => {
     aiJobs[S.sym] = job; store("aiJobs", JSON.stringify(aiJobs)); pollAI(job, S.sym);
   } catch (e) { $("#aiNotice").hidden = false; $("#aiNotice").textContent = e.message; $("#aiBtn").disabled = false; }
 };
-const RATING_COLORS = { Buy: "--up", Overweight: "--up", Hold: "--warn", Underweight: "--down", Sell: "--down" };
+// A rating's verdict box tone (style.css .verdict.v-*: each fill with a text colour of at least 4.5:1 in both themes).
+const RATING_TONES = { Buy: "up", Overweight: "up", Hold: "warn", Underweight: "down", Sell: "down" };
 async function pollAI(jobId, sym) {
   if (S.aiJob === jobId) return; S.aiJob = jobId;
   while (S.aiJob === jobId) {
@@ -465,7 +466,7 @@ async function pollAI(jobId, sym) {
     $("#aiBtn").disabled = false; S.aiJob = null;
     if (job.status === "error") { $("#aiResult").innerHTML = `<div class="notice" style="margin:0">${esc(job.error)}</div>`; return; }
     const names = Object.keys(job.reports);
-    $("#aiResult").innerHTML = `<div class="verdict" style="background:${cssVar(RATING_COLORS[job.rating] || "--muted")}"><h2>${esc(job.rating)}</h2><div>${esc(nameOf(job.symbol))} · finished ${job.finished}</div></div>
+    $("#aiResult").innerHTML = `<div class="verdict v-${RATING_TONES[job.rating] || "muted"}"><h2>${esc(job.rating)}</h2><div>${esc(nameOf(job.symbol))} · finished ${job.finished}</div></div>
       <div class="report-tabs">${names.map((n, i) => `<button data-i="${i}" class="${i ? "" : "active"}">${esc(n)}</button>`).join("")}</div><div class="report" id="reportBody"></div>`;
     const show = (i) => {
       $("#reportBody").innerHTML = mdHtml(job.reports[names[i]] || "");
