@@ -723,10 +723,15 @@ def _rank_user_message(ctx: dict, candidates: list[dict]) -> str:
 def _capture_rank_input(run_id: str):
     """An ``llm`` for ai_ranked: saves {run_id, system, user, sha256} to reports/ai_runs/inputs/<run_id>.json, then asks
     the module's ask_rank_llm. ``sha256`` is of the two messages as JSON, [["system", ...], ["user", ...]]. A failed
-    save is logged and never stops the ranking."""
+    save is logged and never stops the ranking. A ``run_id`` that is not lowercase hex is never used as a file name:
+    nothing is saved and the ranking still runs. ``ctx`` and ``candidates`` reach ask_rank_llm as given, unchanged."""
     import hashlib
+    import re
 
     def capture(ctx: dict, candidates: list[dict]) -> RankedAnswer:
+        if not re.fullmatch(r"[0-9a-f]+", run_id or ""):
+            logger.warning("the ranking LLM's input was not saved: run id %r is not hex", run_id)
+            return ask_rank_llm(ctx, candidates)
         try:
             user = _rank_user_message(ctx, candidates)
             sent = json.dumps([["system", RANK_SYSTEM], ["user", user]], ensure_ascii=False)

@@ -86,3 +86,23 @@ def test_start_saves_the_input_under_the_runs_own_id(fake_llm, monkeypatch):
 @pytest.mark.unit
 def test_the_fingerprint_is_unchanged():
     assert ai_test.prompt_fingerprint() == V3_FINGERPRINT
+
+
+@pytest.mark.unit
+def test_the_capture_hands_over_the_same_objects_unchanged(fake_llm):
+    import copy
+
+    ctx, cands = copy.deepcopy(CTX), copy.deepcopy(CANDS)
+    before = (copy.deepcopy(ctx), copy.deepcopy(cands))
+    st._capture_rank_input("abc123")(ctx, cands)
+    got_ctx, got_cands = fake_llm["calls"][0]
+    assert got_ctx is ctx and got_cands is cands                                  # the very objects ai_ranked passed
+    assert (ctx, cands) == before                                                 # and never mutated
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad", ["../evil", "ABC123", "abc 1", "", r"abc\..\x"])
+def test_a_run_id_that_is_not_hex_saves_nothing_but_still_ranks(fake_llm, tmp_path, bad):
+    assert st._capture_rank_input(bad)(CTX, CANDS) is fake_llm["answer"]
+    assert fake_llm["calls"] == [(CTX, CANDS)]
+    assert not list(tmp_path.rglob("*.json"))
