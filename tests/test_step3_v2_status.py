@@ -39,7 +39,7 @@ def register(day, hour=9, minute=30, status="entered", spec_hash=None, symbol="N
                           **({"legs": [LEGS[0] | {"price": 143.4}]} if status == "entered" else {"reason": "ValueError: no two-sided quote"}))
 
 
-THU = (2026, 11, 5)
+THU = (2026, 11, 12)                    # a v3 session (v3's first is 2026-11-09)
 
 
 @pytest.mark.unit
@@ -72,10 +72,10 @@ def test_a_fingerprint_mismatch_means_no(reg, monkeypatch):
 
 @pytest.mark.unit
 def test_weekends_and_days_before_the_first_session(reg):
-    assert ai_test.today_status(t((2026, 11, 7), 11))["state"] == "NO SESSION"
-    s = ai_test.today_status(t((2026, 11, 4), 11))
-    assert s["state"] == "NO" and "before v2" in s["reason"]
-    assert ai_test.V2_FIRST_SESSION == date(2026, 11, 5) and tr.V2_FIRST_SESSION is ai_test.V2_FIRST_SESSION    # one definition
+    assert ai_test.today_status(t((2026, 11, 14), 11))["state"] == "NO SESSION"
+    s = ai_test.today_status(t((2026, 11, 6), 11))
+    assert s["state"] == "NO" and "before v3" in s["reason"]
+    assert ai_test.FIRST_SESSION == date(2026, 11, 9) and tr.FIRST_SESSION is ai_test.FIRST_SESSION    # one definition
 
 
 @pytest.fixture
@@ -112,7 +112,7 @@ def test_the_red_banner_appears_on_a_mismatch_and_goes_when_restored(real_prompt
 
 @pytest.mark.unit
 def test_the_plan_page_shows_todays_v2_line():
-    assert "v2 aaj ka answer counted" in APP and "v2LineHtml()" in APP[APP.index("function renderStrat("):][:3000]
+    assert "aaj ka answer counted" in APP and "v2LineHtml()" in APP[APP.index("function renderStrat("):][:3000]
     assert ".v2-line" in APP[APP.index("async function loadStatus"):][:1500]
 
 
@@ -124,10 +124,10 @@ def test_the_settlement_script_reads_v2_and_leaves_out_rows_before_the_first_ses
     script = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(script)
     assert script.REAL_REGISTRY == ai_test.REGISTRY and script.REAL_RUN_APPROVED is False
-    register((2026, 11, 4), 12, 58, symbol=ai_settle.SYNTHETIC)                 # same spec hash, a day before the first session
+    register((2026, 11, 6), 12, 58, symbol=ai_settle.SYNTHETIC)                 # same spec hash, a day before the first session
     register(THU, symbol=ai_settle.SYNTHETIC)
-    sessions = {date(2026, 11, 4), date(2026, 11, 5)}
-    counts = ai_settle.interim_counts(ai_test.REGISTRY, ai_test.SPEC_SHA256, sessions, starts=ai_test.V2_FIRST_SESSION)
+    sessions = {date(2026, 11, 6), date(2026, 11, 12)}
+    counts = ai_settle.interim_counts(ai_test.REGISTRY, ai_test.SPEC_SHA256, sessions, starts=ai_test.FIRST_SESSION)
     assert (counts["questions"], counts["entered"]) == (1, 1)
 
 
@@ -140,3 +140,22 @@ def test_your_refused_take_is_kept_under_my_picks_outside_the_stats(world):
     [row] = o["you"]["not_taken"]
     assert "entry zone" in row["reason"] and row["source"] == "you" and o["you"]["stats"]["open"] == 0
     assert "notTakenRowsHtml(v.not_taken)" in APP and 'viewHtml(k, v)' in APP          # both views, one builder
+
+
+# ---------------------------------------------------------------- v3: a Muhurat session never counts (the user does not trade it)
+
+@pytest.mark.unit
+def test_a_muhurat_day_is_no_session_and_never_registered_or_missed(reg, monkeypatch):
+    sun, wed = date(2026, 11, 15), date(2026, 11, 18)             # a weekend Muhurat and a weekday one (closed for regular trading)
+    monkeypatch.setattr(signals, "nse_calendar", lambda: NSECalendar(holidays={wed: "Diwali"}, muhurat_days={sun, wed}))
+    for d in (sun, wed):
+        s = ai_test.today_status(t((d.year, d.month, d.day), 15, 0))
+        assert s["state"] == "NO SESSION" and "Muhurat" in s["reason"], d
+    world_spec = ai_test.read_spec()
+    monkeypatch.setattr(ai_test, "fingerprint_problem", lambda spec=None: None)
+    no_trade = {"symbol": "NIFTY", "plan": {"strategy": "no_trade"}}
+    assert ai_test.record(no_trade, now=t((2026, 11, 18), 11), spec=world_spec) is None     # weekday Muhurat: not counted
+    ai_test.record(no_trade, now=t((2026, 11, 17), 11), spec=world_spec)
+    ai_test.record(no_trade, now=t((2026, 11, 20), 11), spec=world_spec)
+    missed = [r["date"] for r in registry.read(ai_test.REGISTRY) if r["type"] == "missed"]
+    assert missed == ["2026-11-19"]                                # the Muhurat Wednesday is not filled in as missed

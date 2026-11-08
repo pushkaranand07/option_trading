@@ -559,7 +559,7 @@ def overview(chain_fn=None) -> dict:
 
 # ---------------------------------------------------------------- the v2 link and the CSV
 
-from webapp.ai_test import V2_FIRST_SESSION  # noqa: E402  (one definition, beside the spec it comes from)
+from webapp.ai_test import FIRST_SESSION, VERSION  # noqa: E402  (one definition, beside the spec it comes from)
 
 
 def _leg_key(legs: list[dict]) -> list:
@@ -595,14 +595,14 @@ def _v2_link(t: dict, days: dict) -> dict:
     day = t.get("run_day") or (t.get("taken_at") or "")[:10]     # the run's IST session; old rows: the day taken
     r = days.get(day)
     out = {"registered_that_day": bool(r), "same_trade": False, "counted": False, "entry": None, "status": None}
-    if day < V2_FIRST_SESSION.isoformat():               # shown for comparison, never counted
-        return out | {"note": f"before v2 started ({V2_FIRST_SESSION})", "entry": r and r["entry"], "status": r and r["status"]}
+    if day < FIRST_SESSION.isoformat():               # shown for comparison, never counted
+        return out | {"note": f"before v{VERSION} started ({FIRST_SESSION})", "entry": r and r["entry"], "status": r and r["status"]}
     if not r:
-        return out | {"note": "v2 registered nothing that day"}
+        return out | {"note": f"v{VERSION} registered nothing that day"}
     same = r["structure"] == t.get("strategy") and r["legs"] == _leg_key(t.get("legs") or [])
     return out | {"same_trade": same, "counted": same and r["outcome"] == "trade", "entry": r["entry"], "status": r["status"],
-                  "note": ("v2 counted this trade" if same else "v2 counted a different trade that day") if r["outcome"] == "trade"
-                  else f"v2 recorded {r['outcome']} that day"}
+                  "note": (f"v{VERSION} counted this trade" if same else f"v{VERSION} counted a different trade that day") if r["outcome"] == "trade"
+                  else f"v{VERSION} recorded {r['outcome']} that day"}
 
 
 CSV_HEADER = ["view", "source", "status", "taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "run_id", "candidate",

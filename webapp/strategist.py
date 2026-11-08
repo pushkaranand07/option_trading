@@ -548,7 +548,10 @@ Rank exactly 8 candidates (all of them if fewer are offered), strongest first, b
 each one:
 - direction: what most of the evidence agrees on (the agents' decision, news and sentiment, the trend, how the market
   has moved today, today's intraday rule, OI walls, FII positioning);
-- buying vs selling options: implied vol vs the forecast, days to expiry, time decay;
+- the structure: a single bought CALL or PUT, a debit spread or a credit spread. None is preferred by default. A single
+  bought option suits a clear, quick move the evidence expects to reach the target soon, with implied vol not rich vs
+  the forecast; a spread suits a slower or capped move, rich implied vol, or heavy time decay close to expiry. When the
+  evidence for a quick directional move is the strongest part of the analysis, rank a single bought option #1;
 - strikes: distance from spot vs the expected move; whether the target is reachable and the stop sits beyond a key level.
 Do NOT rank by the profit-to-loss figures: a large ratio whose target the evidence does not support is a weaker trade
 than a smaller one it does. Use each candidate once, only numbers from the list. The weaker trades go lower, with low

@@ -98,8 +98,8 @@ def _register(day, legs, priced, hour=10):
 
 @pytest.mark.unit
 def test_an_ai_1_row_shows_whether_v2_counted_it_and_v2s_entry(prov):
-    tr.record_ai_pick("run1")                                                      # AI #1: BUY 22600 CE, on 2026-11-05
-    _register(date(2026, 11, 5), [{"action": "BUY", "type": "CE", "strike": 22600.0}],
+    tr.record_ai_pick("run1")                                                      # AI #1: BUY 22600 CE, on 2026-11-12
+    _register(date(2026, 11, 12), [{"action": "BUY", "type": "CE", "strike": 22600.0}],
               [{"action": "BUY", "type": "CE", "strike": 22600.0, "price": 102.5}])
     o = tr.overview(lambda *a: chain())
     v2 = o["ai"]["open"][0]["v2"]
@@ -112,11 +112,11 @@ def test_an_ai_1_row_shows_whether_v2_counted_it_and_v2s_entry(prov):
 @pytest.mark.unit
 def test_v2_counting_a_different_trade_or_a_pre_start_day_is_not_counted(prov):
     tr.record_ai_pick("run1")
-    _register(date(2026, 11, 5), [{"action": "BUY", "type": "CE", "strike": 22700.0}],
+    _register(date(2026, 11, 12), [{"action": "BUY", "type": "CE", "strike": 22700.0}],
               [{"action": "BUY", "type": "CE", "strike": 22700.0, "price": 55.0}])
     v2 = tr.overview(lambda *a: chain())["ai"]["open"][0]["v2"]
     assert v2["registered_that_day"] and not v2["same_trade"] and not v2["counted"]
-    assert tr._v2_link({"source": "ai", "taken_at": "2026-11-04 12:58", "strategy": "x", "legs": []}, {})["note"] == "before v2 started (2026-11-05)"
+    assert tr._v2_link({"source": "ai", "taken_at": "2026-11-06 12:58", "strategy": "x", "legs": []}, {})["note"] == "before v3 started (2026-11-09)"
 
 
 @pytest.mark.unit

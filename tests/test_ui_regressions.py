@@ -127,8 +127,8 @@ def test_a_locked_trade_card_shows_no_take_button(candidate):
 
 @pytest.mark.unit
 def test_the_v2_status_line_says_the_state_and_the_reason():
-    line = text(render("S.status = ARGS[0]; v2LineHtml()", {"v2": {"state": "NO", "reason": "void entry at 09:30: no two-sided quote"}}))
-    assert "v2 aaj ka answer counted" in line and "NO" in line and "void entry at 09:30" in line
+    line = text(render("S.status = ARGS[0]; v2LineHtml()", {"v2": {"version": "3", "state": "NO", "reason": "void entry at 09:30: no two-sided quote"}}))
+    assert "v3 aaj ka answer counted" in line and "NO" in line and "void entry at 09:30" in line
 
 
 @pytest.mark.unit

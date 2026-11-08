@@ -1,7 +1,8 @@
-"""The AI strategist's forward test, version 2: write each trade to the registry before entry (docs/ai_strategist_test_v2.json, docs/PA_52).
+"""The AI strategist's forward test, version 3: write each trade to the registry before entry (docs/ai_strategist_test_v3.json, docs/PA_53).
 
-Version 1.1 (one suggestion a question) was closed by the user on 2026-11-04 with one trade registered; its spec and registry stay on file,
-unedited, and are not settled or reported. Version 2 counts the AI's #1 of its ranked trades.
+Version 1.1 (one suggestion a question) was closed by the user on 2026-11-04 with one trade registered, and version 2 on 2026-11-08 with
+two counted; their specs and registries stay on file, unedited, and are not settled or reported. Version 3 counts the AI's #1 of its
+ranked trades, ranked by a prompt with no default preference for spreads over single bought options. A Muhurat session never counts.
 
 One NIFTY question per session counts: the #1 of the first asked in the window. Order: the LLM answers; the structure is registered; only then is a
 fresh chain fetched, and the entry is that chain's bid and ask, so no entry price is older than its registration. The rule-based pick is
@@ -25,23 +26,25 @@ from tradingagents.research import registry
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
-SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v2.json"
-SPEC_SHA256 = "30dbdfecc54475ab412c1a00556126807d834944c6469ef6d24f04127f697392"
-REGISTRY = ROOT / "reports" / "ai_test" / "v2" / "registry.jsonl"     # version 1.1's stays at reports/ai_test/registry.jsonl
-CHAINS = ROOT / "reports" / "ai_test" / "v2" / "chains"
+VERSION = "3"
+SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v3.json"
+SPEC_SHA256 = "173667b786bc50d8045013161aae1b9495fc0705b461c6f30cd418805b425bed"
+REGISTRY = ROOT / "reports" / "ai_test" / "v3" / "registry.jsonl"     # 2's stays in reports/ai_test/v2, 1.1's at reports/ai_test/registry.jsonl
+CHAINS = ROOT / "reports" / "ai_test" / "v3" / "chains"
 IST = pytz.timezone("Asia/Kolkata")
 SYMBOL = "NIFTY"
 WINDOW = (time(9, 30), time(15, 0))
-# The spec's "starts" is a rule: "the first weekday session after this file is on main". The frozen file reached main
-# with PR #98, merged 2026-11-04 13:50 IST, so the first counted session is 2026-11-05. Everything else reads this.
-V2_FIRST_SESSION = date(2026, 11, 5)
+# The spec's "starts" is a rule: "the first weekday session after this file is on main". Written 2026-11-08 (Sunday), so if it
+# reaches main before 09:30 on Monday 2026-11-09 that is the first counted session; merged later, this date must move with it.
+# (Version 2: PR #98, merged 2026-11-04, first session 2026-11-05.) Everything else reads this.
+FIRST_SESSION = date(2026, 11, 9)
 
 
 def read_spec(path: Path | None = None) -> dict:
     spec = json.loads((path or SPEC_FILE).read_text(encoding="utf-8"))
     text = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     if hashlib.sha256(text.encode("utf-8")).hexdigest() != SPEC_SHA256:
-        raise ValueError("ai_strategist_test_v2.json changed after it was frozen")
+        raise ValueError(f"{SPEC_FILE.name} changed after it was frozen")
     return spec
 
 
@@ -77,9 +80,11 @@ def today_status(now: datetime | None = None) -> dict:
 
     now = (now or datetime.now(IST)).astimezone(IST)
     day, fp = now.date(), fingerprint_problem()
-    out = {"day": day.isoformat(), "fingerprint_problem": fp}
-    if day < V2_FIRST_SESSION:
-        return out | {"state": "NO", "reason": f"before v2 started ({V2_FIRST_SESSION})"}
+    out = {"version": VERSION, "day": day.isoformat(), "fingerprint_problem": fp}
+    if day < FIRST_SESSION:
+        return out | {"state": "NO", "reason": f"before v{VERSION} started ({FIRST_SESSION})"}
+    if day in getattr(signals.nse_calendar(), "muhurat_days", set()):      # same test as record(): hours need not be known
+        return out | {"state": "NO SESSION", "reason": "Muhurat session: not counted (you don't trade it; its data is still saved)"}
     if not signals.nse_calendar().is_trading_day(day):
         return out | {"state": "NO SESSION", "reason": "no NSE session today"}
     rows = registry.read(REGISTRY)
@@ -114,21 +119,24 @@ def model_settings() -> dict:
             "reasoning_effort": os.environ.get("TRADINGAGENTS_OPENAI_REASONING_EFFORT")}
 
 
-def _weekdays_between(a: date, b: date) -> list[date]:
-    """Weekdays after a and before b. A holiday among them is corrected against NSE's sessions when results are settled."""
-    return [a + timedelta(days=i) for i in range(1, (b - a).days) if (a + timedelta(days=i)).weekday() < 5]
+def _weekdays_between(a: date, b: date, skip: frozenset | set = frozenset()) -> list[date]:
+    """Weekdays after a and before b, minus ``skip`` (Muhurat days). A holiday among them is corrected against NSE's sessions when results are settled."""
+    return [d for d in (a + timedelta(days=i) for i in range(1, (b - a).days)) if d.weekday() < 5 and d not in skip]
 
 
 def record(result: dict, path: Path | None = None, chains: Path | None = None, now: datetime | None = None, built=None, spec: dict | None = None, clock=None) -> dict | None:
     """Register the first NIFTY answer of a session: ``result`` is its #1 trade (a no_trade plan when the AI ranked none).
     Returns the registry row, or None if this answer does not count."""
-    from webapp import strategist as st
+    from webapp import signals, strategist as st
 
     path, chains = path or REGISTRY, chains or CHAINS
     spec = spec or read_spec()
     now = now or datetime.now(IST)
     clock = clock or (lambda: datetime.now(IST))
     if result.get("symbol") != SYMBOL or not WINDOW[0] <= now.time() <= WINDOW[1] or now.weekday() >= 5:
+        return None
+    muhurat = getattr(signals.nse_calendar(), "muhurat_days", set())
+    if now.date() in muhurat:                                    # never a counted session (the user does not trade it)
         return None
     if "stop" in spec and now.date() > date.fromisoformat(spec["stop"]["date"]):
         return None
@@ -142,7 +150,7 @@ def record(result: dict, path: Path | None = None, chains: Path | None = None, n
     spec_hash = SPEC_SHA256
     seen = [date.fromisoformat(r["date"]) for r in rows if r["type"] in ("strategist", "missed")]
     if seen:
-        for d in _weekdays_between(max(seen), day):
+        for d in _weekdays_between(max(seen), day, muhurat):
             registry.record_missed(path, day=d, spec_hash=spec_hash, now=now, reason="no question asked in the window")
     plan = result.get("plan") or {}
     trade = bool(result.get("priced")) and plan.get("strategy") not in (None, "no_trade")

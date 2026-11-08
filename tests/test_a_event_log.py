@@ -18,7 +18,7 @@ def test_a_take_and_a_refusal_each_log_a_line(world):
     t = take(world).json()
     line = next(x for x in events() if t["id"] in x)
     assert " taken " in line and "long_call" in line and "you" in line
-    world["live"]["chain"] = chain({}) | {"timestamp": "05-Nov-2026 09:55:00"}
+    world["live"]["chain"] = chain({}) | {"timestamp": "12-Nov-2026 09:55:00"}
     take(world, candidate=1)
     refused = [x for x in events() if " refused " in x]
     assert refused and "s old" in refused[-1]
