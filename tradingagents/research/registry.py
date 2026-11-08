@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import threading
 import time as _clock
@@ -23,6 +24,7 @@ from pathlib import Path
 
 import pytz
 
+logger = logging.getLogger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 ENTRY_OPEN = time(9, 15)
 GENESIS = "0" * 64
@@ -111,9 +113,16 @@ def _hash(body: dict) -> str:
 
 
 def read(path: Path) -> list[dict]:
-    if not Path(path).exists():
+    """The registry's rows. Readers take no lock, and every append ends with a newline, so a final line without one is
+    an append still being written: it is left out (logged at debug), never parsed. A complete bad line still raises."""
+    p = Path(path)
+    if not p.exists():
         return []
-    return [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()]
+    text = p.read_text(encoding="utf-8")
+    if text and not text.endswith("\n"):
+        text, _, partial = text.rpartition("\n")
+        logger.debug("%s: left out a final line with no newline (an append in progress): %r", p.name, partial[:80])
+    return [json.loads(x) for x in text.splitlines() if x.strip()]
 
 
 def verify(path: Path) -> int:
