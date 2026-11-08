@@ -90,7 +90,7 @@ def test_a_run_stays_fixed_until_the_next_run():
 def test_every_trade_shows_the_money_one_lot_needs():
     assert "lotMoney(c.priced.debit, c.priced.outlay_per_lot)" in _function("tradeCard") and "1 lot <b>${rupee(m.v)}</b>" in _function("tradeCard")
     assert "Money for 1 lot" in _function("stratHtml") and "in them" in _function("viewHtml") and "Money, 1 lot" in _function("tradeDetailHtml")
-    assert '"≈ margin (Dhan sets exact)"' in _function("lotMoney")
+    assert '"max loss · Dhan margin is much higher"' in _function("lotMoney") and "Dhan sets exact" not in _function("lotMoney")   # max loss is not margin
 
 
 @pytest.mark.unit

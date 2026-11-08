@@ -199,3 +199,50 @@ def test_the_calendar_moves_month_by_month_shows_the_whole_week_and_empty_months
     assert 'data-month-nav="-1"' in view(nov, "you") and 'data-month-nav="1"' in view(nov, "you")
     dec = calendar_part(render("S.recMonth = { you: '2026-12' }; recordHtml(ARGS[0])", data))
     assert "December 2026" in dec and "₹1,589" not in dec and "January 2027" in dec    # a month with no trade still shows
+
+
+# ---------------------------------------------------------------- the ₹15,000 budget card (display only)
+
+@pytest.fixture(scope="module")
+def pool():
+    ctx = {"spot": 22600, "days_to_expiry": 2, "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": {}}}
+    cands = st.rank("NIFTY", built=(ctx, CHAIN | {"summary": {"atm_iv": 14.0}, "expiry": "27-Oct-2099"}), top=40)["candidates"]
+    return {c["plan"]["strategy"]: json.loads(json.dumps(c, default=str)) | {"ai_why": "x"} for c in reversed(cands)}
+
+
+def ranked(*cands):
+    return [c | {"rank": i + 1} for i, c in enumerate(cands)]
+
+
+@pytest.mark.unit
+def test_the_budget_card_shows_one_buy_in_plain_words_skipping_spreads(pool):
+    spread, call = pool["bull_call_spread"], pool["long_call"]
+    card = text(render("budgetCardHtml('NIFTY', ARGS[0])", ai_run(None, trades=ranked(spread, call))))
+    leg = call["levels"]["legs"][0]
+    assert "For your ₹15,000 · 1 lot" in card and "No trade today" not in card
+    assert f"BUY NIFTY 27 OCT {int(leg['strike'])} CALL" in card and "(1 lot = 65 qty)" in card
+    assert "you pay ₹" in card and "Exit by 3:15 PM no matter what" in card and "AI's #2 of 2" in card
+
+
+@pytest.mark.unit
+def test_the_budget_card_says_no_trade_when_nothing_fits(pool):
+    costly = pool["long_call"] | {"priced": pool["long_call"]["priced"] | {"outlay_per_lot": 15000.01}}
+    card = text(render("budgetCardHtml('NIFTY', ARGS[0])", ai_run(None, trades=ranked(pool["bull_call_spread"], costly))))
+    assert "No trade today" in card and "BUY NIFTY" not in card
+
+
+@pytest.mark.unit
+def test_a_muhurat_day_gives_no_trade_even_when_a_buy_fits(pool):
+    card = text(render("S.status = { muhurat: { state: 'post_close' } }; budgetCardHtml('NIFTY', ARGS[0])",
+                       ai_run(None, trades=ranked(pool["long_call"]))))
+    assert "No trade today" in card and "Muhurat" in card and "BUY NIFTY" not in card
+
+
+@pytest.mark.unit
+def test_a_credit_spread_never_shows_its_max_loss_as_margin(pool):
+    s = pool["bull_call_spread"]
+    credit = s | {"plan": s["plan"] | {"strategy": "bear_call_spread", "bias": "bearish"},
+                  "priced": s["priced"] | {"debit": False, "net_per_unit": 27.85, "outlay_per_lot": 4689.75, "max_profit_per_lot": 1810.25}}
+    shown = text(render("aiListHtml('NIFTY', ARGS[0])", ai_run(None, trades=ranked(credit))))
+    assert "margin (Dhan sets exact)" not in shown and "lagbhag" not in shown
+    assert "max loss · Dhan margin is much higher" in shown and "No trade today" in shown
