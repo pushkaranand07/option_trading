@@ -57,13 +57,13 @@ def env(monkeypatch):
     monkeypatch.setattr(signals, "nse_calendar", lambda: CAL)
     state = {"bars": bars(), "src": "yahoo"}
 
-    def fake_candles(symbol, tf="5m"):
+    def fake_candles(inst, tf):                       # the daily-bars download (Yahoo, or Dhan when enabled)
         assert tf == "1D"
         if state["bars"] is None:
             raise md.DataError("No price data")
         return state["bars"], state["src"]
 
-    monkeypatch.setattr(md, "candles", fake_candles)
+    monkeypatch.setattr(md, "_candles", fake_candles)
     return state
 
 

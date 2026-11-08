@@ -86,6 +86,13 @@ class _TTLCache:
                     return hit[1]
             return self._fetch(key, fn)
 
+    def peek(self, key, ttl: float):
+        """The value if one younger than ``ttl`` is held, else None; never fetches and never marks the key as read
+        (so it does not keep the key hot for ``refresh_ahead``)."""
+        with self._lock:
+            hit = self._d.get(key)
+            return hit[1] if hit and _time.monotonic() - hit[0] < ttl else None
+
     def _fetch(self, key, fn):
         started = _time.monotonic()
         value = fn()
@@ -418,7 +425,9 @@ def _reference_close(inst: dict, session: date, expected: date) -> tuple[float, 
     """(close, source) of the previous session from the app's own daily bars, else Dhan's daily history."""
     src = None
     try:
-        df, src = candles(inst["symbol"], "1D")
+        # A chart's fresh 1D bars if held; else fetched here, under the caller's 600 s "prev" key. Not through
+        # candles(): that would keep its 20 s key hot and refresh_ahead would re-download it every ~20 s.
+        df, src = _cache.peek(("c", inst["symbol"], "1D"), 20) or _candles(inst, "1D")    # 20 s: candles' 1D ttl
         value = _close_before(df, session, expected)
         if value is not None:
             return value, f"bars ({src})"
