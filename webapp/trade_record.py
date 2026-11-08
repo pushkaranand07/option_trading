@@ -181,7 +181,7 @@ def _load() -> list[dict]:
         logger.error(_problem)
         raise StoreCorrupt(_problem) from exc
     try:
-        rows = json.loads(raw.decode("utf-8"))
+        rows = json.loads(raw.decode("utf-8-sig"))     # a BOM (Notepad, PowerShell 5.1) is fine; _save writes none
         if not isinstance(rows, list) or not all(isinstance(t, dict) for t in rows):
             raise ValueError("not a list of trades")
     except ValueError as exc:                              # a JSON error, bad UTF-8, or the wrong shape
