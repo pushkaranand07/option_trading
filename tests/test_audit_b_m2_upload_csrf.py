@@ -4,8 +4,11 @@ text/csv or the .xlsx type; anything else is 415 and nothing is written."""
 
 import pytest
 
-from tests.test_audit_b_support import HEADER, SAME_ORIGIN, client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
+from tests.test_audit_b_support import HEADER, SAME_ORIGIN
 from webapp import quant
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 

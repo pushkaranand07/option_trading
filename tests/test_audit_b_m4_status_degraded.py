@@ -5,9 +5,11 @@ returned with 200. The status also carries the trade store's problem and the tra
 
 import pytest
 
-from tests.test_audit_b_support import client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
 from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
 from webapp import ai_test, build_info, signals, trade_record as tr
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 V2 = {"version": 3, "state": "NOT YET", "reason": "no answer yet", "fingerprint_problem": None}
 MONITOR = {"running": True, "last_ok_at": "2026-11-09T10:00:00+05:30", "last_error": None, "fail_count": 0}

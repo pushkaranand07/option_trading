@@ -6,8 +6,11 @@ import asyncio
 
 import pytest
 
-from tests.test_audit_b_support import HEADER, SAME_ORIGIN, client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
+from tests.test_audit_b_support import HEADER, SAME_ORIGIN
 from webapp import quant, server
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 OK = HEADER | SAME_ORIGIN | {"Content-Type": "application/octet-stream"}
 

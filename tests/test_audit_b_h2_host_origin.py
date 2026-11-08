@@ -4,8 +4,11 @@ Referer), it must be http://127.0.0.1:<port> or http://localhost:<port>."""
 
 import pytest
 
-from tests.test_audit_b_support import HEADER, SAME_ORIGIN, client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
+from tests.test_audit_b_support import HEADER, SAME_ORIGIN
 from webapp import trade_record as tr
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 
 @pytest.fixture

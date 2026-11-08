@@ -7,8 +7,10 @@ Dhan chain, whose expiries are Dhan's own list (``market_data.expiries``, the li
 
 import pytest
 
-from tests.test_audit_b_support import client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
 from webapp import market_data as md, option_chain as oc, strategist
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 NSE_EXPIRIES = ["13-Nov-2026", "27-Nov-2026"]
 DHAN_EXPIRIES = ["2026-11-13", "2026-11-27"]

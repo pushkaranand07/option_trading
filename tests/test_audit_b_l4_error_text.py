@@ -8,8 +8,11 @@ import logging
 import pytest
 import requests
 
-from tests.test_audit_b_support import HEADER, client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
+from tests.test_audit_b_support import HEADER
 from webapp import market_data as md, option_chain as oc, quant, strategist, trade_record as tr
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 SECRET = r"boom at C:\Users\someone\secret.py line 7"
 

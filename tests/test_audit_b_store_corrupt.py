@@ -4,8 +4,11 @@ clear message on every route that writes trades, not a 400 'Not taken' / 404, an
 
 import pytest
 
-from tests.test_audit_b_support import HEADER, client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
+from tests.test_audit_b_support import HEADER
 from webapp import trade_record as tr
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 WHY = "trades.json could not be read (line 3): fix or restore it; nothing was written."
 

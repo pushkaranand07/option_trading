@@ -13,9 +13,19 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.test_audit_b_support import HEADER, SAME_ORIGIN, client, loopback  # noqa: F401  (fixtures)
-from webapp import market_data as md, morning, quant, server, signals, strategist, trade_record as tr
+from tests import test_audit_b_support as support
+from tests.test_audit_b_support import HEADER, SAME_ORIGIN
+from webapp import (
+    market_data as md,
+    morning,
+    quant,
+    server,
+    signals,
+    strategist,
+    trade_record as tr,
+)
 
+client, loopback = support.client, support.loopback          # the shared fixtures
 ROOT = Path(__file__).resolve().parents[1]
 
 PROBE = r"""

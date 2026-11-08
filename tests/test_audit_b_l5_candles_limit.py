@@ -4,8 +4,10 @@ anything else is 422."""
 import pandas as pd
 import pytest
 
-from tests.test_audit_b_support import client, loopback  # noqa: F401  (fixtures)
+from tests import test_audit_b_support as support
 from webapp import market_data as md, signals
+
+client, loopback = support.client, support.loopback          # the shared fixtures
 
 
 @pytest.fixture
