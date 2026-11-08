@@ -2,12 +2,29 @@
 
 __version__ = "0.7.0"
 
-from dotenv import find_dotenv, load_dotenv
+import os
+import sys
+from pathlib import Path
 
-# Load .env at package import so DEFAULT_CONFIG's env-var overlay and every LLM
-# client see the user's keys whichever entry point started the process.
-# usecwd=True walks from the working directory, so the installed console script
-# finds the project's .env rather than looking beside site-packages. Values the
-# caller has already exported are never overridden.
-load_dotenv(find_dotenv(usecwd=True))
-load_dotenv(find_dotenv(".env.enterprise", usecwd=True), override=False)
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _load_env(root: Path = ROOT, environ=os.environ, modules=sys.modules) -> list[Path]:
+    """Load the repository's own .env (and .env.enterprise) at package import, so DEFAULT_CONFIG's env-var overlay
+    and every LLM client see the user's keys whichever entry point started the process. Only ``root`` is read: no
+    walk up from the working directory, so a worktree, copy or folder below another project never inherits its keys
+    (audit H4). Nothing is loaded when TRADINGAGENTS_NO_DOTENV=1 or under pytest. Exported values are never overridden."""
+    if environ.get("TRADINGAGENTS_NO_DOTENV") == "1" or "pytest" in modules:
+        return []
+    loaded = []
+    for name in (".env", ".env.enterprise"):
+        path = root / name
+        if path.is_file():
+            load_dotenv(path, override=False)
+            loaded.append(path)
+    return loaded
+
+
+_load_env()
