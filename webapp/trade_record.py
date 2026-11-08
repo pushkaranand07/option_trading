@@ -900,27 +900,58 @@ def delete(trade_id: str) -> None:
 # ---------------------------------------------------------------- background monitor
 
 _monitor_started = False
+_monitor_lock = threading.Lock()                 # guards _monitor_started and _monitor
+_monitor = {"running": False, "last_ok_at": None, "last_error": None, "fail_count": 0}
+
+
+def monitor_status() -> dict:
+    """The monitor's health: running, the last good check (IST), the last error, consecutive failures."""
+    with _monitor_lock:
+        return dict(_monitor)
+
+
+def _monitor_tick() -> bool:
+    """One check: while the market is open and a trade is open, apply the rules (refresh_open). A failure is logged
+    with its traceback and counted, never raised, so the monitor keeps going. True when the check succeeded."""
+    from webapp import signals
+
+    try:
+        with _lock:
+            any_open = any(t["status"] == "open" for t in _load())
+        if any_open and signals.market_open():
+            refresh_open()
+    except Exception as exc:                               # a failed check must not stop the monitor: log and count it
+        with _monitor_lock:
+            _monitor["fail_count"] += 1
+            _monitor["last_error"] = f"{_clock():%Y-%m-%d %H:%M:%S} {type(exc).__name__}: {str(exc)[:300]}"
+            n = _monitor["fail_count"]
+        logger.exception("trade record monitor: the check failed (%d in a row)", n)
+        return False
+    with _monitor_lock:
+        _monitor.update(last_ok_at=_clock().strftime("%Y-%m-%d %H:%M:%S"), last_error=None, fail_count=0)
+    return True
 
 
 def start_monitor(every_seconds: int = 60) -> None:
     """Check open trades once a minute while the market is open, so a target / stop reached while the page is
-    closed still closes the trade at that minute's prices."""
+    closed still closes the trade at that minute's prices. Starts one thread, however many callers."""
     global _monitor_started
-    if _monitor_started:
-        return
-    _monitor_started = True
+    with _monitor_lock:
+        if _monitor_started:
+            return
+        _monitor_started = True
 
     def loop():
         import time
 
-        from webapp import signals
-        while True:
-            time.sleep(every_seconds)
-            try:
-                open_ = [t for t in _load() if t["status"] == "open"]
-                if open_ and (signals.market_open() or any(_expired(t) for t in open_)):
-                    refresh_open()                         # GET no longer settles: the monitor does (expiry too)
-            except Exception:                              # a failed check must not stop the monitor
-                pass
+        with _monitor_lock:
+            _monitor["running"] = True
+        try:
+            while True:
+                time.sleep(every_seconds)
+                _monitor_tick()
+        finally:                                           # only a BaseException gets here
+            with _monitor_lock:
+                _monitor["running"] = False
 
     threading.Thread(target=loop, daemon=True, name="trade-record-monitor").start()
