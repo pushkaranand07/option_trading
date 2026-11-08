@@ -43,6 +43,7 @@ from webapp import (  # noqa: E402
     quant,
     signals,
     strategist,
+    timeutil,
     trade_record,
 )
 
@@ -337,8 +338,7 @@ async def morning_plan(date: str | None = None):
 @app.get("/api/morning/context/{symbol}")
 async def morning_context(symbol: str):
     """The morning view for any instrument, built now (the 8:30 job covers NIFTY and BANKNIFTY, with AI)."""
-    from datetime import date as _date
-    return {"context": await _call(morning.context, await _symbol(symbol), _date.today()), "ai": None}
+    return {"context": await _call(morning.context, await _symbol(symbol), timeutil.today_ist()), "ai": None}
 
 
 @app.post("/api/morning/refresh")
@@ -508,12 +508,10 @@ async def trades():
 @app.get("/api/trades.csv")
 def trades_csv():
     """Every trade of both views with where it came from (download)."""
-    from datetime import date as _date
-
     from fastapi.responses import Response
 
     return Response(trade_record.history_csv(), media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="trade_history_{_date.today()}.csv"'})
+                    headers={"Content-Disposition": f'attachment; filename="trade_history_{timeutil.today_ist()}.csv"'})
 
 
 class _NoStoreCorrupt(Exception):

@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from webapp import timeutil
+
 ROOT = Path(__file__).resolve().parent.parent
 JOURNAL_DIR = ROOT / "reports" / "journal"
 MARKET_MAP = ROOT / "reports" / "market_map" / "india-market-map.html"
@@ -87,7 +89,7 @@ def freshness(as_of: date | str | None, now: datetime | None = None, calendar=No
     if calendar is None:
         from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
         calendar = NSECalendar.from_nse()
-    now = now or datetime.now()
+    now = now or timeutil.now_ist().replace(tzinfo=None)          # India time, whatever the PC runs in (L6)
     today = now.date()
     if isinstance(as_of, str):
         as_of = date.fromisoformat(as_of[:10])
@@ -120,7 +122,7 @@ RISK_TTL = 60   # built from end-of-day files that change once a night; a minute
 def risk(symbol: str, on: date | None = None, root: Path | None = None) -> dict:
     from webapp import market_data as md
 
-    on = on or date.today()
+    on = on or timeutil.today_ist()
     return md._cache.get(("risk", symbol.upper(), on, str(root)), RISK_TTL, lambda: _risk(symbol, on, root))
 
 

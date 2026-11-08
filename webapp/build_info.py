@@ -7,8 +7,9 @@ warns while the commit checked out differs from the one the server started on.""
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime
 from pathlib import Path
+
+from webapp import timeutil
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -23,7 +24,7 @@ def repo_head() -> str | None:
 
 
 CODE_VERSION = repo_head()                                   # read once, when the server starts
-STARTED_AT = datetime.now().isoformat(timespec="seconds")
+STARTED_AT = timeutil.now_ist().replace(tzinfo=None).isoformat(timespec="seconds")   # IST wall time (L6), no offset
 
 
 def status() -> dict:
