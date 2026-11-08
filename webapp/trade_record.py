@@ -954,8 +954,9 @@ def _monitor_tick() -> bool:
 
     try:
         with _lock:
-            any_open = any(t["status"] == "open" for t in _load())
-        if any_open and signals.market_open():
+            rows = _load()
+        repair = _repair_range_trades(rows)              # in memory: a bug-closed condor counts as open (and is saved)
+        if signals.market_open() and (repair or any(t["status"] == "open" for t in rows)):
             refresh_open()
     except Exception as exc:                               # a failed check must not stop the monitor: log and count it
         with _monitor_lock:
