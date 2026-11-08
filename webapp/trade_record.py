@@ -37,7 +37,7 @@ from webapp import build_info  # noqa: E402  (the commit and start time each new
 def _event(what: str, t: dict, why: str = "", level: int = logging.INFO) -> None:
     """One line in events.log beside the trade record (and the server log): when, which row, what happened, why.
     A failure to write it is logged as a warning and never stops the trade itself."""
-    line = (f"{datetime.now():%Y-%m-%d %H:%M:%S} {t.get('id')} {t.get('source', 'you')} {what} {t.get('strategy')} "
+    line = (f"{_clock():%Y-%m-%d %H:%M:%S} {t.get('id')} {t.get('source', 'you')} {what} {t.get('strategy')} "
             f"{t.get('symbol')} {t.get('expiry')}" + (f" | {why}" if why else ""))
     logger.log(level, line)
     try:
