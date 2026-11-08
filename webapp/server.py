@@ -119,7 +119,26 @@ async def same_origin_writes(request: Request, call_next):
 # carry messages the app wrote for the user, so they stay 502 with that message. Anything else is a bug: the page
 # gets 500 {"detail": "Internal error", "error_id"} and the traceback is logged under that id, never sent.
 
-UPSTREAM_ERRORS: tuple[type[BaseException], ...] = (md.DataError, nse_oc.ChainError, requests.RequestException)
+def _upstream_errors() -> tuple[type[BaseException], ...]:
+    """The domain errors the data routes reach, all with messages the app writes for the user: the web app's own
+    (market_data.DataError, option_chain.ChainError), the package's vendor taxonomy (VendorError: NSE / Yahoo /
+    Alpha Vantage failed, throttled, no data or not configured), HTTP clients (requests; curl_cffi, which yfinance
+    uses), and the Dhan guard refusing a non-market-data call."""
+    from tradingagents.dataflows.errors import VendorError
+    from webapp import dhan_guard
+
+    errors: list[type[BaseException]] = [md.DataError, nse_oc.ChainError, VendorError, requests.RequestException]
+    try:
+        from curl_cffi.requests.exceptions import RequestException as CurlRequestException
+        errors.append(CurlRequestException)
+    except ImportError:                               # yfinance without curl_cffi
+        pass
+    if blocked := getattr(dhan_guard, "DhanAccountAccessBlocked", None):
+        errors.append(blocked)
+    return tuple(errors)
+
+
+UPSTREAM_ERRORS: tuple[type[BaseException], ...] = _upstream_errors()
 
 
 def log_error(exc: BaseException) -> str:
