@@ -516,6 +516,19 @@ def trades_csv():
                     headers={"Content-Disposition": f'attachment; filename="trade_history_{_date.today()}.csv"'})
 
 
+class _NoStoreCorrupt(Exception):
+    """Stands in for trade_record.StoreCorrupt while the loaded trade_record has none (never raised)."""
+
+
+def _store_corrupt() -> type[Exception]:
+    return getattr(trade_record, "StoreCorrupt", None) or _NoStoreCorrupt
+
+
+def _store_unavailable(exc: Exception) -> HTTPException:
+    """Track A raises StoreCorrupt on a write when the trade store can't be read: nothing is saved until it is fixed."""
+    return HTTPException(503, f"The trade record can't be saved right now: {exc}")
+
+
 class TakeRequest(BaseModel):
     """The page sends only which trade of which run; any other field (a price, say) is ignored."""
     run_id: str
@@ -529,18 +542,25 @@ def trade_take(req: TakeRequest):
     chain now. Any price in the body is ignored."""
     run_id, candidate = req.run_id, req.candidate
     try:
-        return trade_record.take_from_run(run_id, candidate, confirm=req.confirm)
-    except trade_record.BetExists as exc:                                  # ask first; nothing written
-        raise HTTPException(409, {"message": str(exc), **exc.details}) from exc
-    except trade_record.TradeError as exc:
-        trade_record.record_refused(run_id, candidate, exc, "you")       # kept under My picks, outside the stats
-        raise HTTPException(400, f"Not taken: {exc}") from exc
+        try:
+            return trade_record.take_from_run(run_id, candidate, confirm=req.confirm)
+        except _store_corrupt():
+            raise
+        except trade_record.BetExists as exc:                              # ask first; nothing written
+            raise HTTPException(409, {"message": str(exc), **exc.details}) from exc
+        except trade_record.TradeError as exc:
+            trade_record.record_refused(run_id, candidate, exc, "you")   # kept under My picks, outside the stats
+            raise HTTPException(400, f"Not taken: {exc}") from exc
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
 
 
 @app.post("/api/trades/{trade_id}/close")
 async def trade_close(trade_id: str):
     try:
         return await run_in_threadpool(trade_record.close, trade_id)
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
     except trade_record.TradeError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -549,6 +569,8 @@ async def trade_close(trade_id: str):
 def trade_delete(trade_id: str):
     try:
         trade_record.delete(trade_id)
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
     except trade_record.TradeError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"ok": True}
