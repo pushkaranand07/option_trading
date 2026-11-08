@@ -12,7 +12,7 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 import requests
@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-from fastapi import Body, FastAPI, HTTPException, Request  # noqa: E402
+from fastapi import Body, FastAPI, HTTPException, Query, Request  # noqa: E402
 from fastapi.concurrency import run_in_threadpool  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -182,7 +182,7 @@ async def quotes(symbols: str):
 
 
 @app.get("/api/candles/{symbol}")
-async def candles(symbol: str, tf: str = "5m", limit: int = 1500):
+async def candles(symbol: str, tf: str = "5m", limit: Annotated[int, Query(ge=1, le=5000)] = 1500):
     df, source = await _call(md.candles, symbol, tf)
     open_now = signals.market_open()
     age, stale = md.bar_age(df), md.stale_bars(df, tf, open_now)
