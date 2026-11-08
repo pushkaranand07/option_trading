@@ -576,9 +576,19 @@ def _stats(closed: list[dict], open_: list[dict]) -> dict:
             "worst": min(nets, default=None), "open_pnl": sum((t.get("live") or {}).get("pnl") or 0 for t in open_)}
 
 
+def _live_mark(t: dict, chain_fn, live: bool) -> dict:
+    """mark() as the record uses it: with the market closed the last prices are shown, never acted on (expiry aside)."""
+    v = mark(t, chain_fn)
+    v["market_closed"] = not live
+    if not live and "expired" not in v["flags"]:
+        v["flags"] = []                                  # last prices of a closed market: shown, never acted on
+    return v
+
+
 def overview(chain_fn=None) -> dict:
-    """Open trades with live marks (flags saved; every trade settled by the rules), closed trades, totals —
-    yours and the AI's separately, the AI's also by evidence score."""
+    """Open trades with live marks, closed trades, totals — yours and the AI's separately, the AI's also by evidence
+    score. Read only (GET /api/trades): nothing is saved or logged. An open trade the rules would close now shows it
+    as ``live["would_settle"]`` (the reason); refresh_open() does the settling."""
     live = exit_allowed() is None                        # closed market: last prices shown, nothing settled (expiry aside)
     problem = None
     with _lock:
@@ -586,24 +596,50 @@ def overview(chain_fn=None) -> dict:
             trades = _load()
         except StoreCorrupt as exc:                      # a read must not crash the page: an empty view that says why
             trades, problem = [], str(exc)
+        _repair_range_trades(trades)                     # shown repaired; saved only by refresh_open()
+        for t in trades:
+            if t["status"] == "open":
+                v = _live_mark(t, chain_fn, live)
+                d = _settle_decision(t, v)
+                v["would_settle"] = d[3] if d and d[0] == "settle" else None
+                t["live"] = v
+    return _view(trades, problem)
+
+
+def refresh_open(chain_fn=None) -> dict:
+    """Apply the rules to every open trade and save: remember new target / stop flags, settle what reached its
+    target, stop or expiry, write events.log. The monitor calls it; GET never does. Returns the same view as
+    overview(). Raises StoreCorrupt (nothing written) when trades.json cannot be read."""
+    live = exit_allowed() is None
+    with _lock:
+        trades = _load()
         changed = _repair_range_trades(trades)
         for t in trades:
             if t["status"] != "open":
                 continue
-            v = mark(t, chain_fn)
-            v["market_closed"] = not live
-            if not live and "expired" not in v["flags"]:
-                v["flags"] = []                          # last prices of a closed market: shown, never acted on
-                t["live"] = v
-                continue
-            if v.get("spot") is not None and v["spot"] != t.get("last_spot"):
-                t["last_spot"] = v["spot"]
-                changed = True
-            changed |= _remember_flags(t, v)
-            changed |= _auto_settle(t, v)
+            v = _live_mark(t, chain_fn, live)
             t["live"] = v
+            if not live and "expired" not in v["flags"]:
+                continue
+            changed |= _apply_mark(t, v)
         if changed:
             _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session", *BET_FIELDS)} for t in trades])
+    return _view(trades, None)
+
+
+def _apply_mark(t: dict, v: dict) -> bool:
+    """Write one live view into its open trade: the last index level, new flags, a settle by rule. True if changed."""
+    changed = False
+    if v.get("spot") is not None and v["spot"] != t.get("last_spot"):
+        t["last_spot"] = v["spot"]
+        changed = True
+    changed |= _remember_flags(t, v)
+    changed |= _auto_settle(t, v)
+    return changed
+
+
+def _view(trades: list[dict], problem: str | None) -> dict:
+    """The page's view of the rows (read-time fields only, never saved)."""
     for t in trades:                                     # read-time only, never saved
         t["outside_session"] = t["status"] != "not_taken" and _outside_session(t)
     _group_bets(trades)
@@ -745,23 +781,34 @@ def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dic
     return t
 
 
-def _auto_settle(t: dict, v: dict) -> bool:
-    """Close by rule: the stop first if both are reached, then the target, else at expiry."""
+def _settle_decision(t: dict, v: dict) -> tuple | None:
+    """What the rules do with an open trade given its live view, without doing it: ("settle", exits, spot, reason),
+    ("exit_pending", None, spot, hit) or None. The stop first if both are reached, then the target, else at expiry."""
     if "expired" in v["flags"]:
         spot = t.get("last_spot") or t["spot_at_entry"]
-        _settle(t, [_intrinsic(leg, spot) for leg in t["legs"]], spot, "expired")
-        return True
+        return "settle", [_intrinsic(leg, spot) for leg in t["legs"]], spot, "expired"
     hit = "stop" if "stop" in v["flags"] else "target" if "target" in v["flags"] else None
-    if hit and v["pnl"] is None and v.get("pending"):         # it should close, but a leg has no quote: say so once
+    if hit and v["pnl"] is None and v.get("pending"):         # it should close, but a leg has no quote
+        return "exit_pending", None, v["spot"], hit
+    if hit and v["pnl"] is not None:
+        return "settle", [x["now"] for x in v["legs"]], v["spot"], "range broken" if t.get("range") else f"{hit} reached"
+    return None
+
+
+def _auto_settle(t: dict, v: dict) -> bool:
+    """Close by rule (_settle_decision); a trade that should close but has a leg with no quote says so once."""
+    d = _settle_decision(t, v)
+    if d is None:
+        return False
+    kind, exits, spot, why = d
+    if kind == "exit_pending":
         if any(a["kind"] == "exit_pending" for a in t["alerts"]):
             return False
-        t["alerts"].append({"kind": "exit_pending", "at": _now(), "spot": v["spot"], "legs": v["pending"]})
-        _event("exit_pending", t, f"exit pending: reached its {hit} but has no quote for {', '.join(v['pending'])}", logging.WARNING)
+        t["alerts"].append({"kind": "exit_pending", "at": _now(), "spot": spot, "legs": v["pending"]})
+        _event("exit_pending", t, f"exit pending: reached its {why} but has no quote for {', '.join(v['pending'])}", logging.WARNING)
         return True
-    if hit and v["pnl"] is not None:
-        _settle(t, [x["now"] for x in v["legs"]], v["spot"], "range broken" if t.get("range") else f"{hit} reached")
-        return True
-    return False
+    _settle(t, exits, spot, why)
+    return True
 
 
 BUG_NOTE = ("reopened 2026-11-04: it had been closed by a bug that read this range trade's single index target / stop "
@@ -857,8 +904,9 @@ def start_monitor(every_seconds: int = 60) -> None:
         while True:
             time.sleep(every_seconds)
             try:
-                if signals.market_open() and any(t["status"] == "open" for t in _load()):
-                    overview()
+                open_ = [t for t in _load() if t["status"] == "open"]
+                if open_ and (signals.market_open() or any(_expired(t) for t in open_)):
+                    refresh_open()                         # GET no longer settles: the monitor does (expiry too)
             except Exception:                              # a failed check must not stop the monitor
                 pass
 

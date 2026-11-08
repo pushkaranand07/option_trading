@@ -53,6 +53,7 @@ WRITES = {
     "record_refused": lambda d: tr.record_refused("run1", 0, tr.TradeError("stale"), "you"),
     "close": lambda d: tr.close(d["ids"][0], chain(22600, _q(130, 129, 131), _q(88, 87, 89))),
     "delete": lambda d: tr.delete(d["ids"][0]),
+    "refresh_open": lambda d: tr.refresh_open(chain(22470, _q(80, 79, 81), _q(58, 57, 59))),
 }
 
 
