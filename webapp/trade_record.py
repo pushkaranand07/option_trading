@@ -16,6 +16,8 @@ Paper trades only: nothing here places an order.
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import logging
 import threading
@@ -113,11 +115,73 @@ def exit_allowed() -> str | None:
 EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
 
 
+class StoreCorrupt(TradeError):
+    """trades.json exists but cannot be read: every write is refused (nothing saved over the history) until it is fixed."""
+
+
+STORE_DAMAGED_MSG = ("The trade record file trades.json is damaged and cannot be read ({why}). A copy was saved as {copy}. "
+                     "Nothing will be written to the trade record until the file is fixed or restored.")
+STORE_UNREADABLE_MSG = ("The trade record file trades.json cannot be opened ({why}). Nothing will be written to the trade "
+                        "record until it can be read again.")
+_problem: str | None = None                  # what is wrong with the store, from the last read (None: fine)
+_backups: dict[str, tuple[str, str]] = {}    # store path -> (sha256 of the damaged bytes, the copy's name): copied once
+
+
 def _load() -> list[dict]:
-    try:
-        return json.loads(STORE.read_text(encoding="utf-8")) if STORE.exists() else []
-    except (OSError, ValueError):
+    """Every row on file; [] only when there is no file yet. A file that exists but cannot be read or parsed raises
+    StoreCorrupt (after copying it aside once), so no writer can save a short list over the history (audit H1)."""
+    global _problem
+    if not STORE.exists():
+        _problem = None
         return []
+    try:
+        raw = STORE.read_bytes()
+    except OSError as exc:
+        _problem = STORE_UNREADABLE_MSG.format(why=str(exc)[:160])
+        logger.error(_problem)
+        raise StoreCorrupt(_problem) from exc
+    try:
+        rows = json.loads(raw.decode("utf-8"))
+        if not isinstance(rows, list) or not all(isinstance(t, dict) for t in rows):
+            raise ValueError("not a list of trades")
+    except ValueError as exc:                              # a JSON error, bad UTF-8, or the wrong shape
+        _problem = STORE_DAMAGED_MSG.format(why=str(exc)[:160], copy=_back_up_damaged(raw))
+        raise StoreCorrupt(_problem) from exc
+    _problem = None
+    return rows
+
+
+def _back_up_damaged(raw: bytes) -> str:
+    """Copy the damaged file beside it as trades.json.corrupt-<YYYYmmdd-HHMMSS>, once per damaged content (a copy
+    already on disk with the same bytes counts, so a restart does not copy again); the copy's name."""
+    sha = hashlib.sha256(raw).hexdigest()
+    known = _backups.get(str(STORE))
+    if known and known[0] == sha:
+        return known[1]
+    for old in sorted(STORE.parent.glob(f"{STORE.name}.corrupt-*")):
+        try:
+            if old.stat().st_size == len(raw) and hashlib.sha256(old.read_bytes()).hexdigest() == sha:
+                _backups[str(STORE)] = (sha, old.name)
+                return old.name
+        except OSError:
+            continue
+    copy = STORE.with_name(f"{STORE.name}.corrupt-{_clock():%Y%m%d-%H%M%S}")
+    try:
+        copy.write_bytes(raw)
+    except OSError as exc:
+        logger.error("trades.json is damaged and the copy %s could not be written (%s)", copy, exc)
+        return f"{copy.name} (not written: {exc})"
+    _backups[str(STORE)] = (sha, copy.name)
+    logger.error("trades.json is damaged: copied to %s; every write to the trade record is refused until it is fixed", copy)
+    return copy.name
+
+
+def store_problem() -> str | None:
+    """What is wrong with the trade record file right now (it is read again), or None when it is fine or absent."""
+    with _lock:
+        with contextlib.suppress(StoreCorrupt):
+            _load()
+        return _problem
 
 
 def _save(trades: list[dict]) -> None:
@@ -516,8 +580,12 @@ def overview(chain_fn=None) -> dict:
     """Open trades with live marks (flags saved; every trade settled by the rules), closed trades, totals —
     yours and the AI's separately, the AI's also by evidence score."""
     live = exit_allowed() is None                        # closed market: last prices shown, nothing settled (expiry aside)
+    problem = None
     with _lock:
-        trades = _load()
+        try:
+            trades = _load()
+        except StoreCorrupt as exc:                      # a read must not crash the page: an empty view that says why
+            trades, problem = [], str(exc)
         changed = _repair_range_trades(trades)
         for t in trades:
             if t["status"] != "open":
@@ -554,7 +622,7 @@ def overview(chain_fn=None) -> dict:
     out["ai"]["by_score"] = {band: _stats([t for t in counted(out["ai"]["closed"]) if t.get("score_label") == band], [])
                              for band in ("Strong", "Moderate", "Weak")}
     # the page's original keys stay = your trades
-    return out | {"open": out["you"]["open"], "closed": out["you"]["closed"], "stats": out["you"]["stats"]}
+    return out | {"open": out["you"]["open"], "closed": out["you"]["closed"], "stats": out["you"]["stats"], "store_problem": problem}
 
 
 # ---------------------------------------------------------------- the v2 link and the CSV
@@ -634,7 +702,12 @@ def history_csv() -> str:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(CSV_HEADER)
-    for t in sorted(_load(), key=lambda t: t.get("taken_at") or ""):
+    try:
+        rows = _load()
+    except StoreCorrupt as exc:                          # a read must not crash: the header and one row that says why
+        w.writerow(["store problem", str(exc)] + [""] * (len(CSV_HEADER) - 2))
+        return buf.getvalue()
+    for t in sorted(rows, key=lambda t: t.get("taken_at") or ""):
         ai = t.get("source") == "ai"
         known = lambda k: _cell(t[k]) if k in t else "unknown"  # noqa: E731
         legs = "; ".join(f"{'B' if x['action'] == 'BUY' else 'S'} {float(x['strike']):.0f} {x['type']} shown {_cell(x.get('shown_price')) if 'shown_price' in x else 'unknown'}"
