@@ -18,7 +18,9 @@ def store(monkeypatch, tmp_path):
     monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
     monkeypatch.setattr(tr, "_market_open", lambda *a: True)
     monkeypatch.setattr(signals, "market_open", lambda *a: True)
-    monkeypatch.setattr(tr, "_monitor", dict(tr._monitor))     # a fresh status per test
+    monkeypatch.setattr(tr, "_monitor", {"running": False, "last_ok_at": None, "last_error": None, "fail_count": 0})
+    # a fresh status per test: the server, once imported by another test, runs the real monitor thread, whose ticks
+    # had already set last_ok_at in the module's status
     tr.take(RESULT)
 
 
