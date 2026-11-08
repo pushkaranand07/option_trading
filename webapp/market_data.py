@@ -330,6 +330,7 @@ def quotes(symbols: list[str]) -> dict[str, dict]:
 
 def _quotes(insts: list[dict]) -> dict[str, dict]:
     out: dict[str, dict] = {}
+    session = _warm_prev_closes(insts)
     dhan_insts = [i for i in insts if i["id"] is not None] if dhan.enabled else []
     if dhan_insts:
         body: dict[str, list[int]] = {}
@@ -342,12 +343,12 @@ def _quotes(insts: list[dict]) -> dict[str, dict]:
                 if row and row.get("last_price"):
                     ltp, prev = float(row["last_price"]), float((row.get("ohlc") or {}).get("close") or 0)
                     out[i["symbol"]] = _quote_row(i, ltp, prev, row.get("ohlc") or {}, "dhan",
-                                                  checked=_checked_prev(i, prev, "dhan"))
+                                                  checked=_checked_prev(i, prev, "dhan", session))
         except DataError:
             pass
     for i in insts:
         if i["symbol"] not in out:
-            q = _cache.get(("yq", i["yahoo"]), 15, lambda i=i: _yahoo_quote(i))
+            q = _cache.get(("yq", i["yahoo"]), 15, lambda i=i: _yahoo_quote(i, session))
             if q:
                 out[i["symbol"]] = q
     return out
@@ -368,13 +369,13 @@ def _quote_row(inst, ltp, prev, ohlc, source, checked: tuple[float | None, str, 
     return row
 
 
-def _yahoo_quote(inst) -> dict | None:
+def _yahoo_quote(inst, session: date | None = None) -> dict | None:
     try:
         fi = yf.Ticker(inst["yahoo"]).fast_info
         ltp, prev = float(fi["last_price"]), float(fi["previous_close"])
         ohlc = {"open": round(float(fi["open"]), 2), "high": round(float(fi["day_high"]), 2),
                 "low": round(float(fi["day_low"]), 2)}
-        return _quote_row(inst, ltp, prev, ohlc, "yahoo", checked=_checked_prev(inst, prev, "yahoo"))
+        return _quote_row(inst, ltp, prev, ohlc, "yahoo", checked=_checked_prev(inst, prev, "yahoo", session))
     except Exception:
         return None
 
@@ -445,8 +446,7 @@ def prev_close(inst: dict, ltp_session_date: date, *, vendor: float | None = Non
 
     cal = calendar or signals.nse_calendar()
     expected = cal.previous_session(ltp_session_date)
-    found = _cache.get(("prev", inst["symbol"], ltp_session_date.isoformat()), 600,
-                       lambda: _reference_close(inst, ltp_session_date, expected))
+    found = _cached_reference(inst, ltp_session_date, expected)
     sources = [found] if found else []
     if vendor:
         sources.append((float(vendor), vendor_source))
@@ -462,10 +462,44 @@ def prev_close(inst: dict, ltp_session_date: date, *, vendor: float | None = Non
     return value, source, warning
 
 
-def _checked_prev(inst: dict, vendor: float, vendor_source: str) -> tuple[float | None, str, str | None]:
+def _cached_reference(inst: dict, session: date, expected: date) -> tuple[float, str] | None:
+    """``_reference_close`` cached per symbol and session."""
+    return _cache.get(("prev", inst["symbol"], session.isoformat()), 600,
+                      lambda: _reference_close(inst, session, expected))
+
+
+PREV_WORKERS = 8      # daily-bars downloads at once when a cold quote request needs several previous closes
+
+
+def _warm_prev_closes(insts: list[dict]) -> date | None:
+    """Fetch the previous closes of ``insts`` in parallel before the quote rows are built (a cold request with N
+    symbols then costs about one daily-bars download, not N). Returns the quote session, or None if unknown."""
+    from webapp import signals
+
+    try:
+        session = quote_session_date()
+        expected = signals.nse_calendar().previous_session(session)
+    except Exception as exc:
+        logger.warning("quote session unknown: %s", exc)
+        return None
+
+    def one(inst):
+        try:
+            _cached_reference(inst, session, expected)
+        except Exception as exc:                              # the row falls back to the vendor's value
+            logger.warning("previous close lookup for %s failed: %s", inst["symbol"], exc)
+
+    if len(insts) > 1:
+        with ThreadPoolExecutor(min(PREV_WORKERS, len(insts))) as pool:
+            list(pool.map(one, insts))
+    return session
+
+
+def _checked_prev(inst: dict, vendor: float, vendor_source: str,
+                  session: date | None = None) -> tuple[float | None, str, str | None]:
     """``prev_close`` for a quote now; the vendor's value alone if the calendar or the bars fail outright."""
     try:
-        return prev_close(inst, quote_session_date(), vendor=vendor, vendor_source=vendor_source)
+        return prev_close(inst, session or quote_session_date(), vendor=vendor, vendor_source=vendor_source)
     except Exception as exc:                                  # a quote is never lost over its previous close
         logger.warning("previous close check for %s failed: %s", inst["symbol"], exc)
         return vendor, vendor_source, None
