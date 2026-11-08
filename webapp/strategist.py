@@ -24,6 +24,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from webapp.timeutil import now_ist
+
 logger = logging.getLogger(__name__)
 
 STRATEGIES = {
@@ -388,7 +390,7 @@ def evidence(plan: StrategyPlan, ctx: dict, priced: dict | None) -> dict | None:
 
 def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
     ctx, ch = build_context(symbol, expiry)
-    started = datetime.now()
+    started = now_ist()
     ask = llm or ask_llm
     plan = ask(ctx)
     problems = check_structure(plan, ch)
@@ -398,9 +400,9 @@ def recommend(symbol: str, expiry: str | None = None, llm=None) -> dict:
         plan = ask(ctx, problems)
         problems = check_structure(plan, ch)
     out = {"symbol": symbol, "expiry": ch["expiry"], "spot": ch["spot"], "lot": ch["lot"],
-           "seconds": (datetime.now() - started).seconds, "plan": plan.model_dump(),
+           "seconds": (now_ist() - started).seconds, "plan": plan.model_dump(),
            "strategy_text": STRATEGIES[plan.strategy][0], "chain_summary": ch["summary"], "retried": retried,
-           "asked_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
+           "asked_at": now_ist().strftime("%Y-%m-%d %H:%M")}
     if problems:
         out.update(rejected=problems, priced=None, warnings=[])
         return out
@@ -758,7 +760,7 @@ def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
                          "Pehle Complete analysis chala (10-15 min); uske baad Quick analysis 1-2 minute mein hoga.")
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
-        _jobs[job_id] = {"status": "running", "symbol": symbol, "mode": mode, "started": datetime.now().strftime("%H:%M:%S")}
+        _jobs[job_id] = {"status": "running", "symbol": symbol, "mode": mode, "started": now_ist().strftime("%H:%M:%S")}
 
     def full_research(sym):
         return save_research(sym, agents_view(sym))
