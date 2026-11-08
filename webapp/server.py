@@ -358,13 +358,31 @@ def journal_files():
 UPLOAD_TYPES = ("application/octet-stream", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
+async def _read_capped(request: Request, cap: int) -> bytes:
+    """The request body, at most ``cap`` bytes (audit L2). No Content-Length, or one over the cap, is refused before
+    a byte is read; while reading, a running total stops a body that is longer than its Content-Length said."""
+    too_big = f"File is larger than {cap // (1024 * 1024)} MB." if cap >= 1024 * 1024 else f"File is larger than {cap} bytes."
+    length = request.headers.get("content-length", "")
+    if not length.isdigit():
+        raise HTTPException(413, "Upload refused: the file's size was not sent (Content-Length).")
+    if int(length) > cap:
+        raise HTTPException(413, too_big)
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > cap:
+            raise HTTPException(413, too_big)
+    return bytes(data)
+
+
 @app.post("/api/journal/upload")
 async def journal_upload(request: Request, name: str):
     ctype = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if ctype not in UPLOAD_TYPES:
         raise HTTPException(415, f"Send the file with Content-Type {UPLOAD_TYPES[0]} (or text/csv / the .xlsx type).")
+    data = await _read_capped(request, quant.MAX_UPLOAD)
     try:
-        return {"name": quant.save_upload(name, await request.body())}
+        return {"name": quant.save_upload(name, data)}
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

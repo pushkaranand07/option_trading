@@ -275,13 +275,28 @@ def _table(df: pd.DataFrame) -> list[dict]:
     return out
 
 
+def _read_tradebook(jr, path: Path) -> pd.DataFrame:
+    """``jr.read_tradebook``, with any parse failure of a user's file turned into a ValueError with a plain message
+    (audit L2: a broken .xlsx raised zipfile.BadZipFile, a 500). The tradebook reader's own messages are kept."""
+    unreadable = (f"{path.name} could not be read as a tradebook: export it again from Dhan as .csv or .xlsx and "
+                  "upload that file.")
+    try:
+        return jr.read_tradebook(path)
+    except UnicodeDecodeError as exc:                 # a ValueError, but its text is the codec's, not ours
+        raise ValueError(unreadable) from exc
+    except ValueError:
+        raise
+    except Exception as exc:                          # BadZipFile, xlrd / openpyxl / csv errors, KeyError ...
+        raise ValueError(unreadable) from exc
+
+
 def journal(name: str, horizon: str = "all") -> dict:
     from tradingagents.analytics import journal as jr
 
     path = JOURNAL_DIR / safe_name(name)
     if not path.exists():
         raise ValueError(f"{path.name} is not in reports/journal/.")
-    trades = jr.read_tradebook(path)
+    trades = _read_tradebook(jr, path)
     trips, still_open = jr.round_trips(trades)
     horizons = {"all": "all", "intraday": jr.HORIZONS[0], "week": jr.HORIZONS[1], "month": jr.HORIZONS[2],
                 "long": jr.HORIZONS[3]}
