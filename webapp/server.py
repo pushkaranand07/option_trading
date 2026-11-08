@@ -288,6 +288,9 @@ def known_expiry(symbol: str, expiry: str | None, listing) -> None:
     if not expiry or listing is None:
         return
     valid = list(listing(symbol))
+    if not valid:                                     # the sources answered nothing: not the user's mistake
+        raise HTTPException(502, f"The expiry list for {symbol} is unavailable right now (expiry list unavailable): "
+                                 "try again in a moment.")
     if expiry not in valid:
         raise HTTPException(400, {"message": f"{expiry} is not an expiry of {symbol}: pick one of {', '.join(valid) or 'none listed'}.",
                                   "valid_expiries": valid})

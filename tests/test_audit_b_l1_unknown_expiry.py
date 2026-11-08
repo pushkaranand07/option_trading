@@ -56,6 +56,17 @@ def test_no_expiry_means_the_nearest_and_no_check(client, world, path, kind):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(("path", "kind"), [("/api/chain/NIFTY", "chain"), ("/api/rank/NIFTY", "rank"), ("/api/optionchain/NIFTY", "dhan")])
+def test_an_empty_expiry_list_is_502_try_again_not_a_wrong_expiry(client, world, monkeypatch, path, kind):
+    monkeypatch.setattr(oc, "valid_expiries", lambda s: [], raising=False)          # both sources down
+    monkeypatch.setattr(md, "expiries", lambda s: [])
+    r = client.get(path, params={"expiry": "27-Nov-2026"})
+    assert r.status_code == 502, r.text
+    assert "expiry list unavailable" in r.json()["detail"] and "try again" in r.json()["detail"]
+    assert world[kind] == []
+
+
+@pytest.mark.unit
 def test_without_track_ds_valid_expiries_the_route_stays_lenient(client, world, monkeypatch):
     monkeypatch.delattr(oc, "valid_expiries", raising=False)
     assert client.get("/api/chain/NIFTY", params={"expiry": "01-Jan-2030"}).status_code == 200
