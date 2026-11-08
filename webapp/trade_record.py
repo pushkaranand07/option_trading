@@ -33,6 +33,58 @@ _lock = threading.Lock()
 logger = logging.getLogger(__name__)
 from webapp import build_info  # noqa: E402  (the commit and start time each new row records)
 
+# Every user-facing message of the trade record, in one place (Hinglish and English, as shown). Tests assert parts
+# of these texts, so change them only on purpose. Templates are filled with str.format.
+MESSAGES = {
+    # the session gates
+    "market_closed": "Market band hai: abhi ke prices pe asli order nahi lag sakta. 9:15 ke baad karna.",
+    "exit_market_closed": ("Market band hai: band karne ka asli price abhi nahi hai. 9:15 ke baad band karna; "
+                           "expiry ke baad trade expiry value pe band hota hai."),
+    "run_expired": "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar.",
+    # why a chain's quotes cannot be traded at now
+    "quotes_no_timestamp": "the chain has no timestamp, so its quotes may be old",
+    "quotes_bad_timestamp": "the chain's timestamp {ts!r} could not be read",
+    "quotes_not_today": "the quotes are from {day}, not today",
+    "quotes_clock_behind": "NSE's time ({nse_time}) is {ahead} s ahead of this computer's clock: check the clock",
+    "quotes_too_old": "the quotes are {age} s old (limit {limit} s)",
+    # a Take refused
+    "run_not_on_file": "This run is not on file: run the analysis again.",
+    "no_such_candidate": "This run has no trade #{n}.",
+    "prices_unavailable_take": "Live prices unavailable ({error}): not taken. Try again in a moment.",
+    "nse_refused": "NSE: {why}. Not taken; try again in a moment.",
+    "outside_entry_zone": "{symbol} is at {spot:,.2f}, outside this trade's entry zone {lo:,.0f}-{hi:,.0f}: not taken.",
+    "leg_unquoted": "{strike:,.0f} {type} has no live bid / ask right now: not taken.",
+    "no_trade_in_suggestion": "There is no trade to take in this suggestion.",
+    "bet_exists": ("Is disha ({direction}) ka ek {symbol} bet pehle se chal raha hai "
+                   "(bet {bet}, shuru {started}). Isi bet mein ek aur trade jodna hai?"),
+    # marking and closing
+    "prices_unavailable": "Live prices unavailable: {error}",
+    "unknown_trade": "Unknown trade.",
+    "already_closed": "This trade is already closed.",
+    "leg_no_price": "A leg has no live price; try again in a moment.",
+    # close reasons (stored on the row and shown on the page)
+    "reason_reached": "{kind} reached",
+    "reason_range_broken": "range broken",
+    "reason_expired": "expired",
+    "reason_by_you": "closed by you",
+    "range_bug_note": ("reopened 2026-11-04: it had been closed by a bug that read this range trade's single index target / stop "
+                       "as a directional trade's"),
+    # events.log
+    "event_exit_pending": "exit pending: reached its {hit} but has no quote for {legs}",
+    "event_removed": "removed from the record by you",
+    # the trade record file (audit H1)
+    "store_damaged": ("The trade record file trades.json is damaged and cannot be read ({why}). A copy was saved as {copy}. "
+                      "Nothing will be written to the trade record until the file is fixed or restored."),
+    "store_unreadable": ("The trade record file trades.json cannot be opened ({why}). Nothing will be written to the trade "
+                         "record until it can be read again."),
+    # the v2 link beside an AI #1 row
+    "v2_before_start": "before v{version} started ({first})",
+    "v2_nothing": "v{version} registered nothing that day",
+    "v2_counted_this": "v{version} counted this trade",
+    "v2_counted_other": "v{version} counted a different trade that day",
+    "v2_recorded": "v{version} recorded {outcome} that day",
+}
+
 
 def _event(what: str, t: dict, why: str = "", level: int = logging.INFO) -> None:
     """One line in events.log beside the trade record (and the server log): when, which row, what happened, why.
@@ -68,7 +120,6 @@ def _market_open(at: datetime | None = None) -> bool:
     return signals.market_open(at)
 
 
-CLOSED_MSG = "Market band hai: abhi ke prices pe asli order nahi lag sakta. 9:15 ke baad karna."
 MAX_QUOTE_AGE = 120              # seconds: an older chain snapshot is not a price you could trade at now (user's choice,
                                  # 2026-11-05: at 60 s NSE's ~45 s refresh plus the cache refused most Takes, e.g. 78 s, 83 s)
 MAX_CLOCK_AHEAD = 30             # seconds NSE's stamp may run ahead of this computer's clock
@@ -81,48 +132,37 @@ def _quote_age(ch: dict, now: datetime) -> tuple[int | None, str | None]:
 
     ts = ch.get("timestamp")
     if not ts:
-        return None, "the chain has no timestamp, so its quotes may be old"
+        return None, MESSAGES["quotes_no_timestamp"]
     try:
         when = pytz.timezone("Asia/Kolkata").localize(datetime.strptime(ts, "%d-%b-%Y %H:%M:%S"))
     except ValueError:
-        return None, f"the chain's timestamp {ts!r} could not be read"
+        return None, MESSAGES["quotes_bad_timestamp"].format(ts=ts)
     age = round((now - when).total_seconds())
     if when.date() != now.date():
-        return age, f"the quotes are from {ts[:11]}, not today"
+        return age, MESSAGES["quotes_not_today"].format(day=ts[:11])
     if age < -MAX_CLOCK_AHEAD:
-        return age, f"NSE's time ({ts[-8:]}) is {-age} s ahead of this computer's clock: check the clock"
+        return age, MESSAGES["quotes_clock_behind"].format(nse_time=ts[-8:], ahead=-age)
     if age > MAX_QUOTE_AGE:
-        return age, f"the quotes are {age} s old (limit {MAX_QUOTE_AGE} s)"
+        return age, MESSAGES["quotes_too_old"].format(age=age, limit=MAX_QUOTE_AGE)
     return age, None
 
 
 def entry_allowed() -> str | None:
     """Why no trade may be entered now, or None. The one session check every entry path asks:
     take() (the only writer of a trade row), take_from_run() before fetching prices, the AI run before recording its pick."""
-    return None if _market_open() else CLOSED_MSG
-
-
-EXIT_CLOSED_MSG = ("Market band hai: band karne ka asli price abhi nahi hai. 9:15 ke baad band karna; "
-                   "expiry ke baad trade expiry value pe band hota hai.")
+    return None if _market_open() else MESSAGES["market_closed"]
 
 
 def exit_allowed() -> str | None:
     """Why a trade cannot be closed now, or None. Only whether the market is open: no entry rule (the entry gate, a
     time window, dedupe) ever stops an exit. A trade past expiry settles at intrinsic value whatever this says."""
-    return None if _market_open() else EXIT_CLOSED_MSG
-
-
-EXPIRED_MSG = "Yeh run expired hai (kisi aur din ka): uske prices aaj ke nahi. Analysis dobara chala, phir Take kar."
+    return None if _market_open() else MESSAGES["exit_market_closed"]
 
 
 class StoreCorrupt(TradeError):
     """trades.json exists but cannot be read: every write is refused (nothing saved over the history) until it is fixed."""
 
 
-STORE_DAMAGED_MSG = ("The trade record file trades.json is damaged and cannot be read ({why}). A copy was saved as {copy}. "
-                     "Nothing will be written to the trade record until the file is fixed or restored.")
-STORE_UNREADABLE_MSG = ("The trade record file trades.json cannot be opened ({why}). Nothing will be written to the trade "
-                        "record until it can be read again.")
 _problem: str | None = None                  # what is wrong with the store, from the last read (None: fine)
 _backups: dict[str, tuple[str, str]] = {}    # store path -> (sha256 of the damaged bytes, the copy's name): copied once
 
@@ -137,7 +177,7 @@ def _load() -> list[dict]:
     try:
         raw = STORE.read_bytes()
     except OSError as exc:
-        _problem = STORE_UNREADABLE_MSG.format(why=str(exc)[:160])
+        _problem = MESSAGES["store_unreadable"].format(why=str(exc)[:160])
         logger.error(_problem)
         raise StoreCorrupt(_problem) from exc
     try:
@@ -145,7 +185,7 @@ def _load() -> list[dict]:
         if not isinstance(rows, list) or not all(isinstance(t, dict) for t in rows):
             raise ValueError("not a list of trades")
     except ValueError as exc:                              # a JSON error, bad UTF-8, or the wrong shape
-        _problem = STORE_DAMAGED_MSG.format(why=str(exc)[:160], copy=_back_up_damaged(raw))
+        _problem = MESSAGES["store_damaged"].format(why=str(exc)[:160], copy=_back_up_damaged(raw))
         raise StoreCorrupt(_problem) from exc
     _problem = None
     return rows
@@ -229,33 +269,33 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
 
     run = st.load_run(run_id or "")
     if not run:
-        raise TradeError("This run is not on file: run the analysis again.")
+        raise TradeError(MESSAGES["run_not_on_file"])
     if st.run_expired(run):
-        raise TradeError(EXPIRED_MSG)
+        raise TradeError(MESSAGES["run_expired"])
     if why := entry_allowed():
         raise TradeError(why)
     trades = run.get("trades") or []
     if not 0 <= candidate < len(trades):
-        raise TradeError(f"This run has no trade #{candidate + 1}.")
+        raise TradeError(MESSAGES["no_such_candidate"].format(n=candidate + 1))
     c = trades[candidate]
     try:
         ch = (chain_fn or oc.chain)(c["symbol"], c["expiry"])
     except Exception as exc:                               # never fall back to the run's prices
-        raise TradeError(f"Live prices unavailable ({str(exc)[:160]}): not taken. Try again in a moment.") from exc
+        raise TradeError(MESSAGES["prices_unavailable_take"].format(error=str(exc)[:160])) from exc
     age, why = _quote_age(ch, signals.now_ist())
     if why:
-        raise TradeError(f"NSE: {why}. Not taken; try again in a moment.", {"spot_at_take": ch.get("spot"), "in_entry_zone": None, "quote_age_s": age})
+        raise TradeError(MESSAGES["nse_refused"].format(why=why), {"spot_at_take": ch.get("spot"), "in_entry_zone": None, "quote_age_s": age})
     plan, spot = c["plan"], ch["spot"]
     lo, hi = plan.get("underlying_entry_low"), plan.get("underlying_entry_high")
     in_zone = None if lo is None or hi is None else lo <= spot <= hi
     if in_zone is False:
-        raise TradeError(f"{c['symbol']} is at {spot:,.2f}, outside this trade's entry zone {lo:,.0f}-{hi:,.0f}: not taken.",
+        raise TradeError(MESSAGES["outside_entry_zone"].format(symbol=c["symbol"], spot=spot, lo=lo, hi=hi),
                          {"spot_at_take": spot, "in_entry_zone": False, "quote_age_s": age})
     rows = {r["strike"]: r for r in ch["rows"]}
     for leg in plan["legs"]:
         q = (rows.get(float(leg["strike"])) or {}).get(leg["option_type"].lower())
         if not q or not q.get("bid") or not q.get("ask"):
-            raise TradeError(f"{leg['strike']:,.0f} {leg['option_type']} has no live bid / ask right now: not taken.",
+            raise TradeError(MESSAGES["leg_unquoted"].format(strike=leg["strike"], type=leg["option_type"]),
                              {"spot_at_take": spot, "in_entry_zone": in_zone, "quote_age_s": age})
     sp = st.StrategyPlan(**plan)
     priced = st.price(sp, ch)
@@ -278,8 +318,6 @@ def record_ai_pick(run_id: str, chain_fn=None) -> dict:
     """The AI's #1 of a run, into the AI track record through the same fresh-chain path as your Take. A refusal
     (stale quotes, outside the entry zone, no live quote...) is kept as a "not taken" row with its reason, so a
     missed pick shows instead of a trade at an old price."""
-    from webapp import strategist as st
-
     try:
         return take_from_run(run_id, 0, chain_fn, source="ai")
     except TradeError as exc:
@@ -331,7 +369,7 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
     recorded. Either way the row carries added_to_bet and the event log says who added it."""
     plan, priced = result.get("plan") or {}, result.get("priced")
     if result.get("rejected") or not priced or plan.get("strategy") in (None, "no_trade"):
-        raise TradeError("There is no trade to take in this suggestion.")
+        raise TradeError(MESSAGES["no_trade_in_suggestion"])
     if why := entry_allowed():
         raise TradeError(why)
     lv = {(x["strike"], x["type"], x["action"]): x for x in (result.get("levels") or {}).get("legs", [])}
@@ -367,8 +405,8 @@ def take(result: dict, source: str = "you", provenance: dict | None = None, show
         bet = find_bet(grouped, trade)
         if bet and source == "you" and not confirm:
             started = next(t["taken_at"] for t in grouped if t["id"] == bet)
-            raise BetExists(f"Is disha ({direction_of(trade['strategy'])}) ka ek {trade['symbol']} bet pehle se chal raha hai "
-                            f"(bet {bet}, shuru {started}). Isi bet mein ek aur trade jodna hai?",
+            raise BetExists(MESSAGES["bet_exists"].format(direction=direction_of(trade["strategy"]), symbol=trade["symbol"],
+                                                          bet=bet, started=started),
                             {"bet_id": bet, "bet_started": started})
         if bet:
             trade["added_to_bet"] = bet
@@ -527,7 +565,7 @@ def mark(trade: dict, chain_fn=None) -> dict:
     try:
         ch = (chain_fn or oc.full_chain)(trade["symbol"], trade["expiry"])     # every strike: a held leg can be far from the money
     except Exception as exc:
-        view["error"] = f"Live prices unavailable: {str(exc)[:160]}"
+        view["error"] = MESSAGES["prices_unavailable"].format(error=str(exc)[:160])
         return view
     rows = {r["strike"]: r for r in ch["rows"]}
     exits = []
@@ -704,13 +742,14 @@ def _v2_link(t: dict, days: dict) -> dict:
     r = days.get(day)
     out = {"registered_that_day": bool(r), "same_trade": False, "counted": False, "entry": None, "status": None}
     if day < FIRST_SESSION.isoformat():               # shown for comparison, never counted
-        return out | {"note": f"before v{VERSION} started ({FIRST_SESSION})", "entry": r and r["entry"], "status": r and r["status"]}
+        return out | {"note": MESSAGES["v2_before_start"].format(version=VERSION, first=FIRST_SESSION), "entry": r and r["entry"],
+                      "status": r and r["status"]}
     if not r:
-        return out | {"note": f"v{VERSION} registered nothing that day"}
+        return out | {"note": MESSAGES["v2_nothing"].format(version=VERSION)}
     same = r["structure"] == t.get("strategy") and r["legs"] == _leg_key(t.get("legs") or [])
     return out | {"same_trade": same, "counted": same and r["outcome"] == "trade", "entry": r["entry"], "status": r["status"],
-                  "note": (f"v{VERSION} counted this trade" if same else f"v{VERSION} counted a different trade that day") if r["outcome"] == "trade"
-                  else f"v{VERSION} recorded {r['outcome']} that day"}
+                  "note": MESSAGES[("v2_counted_this" if same else "v2_counted_other") if r["outcome"] == "trade" else "v2_recorded"]
+                  .format(version=VERSION, outcome=r["outcome"])}
 
 
 CSV_HEADER = ["view", "source", "status", "taken_at", "closed_at", "symbol", "strategy", "expiry", "legs", "run_id", "candidate",
@@ -749,7 +788,7 @@ def history_csv() -> str:
         return buf.getvalue()
     for t in sorted(rows, key=lambda t: t.get("taken_at") or ""):
         ai = t.get("source") == "ai"
-        known = lambda k: _cell(t[k]) if k in t else "unknown"  # noqa: E731
+        known = lambda k, t=t: _cell(t[k]) if k in t else "unknown"  # noqa: E731
         legs = "; ".join(f"{'B' if x['action'] == 'BUY' else 'S'} {float(x['strike']):.0f} {x['type']} shown {_cell(x.get('shown_price')) if 'shown_price' in x else 'unknown'}"
                          f" entry {_cell(x.get('entry'))} exit {_cell(x.get('exit'))}" for x in t["legs"])
         link = _v2_link(t, days) if ai else None
@@ -790,12 +829,13 @@ def _settle_decision(t: dict, v: dict) -> tuple | None:
     ("exit_pending", None, spot, hit) or None. The stop first if both are reached, then the target, else at expiry."""
     if "expired" in v["flags"]:
         spot = t.get("last_spot") or t["spot_at_entry"]
-        return "settle", [_intrinsic(leg, spot) for leg in t["legs"]], spot, "expired"
+        return "settle", [_intrinsic(leg, spot) for leg in t["legs"]], spot, MESSAGES["reason_expired"]
     hit = "stop" if "stop" in v["flags"] else "target" if "target" in v["flags"] else None
     if hit and v["pnl"] is None and v.get("pending"):         # it should close, but a leg has no quote
         return "exit_pending", None, v["spot"], hit
     if hit and v["pnl"] is not None:
-        return "settle", [x["now"] for x in v["legs"]], v["spot"], "range broken" if t.get("range") else f"{hit} reached"
+        return ("settle", [x["now"] for x in v["legs"]], v["spot"],
+                MESSAGES["reason_range_broken"] if t.get("range") else MESSAGES["reason_reached"].format(kind=hit))
     return None
 
 
@@ -809,14 +849,10 @@ def _auto_settle(t: dict, v: dict) -> bool:
         if any(a["kind"] == "exit_pending" for a in t["alerts"]):
             return False
         t["alerts"].append({"kind": "exit_pending", "at": _now(), "spot": spot, "legs": v["pending"]})
-        _event("exit_pending", t, f"exit pending: reached its {why} but has no quote for {', '.join(v['pending'])}", logging.WARNING)
+        _event("exit_pending", t, MESSAGES["event_exit_pending"].format(hit=why, legs=", ".join(v["pending"])), logging.WARNING)
         return True
     _settle(t, exits, spot, why)
     return True
-
-
-BUG_NOTE = ("reopened 2026-11-04: it had been closed by a bug that read this range trade's single index target / stop "
-            "as a directional trade's")
 
 
 def _repair_range_trades(trades: list[dict]) -> bool:
@@ -827,12 +863,12 @@ def _repair_range_trades(trades: list[dict]) -> bool:
         if t.get("strategy") not in RANGE or t.get("range"):
             continue
         _as_range_trade(t)
-        if t["status"] == "closed" and t.get("reason") in ("target reached", "stop reached"):
+        if t["status"] == "closed" and t.get("reason") in ("target reached", "stop reached"):   # the old rows' stored values
             for k in ("closed_at", "spot_at_exit", "reason", "gross_pnl", "net_pnl"):
                 t.pop(k, None)
             for leg in t["legs"]:
                 leg.pop("exit", None)
-            t.update(status="open", alerts=[], note=BUG_NOTE)
+            t.update(status="open", alerts=[], note=MESSAGES["range_bug_note"])
         changed = True
     return changed
 
@@ -844,9 +880,9 @@ def close(trade_id: str, chain_fn=None) -> dict:
     def find(trades: list[dict]) -> dict:
         t = next((x for x in trades if x["id"] == trade_id), None)
         if t is None:
-            raise TradeError("Unknown trade.")
+            raise TradeError(MESSAGES["unknown_trade"])
         if t["status"] != "open":
-            raise TradeError("This trade is already closed.")
+            raise TradeError(MESSAGES["already_closed"])
         return t
 
     with _lock:                                          # check first; the chain is fetched outside the lock
@@ -858,17 +894,18 @@ def close(trade_id: str, chain_fn=None) -> dict:
             raise TradeError(why)
         v = mark(snap, chain_fn or oc.full_chain)
         if v["error"] or v["pnl"] is None:
-            raise TradeError(v["error"] or "A leg has no live price; try again in a moment.")
+            raise TradeError(v["error"] or MESSAGES["leg_no_price"])
     with _lock:                                          # read again: closed or removed meanwhile is refused
         trades = _load()
         t = find(trades)
         if v is None:
             spot = t.get("last_spot") or t["spot_at_entry"]
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
-            reason = "expired"
+            reason = MESSAGES["reason_expired"]
         else:
             exits, spot = [x["now"] for x in v["legs"]], v["spot"]
-            reason = " + ".join(f"{a['kind']} reached" for a in t["alerts"]) or "closed by you"
+            reason = (" + ".join(MESSAGES["reason_reached"].format(kind=a["kind"]) for a in t["alerts"])
+                      or MESSAGES["reason_by_you"])
         _settle(t, exits, spot, reason)
         _save(trades)
         return t
@@ -892,9 +929,9 @@ def delete(trade_id: str) -> None:
         trades = _load()
         keep = [t for t in trades if t["id"] != trade_id]
         if len(keep) == len(trades):
-            raise TradeError("Unknown trade.")
+            raise TradeError(MESSAGES["unknown_trade"])
         _save(keep)
-    _event("removed", next(t for t in trades if t["id"] == trade_id), "removed from the record by you")
+    _event("removed", next(t for t in trades if t["id"] == trade_id), MESSAGES["event_removed"])
 
 
 # ---------------------------------------------------------------- background monitor
