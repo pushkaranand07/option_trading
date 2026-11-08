@@ -199,8 +199,26 @@ async def plan(symbol: str):
     return await _call(planner.plan, symbol)
 
 
+def known_expiry(symbol: str, expiry: str | None, listing) -> None:
+    """Audit L1: an expiry asked for must be one of the symbol's, or 400 with the valid list (the chain code would
+    otherwise answer for another expiry without saying so). Checked here, at the HTTP layer only: option_chain.chain
+    stays lenient for the forward test. No expiry means the nearest, unchecked; with no ``listing`` (Track D's
+    ``option_chain.valid_expiries`` not present) the route stays lenient as before."""
+    if not expiry or listing is None:
+        return
+    valid = list(listing(symbol))
+    if expiry not in valid:
+        raise HTTPException(400, {"message": f"{expiry} is not an expiry of {symbol}: pick one of {', '.join(valid) or 'none listed'}.",
+                                  "valid_expiries": valid})
+
+
+def _nse_expiries():
+    return getattr(nse_oc, "valid_expiries", None)
+
+
 @app.get("/api/optionchain/{symbol}")
 async def option_chain(symbol: str, expiry: str | None = None):
+    await _call(known_expiry, symbol, expiry, md.expiries)          # the Dhan chain: Dhan's own expiry list
     chain = await _call(md.option_chain, symbol, expiry)
     chain["view"] = signals.option_view(chain["rows"], chain["spot"])
     return chain
@@ -281,7 +299,9 @@ def morning_ai():
 @app.get("/api/chain/{symbol}")
 async def nse_chain(symbol: str, expiry: str | None = None):
     try:
-        return await run_in_threadpool(nse_oc.chain, md.instrument(symbol)["symbol"], expiry)
+        sym = md.instrument(symbol)["symbol"]
+        await run_in_threadpool(known_expiry, sym, expiry, _nse_expiries())
+        return await run_in_threadpool(nse_oc.chain, sym, expiry)
     except nse_oc.ChainError as exc:
         raise HTTPException(404, str(exc)) from exc
     except UPSTREAM_ERRORS as exc:
@@ -303,7 +323,9 @@ async def nse_contract(id: str):
 async def trade_rank(symbol: str, expiry: str | None = None):
     """Pulse's ranked trades for the instrument: strikes, entry, target and stop for each, best first (no LLM)."""
     try:
-        return await run_in_threadpool(strategist.rank, md.instrument(symbol)["symbol"], expiry)
+        sym = md.instrument(symbol)["symbol"]
+        await run_in_threadpool(known_expiry, sym, expiry, _nse_expiries())
+        return await run_in_threadpool(strategist.rank, sym, expiry)
     except nse_oc.ChainError as exc:
         raise HTTPException(404, str(exc)) from exc
     except UPSTREAM_ERRORS as exc:
