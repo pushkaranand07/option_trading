@@ -11,6 +11,7 @@ import contextlib
 import csv
 import json
 import logging
+import math
 import os
 import threading
 import time as _time
@@ -364,10 +365,14 @@ def _quotes(insts: list[dict]) -> dict[str, dict]:
 def _quote_row(inst, ltp, prev, ohlc, source, checked: tuple[float | None, str, str | None] | None = None):
     """``checked``: (previous close, its source, warning) from ``prev_close``; it replaces the vendor's ``prev``."""
     prev_source, warning = source, None
-    if checked is not None and checked[0]:
+    if checked is not None and _valid_close(checked[0]):
         prev, prev_source, warning = checked
+    if not _valid_close(prev):                                # NaN / inf / 0 / negative: never emitted
+        prev, prev_source = None, "none"
+        warning = "No valid previous close from any source; change not shown."
     chg = ltp - prev if prev else 0.0
-    row = {"symbol": inst["symbol"], "name": inst["name"], "ltp": round(ltp, 2), "prev_close": round(prev, 2),
+    row = {"symbol": inst["symbol"], "name": inst["name"], "ltp": round(ltp, 2),
+           "prev_close": round(prev, 2) if prev else None,
            "change": round(chg, 2), "change_pct": round(chg / prev * 100, 2) if prev else 0.0,
            "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"), "source": source,
            "prev_close_source": prev_source}
@@ -390,6 +395,14 @@ def _yahoo_quote(inst, session: date | None = None) -> dict | None:
 # ---------- previous close (audit M1) ----------
 
 PREV_CLOSE_TOLERANCE = 0.005     # sources further apart than 0.5% are reported in the quote row
+
+
+def _valid_close(v) -> bool:
+    """A usable close: a finite number above zero (NaN, inf, 0 and negatives count as missing)."""
+    try:
+        return math.isfinite(float(v)) and float(v) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def quote_session_date(now: datetime | None = None, calendar=None) -> date:
@@ -418,7 +431,7 @@ def _close_before(df: pd.DataFrame | None, session: date, expected: date) -> flo
     if before.empty or before.index[-1].date() < expected:     # the bars miss that session (a vendor gap)
         return None
     close = float(before["close"].iloc[-1])
-    return close if close > 0 else None
+    return close if _valid_close(close) else None
 
 
 def _reference_close(inst: dict, session: date, expected: date) -> tuple[float, str] | None:
@@ -457,7 +470,7 @@ def prev_close(inst: dict, ltp_session_date: date, *, vendor: float | None = Non
     expected = cal.previous_session(ltp_session_date)
     found = _cached_reference(inst, ltp_session_date, expected)
     sources = [found] if found else []
-    if vendor:
+    if _valid_close(vendor):
         sources.append((float(vendor), vendor_source))
     if not sources:
         return None, "none", None
