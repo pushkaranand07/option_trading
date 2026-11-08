@@ -171,12 +171,12 @@ def _load() -> list[dict]:
     """Every row on file; [] only when there is no file yet. A file that exists but cannot be read or parsed raises
     StoreCorrupt (after copying it aside once), so no writer can save a short list over the history (audit H1)."""
     global _problem
-    if not STORE.exists():
-        _problem = None
-        return []
     try:
+        if not STORE.exists():                           # 3.13: exists() itself can raise (PermissionError)
+            _problem = None
+            return []
         raw = STORE.read_bytes()
-    except OSError as exc:
+    except OSError as exc:                               # unreadable: no backup copy (there are no bytes to copy)
         _problem = MESSAGES["store_unreadable"].format(why=str(exc)[:160])
         logger.error(_problem)
         raise StoreCorrupt(_problem) from exc
