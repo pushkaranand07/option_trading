@@ -277,12 +277,36 @@ def _table(df: pd.DataFrame) -> list[dict]:
     return out
 
 
+XLSX_MAX_UNPACKED = 50 * 1024 * 1024     # a Dhan tradebook unpacks to well under a megabyte
+XLSX_MAX_RATIO = 100                     # deflate on real sheets is ~5-20:1; zip bombs are 1000:1
+
+
+def check_xlsx_size(path: Path) -> None:
+    """Refuse an .xlsx (a zip) that would unpack to more than 50 MB, or has an entry compressed more than 100:1,
+    before anything parses it (audit L2: a 0.30 MB file expanded to 88 MB, 133 s and 422 MB of RAM). Reads only the
+    zip's directory. Other file types pass; a file that isn't a zip raises zipfile.BadZipFile for the caller."""
+    import zipfile
+
+    if path.suffix.lower() != ".xlsx":
+        return
+    too_big = (f"{path.name} is too large when unpacked to be a Dhan tradebook: export it again from Dhan and "
+               "upload that file.")
+    with zipfile.ZipFile(path) as z:
+        entries = z.infolist()
+    if sum(e.file_size for e in entries) > XLSX_MAX_UNPACKED:
+        raise ValueError(too_big)
+    for e in entries:
+        if e.file_size > XLSX_MAX_RATIO * max(e.compress_size, 1):
+            raise ValueError(too_big)
+
+
 def _read_tradebook(jr, path: Path) -> pd.DataFrame:
     """``jr.read_tradebook``, with any parse failure of a user's file turned into a ValueError with a plain message
     (audit L2: a broken .xlsx raised zipfile.BadZipFile, a 500). The tradebook reader's own messages are kept."""
     unreadable = (f"{path.name} could not be read as a tradebook: export it again from Dhan as .csv or .xlsx and "
                   "upload that file.")
     try:
+        check_xlsx_size(path)
         return jr.read_tradebook(path)
     except UnicodeDecodeError as exc:                 # a ValueError, but its text is the codec's, not ours
         raise ValueError(unreadable) from exc
