@@ -143,21 +143,22 @@ def record(result: dict, path: Path | None = None, chains: Path | None = None, n
     if why := fingerprint_problem(spec):
         logger.warning("this answer does not count: %s", why)
         return None
-    rows = registry.read(path)
     day = now.date()
-    if any(r.get("date") == day.isoformat() for r in rows if r["type"] in ("strategist", "missed")):
-        return None
     spec_hash = SPEC_SHA256
-    seen = [date.fromisoformat(r["date"]) for r in rows if r["type"] in ("strategist", "missed")]
-    if seen:
-        for d in _weekdays_between(max(seen), day, muhurat):
-            registry.record_missed(path, day=d, spec_hash=spec_hash, now=now, reason="no question asked in the window")
     plan = result.get("plan") or {}
     trade = bool(result.get("priced")) and plan.get("strategy") not in (None, "no_trade")
-    row = registry.register_structure(
-        path, day=day, symbol=SYMBOL, expiry=result.get("expiry"), spec_hash=spec_hash, now=now, outcome="trade" if trade else "rejected" if result.get("rejected") else "no_trade",
-        structure=plan.get("strategy"), direction=plan.get("bias"), legs=[{"action": x["action"], "type": x["option_type"], "strike": x["strike"]} for x in plan.get("legs", [])] if trade else [],
-        max_risk_indicative=(result.get("priced") or {}).get("max_loss_per_lot"))
+    with registry.locked(path):          # audit H3: read -> decide -> register as one step, so a racing run registers nothing
+        rows = registry.read(path)
+        if any(r.get("date") == day.isoformat() for r in rows if r["type"] in ("strategist", "missed")):
+            return None
+        seen = [date.fromisoformat(r["date"]) for r in rows if r["type"] in ("strategist", "missed")]
+        if seen:
+            for d in _weekdays_between(max(seen), day, muhurat):
+                registry.record_missed(path, day=d, spec_hash=spec_hash, now=now, reason="no question asked in the window")
+        row = registry.register_structure(
+            path, day=day, symbol=SYMBOL, expiry=result.get("expiry"), spec_hash=spec_hash, now=now, outcome="trade" if trade else "rejected" if result.get("rejected") else "no_trade",
+            structure=plan.get("strategy"), direction=plan.get("bias"), legs=[{"action": x["action"], "type": x["option_type"], "strike": x["strike"]} for x in plan.get("legs", [])] if trade else [],
+            max_risk_indicative=(result.get("priced") or {}).get("max_loss_per_lot"))
     if not trade:
         return row
     ctx, ch = built or st.build_context(SYMBOL, result.get("expiry"))     # fetched only after the row above was written
