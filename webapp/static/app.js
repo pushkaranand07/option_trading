@@ -16,7 +16,10 @@ function store(k, v) {
 // requires: another website open in the browser cannot add it, so it cannot take or close trades through this server.
 async function api(path, opts) {
   const method = (opts?.method || "GET").toUpperCase();
-  if (method !== "GET" && method !== "HEAD") opts = { ...opts, headers: { ...(opts.headers || {}), "X-Pulse-Request": "1" } };
+  if (method !== "GET" && method !== "HEAD") {         // Headers keeps the caller's headers whether given as an object, a list or a Headers
+    const headers = new Headers(opts.headers); headers.set("X-Pulse-Request", "1");
+    opts = { ...opts, headers };
+  }
   const r = await fetch(path, opts);
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {                            // a detail may be an object (409: {message, ...}); the message is what is shown
@@ -72,7 +75,13 @@ const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
   code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null,
   store: st?.store_problem ? `Trade record problem: ${st.store_problem}` : null,     // the server's message is complete: what failed, any copy made, writes stopped
   monitor: st?.monitor?.fail_count >= 3 ? `Auto-settle is failing: ${st.monitor.fail_count} checks in a row${st.monitor.last_error ? ` (last error: ${st.monitor.last_error})` : ""}. Open paper trades are not being closed at their target, stop or exit time until it recovers${st.monitor.last_ok_at ? `; it last worked at ${String(st.monitor.last_ok_at).replace("T", " ")}` : ""}.` : null,
-  degraded: st?.degraded?.length ? `Running with parts missing: ${st.degraded.map((d) => `${d.part}${d.reason ? ` (${d.reason})` : ""}`).join("; ")}.` : null });
+  degraded: degradedText(st?.degraded) });
+// The degraded notice: each part the server could not check, except the calendar and v2, which #calWarn and the v2
+// line already show (each warning once). A malformed list shows nothing rather than stopping every banner.
+function degradedText(list) {
+  const parts = (Array.isArray(list) ? list : []).filter((d) => d && typeof d === "object" && d.part && !["calendar", "v2"].includes(d.part));
+  return parts.length ? `Running with parts missing: ${parts.map((d) => `${d.part}${d.reason ? ` (${d.reason})` : ""}`).join("; ")}.` : null;
+}
 // The forward test's version as the server reports it (data keys keep the name "v2"; the test running is v3).
 const ftName = () => `v${S.status?.v2?.version || "3"}`;
 // Did today's answer count for the forward test: YES / NO / NOT YET (the server says why).
