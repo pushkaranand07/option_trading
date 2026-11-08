@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from webapp import market_data as md
+from webapp import market_data as md, timeutil
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,6 @@ def valid_expiries(symbol: str) -> list[str]:
     """The option expiries that can be asked for, in NSE's spelling (``17-Nov-2026``): NSE's list; with Dhan enabled
     its ``/optionchain/expirylist`` (cached for the day) is a cross-check, and the list when NSE has none. Never
     raises: ``[]`` when neither source has one."""
-    from webapp import timeutil
-
     symbol = symbol.upper()
     try:
         nse = expiries(symbol)
@@ -133,10 +131,10 @@ def lot_size(symbol: str) -> int:
     if symbol in md.INDICES:
         return int(md.index_lots().get(symbol) or md.INDICES[symbol][4])
     try:
-        from datetime import date, timedelta
+        from datetime import timedelta
 
         from tradingagents.analytics import datastore as ds
-        fo = ds.load("fo_summary", symbols=[symbol], start=date.today() - timedelta(days=30))
+        fo = ds.load("fo_summary", symbols=[symbol], start=timeutil.today_ist() - timedelta(days=30))
         if len(fo):
             return int(fo.sort_values("trade_date")["lot_size"].iloc[-1])
     except Exception:
@@ -200,4 +198,4 @@ def _chain(symbol: str, expiry: str, exps: list[str], lot: int | None, client, s
     if lot is None:
         lot = lot_size(symbol)
     return shape(raw, int(lot), strikes_each_side) | {"symbol": symbol, "expiry": expiry, "expiries": exps,
-                                                      "fetched": datetime.now().strftime("%H:%M:%S")}
+                                                      "fetched": timeutil.now_ist().strftime("%H:%M:%S")}

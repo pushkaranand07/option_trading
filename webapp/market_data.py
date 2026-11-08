@@ -207,7 +207,8 @@ dhan = Dhan()
 def _scrip_master_path() -> Path:
     """Dhan's public instrument list (no login needed), downloaded at most once a day."""
     path = CACHE_DIR / "dhan-scrip-master.csv"
-    if not path.exists() or datetime.fromtimestamp(path.stat().st_mtime).date() != datetime.now().date():
+    if (not path.exists()
+            or datetime.fromtimestamp(path.stat().st_mtime, timeutil.IST).date() != timeutil.today_ist()):
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         r = dhan_guard.request("GET", SCRIP_MASTER_URL, timeout=60)
         r.raise_for_status()

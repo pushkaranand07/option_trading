@@ -31,6 +31,7 @@ from tradingagents.analytics.costs import (
     fill_charges,
 )
 from tradingagents.analytics.implied_vol import expiry_atm
+from tradingagents.dataflows.vendors.nse.calendar import now_ist
 from tradingagents.integrations.optopsy.adapter import DEFAULT_RISK_FREE
 
 LEGS = ("long_put", "short_put", "short_call", "long_call")
@@ -48,7 +49,7 @@ def fetch_board_meetings(symbol: str, client=None, root: Path | None = None, sta
     if client is None:
         from tradingagents.dataflows.vendors.nse.client import default_client
         client = default_client()
-    end = end or date.today()
+    end = end or now_ist().date()
     rows = client.get_json(BOARD_MEETINGS, {"index": "equities", "symbol": symbol,
                                             "from_date": f"{start:%d-%m-%Y}", "to_date": f"{end:%d-%m-%Y}"},
                            ttl=0).data
