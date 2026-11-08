@@ -10,10 +10,12 @@ from __future__ import annotations
 import logging
 import re
 import time
+import uuid
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
+import requests
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -93,13 +95,37 @@ async def same_origin_writes(request: Request, call_next):
     return await call_next(request)
 
 
+# ---------- errors the page sees (audit L4) ----------
+# Bad input: 400 / 422 with a message written here. Known not-found: 404. Upstream data errors (Yahoo, Dhan, NSE)
+# carry messages the app wrote for the user, so they stay 502 with that message. Anything else is a bug: the page
+# gets 500 {"detail": "Internal error", "error_id"} and the traceback is logged under that id, never sent.
+
+UPSTREAM_ERRORS: tuple[type[BaseException], ...] = (md.DataError, nse_oc.ChainError, requests.RequestException)
+
+
+def internal_error(exc: BaseException) -> JSONResponse:
+    error_id = uuid.uuid4().hex[:10]
+    logger.error("Internal error %s: %s", error_id, type(exc).__name__, exc_info=(type(exc), exc, exc.__traceback__))
+    return JSONResponse({"detail": "Internal error", "error_id": error_id}, status_code=500)
+
+
+@app.middleware("http")
+async def errors_have_an_id(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:                          # an unhandled exception in any endpoint
+        return internal_error(exc)
+
+
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)      # added last, so it runs first
 
 
 async def _call(fn, *args):
+    """Run a blocking data call off the event loop. An upstream data error is a 502 with its own (app-written)
+    message; any other exception propagates and becomes a 500 with an error id."""
     try:
         return await run_in_threadpool(fn, *args)
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
@@ -258,7 +284,7 @@ async def nse_chain(symbol: str, expiry: str | None = None):
         return await run_in_threadpool(nse_oc.chain, md.instrument(symbol)["symbol"], expiry)
     except nse_oc.ChainError as exc:
         raise HTTPException(404, str(exc)) from exc
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(502, str(exc)) from exc
 
 
@@ -269,7 +295,7 @@ async def nse_contract(id: str):
         return await run_in_threadpool(nse_oc.contract, id)
     except nse_oc.ChainError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(502, str(exc)) from exc
 
 
@@ -280,7 +306,7 @@ async def trade_rank(symbol: str, expiry: str | None = None):
         return await run_in_threadpool(strategist.rank, md.instrument(symbol)["symbol"], expiry)
     except nse_oc.ChainError as exc:
         raise HTTPException(404, str(exc)) from exc
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(502, str(exc)) from exc
 
 
@@ -412,15 +438,20 @@ def trades_csv():
 def trade_take(body: dict = Body(...)):
     """Take trade ``candidate`` of AI run ``run_id`` as a dummy one-lot trade, priced by the server from a fresh
     chain now. Any price in the body is ignored."""
+    raw = body.get("candidate")
     try:
-        run_id, candidate = str(body.get("run_id") or ""), int(body.get("candidate"))
+        if isinstance(raw, bool):
+            raise TypeError
+        candidate = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, "Not taken: send run_id and candidate (the trade's number in the run, 0 or more).") from exc
+    run_id = str(body.get("run_id") or "")
+    try:
         return trade_record.take_from_run(run_id, candidate, confirm=bool(body.get("confirm")))
     except trade_record.BetExists as exc:                                  # ask first; nothing written
         raise HTTPException(409, {"message": str(exc), **exc.details}) from exc
     except trade_record.TradeError as exc:
         trade_record.record_refused(run_id, candidate, exc, "you")       # kept under My picks, outside the stats
-        raise HTTPException(400, f"Not taken: {exc}") from exc
-    except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(400, f"Not taken: {exc}") from exc
 
 
