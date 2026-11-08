@@ -8,9 +8,11 @@ then open http://localhost:8000
 from __future__ import annotations
 
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -19,9 +21,10 @@ load_dotenv(ROOT / ".env")
 
 from fastapi import Body, FastAPI, HTTPException, Request  # noqa: E402
 from fastapi.concurrency import run_in_threadpool  # noqa: E402
-from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
+from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
 
 from webapp import (  # noqa: E402
     ai,
@@ -53,6 +56,44 @@ async def time_requests(request: Request, call_next):
     if route is not None and request.url.path.startswith("/api/"):
         latency.observe(f"api {request.method} {route.path}", time.perf_counter() - started)
     return response
+
+
+# ---------- who may talk to the server (audit H2: DNS rebinding and CSRF) ----------
+# The server is for this computer's browser only. A page on another site can make the browser send requests here
+# (a form post, or DNS rebinding where attacker.example resolves to 127.0.0.1), so:
+#   * only Host 127.0.0.1 / localhost is served (anything else: 400, from TrustedHostMiddleware below);
+#   * a request that can change something (not GET / HEAD / OPTIONS) needs the header X-Pulse-Request: 1, which a
+#     cross-site form cannot set and a cross-site fetch cannot send without a CORS preflight this server never
+#     answers; and when the browser names an Origin (or, without one, a Referer), it must be this computer's.
+
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+REQUEST_HEADER = "X-Pulse-Request"
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_LOCAL_ORIGIN = re.compile(r"http://(127\.0\.0\.1|localhost)(:\d{1,5})?")
+
+
+def local_origin(value: str) -> bool:
+    """Is an Origin / Referer value this computer's page (http://127.0.0.1 or http://localhost, any port)?"""
+    parts = urlsplit(value)
+    return bool(parts.scheme and parts.netloc) and _LOCAL_ORIGIN.fullmatch(f"{parts.scheme}://{parts.netloc}") is not None
+
+
+def _forbidden(message: str) -> JSONResponse:
+    return JSONResponse({"detail": message}, status_code=403)
+
+
+@app.middleware("http")
+async def same_origin_writes(request: Request, call_next):
+    if request.method not in SAFE_METHODS:
+        if request.headers.get(REQUEST_HEADER) != "1":
+            return _forbidden(f"Refused: a request that changes something must carry the header {REQUEST_HEADER}: 1.")
+        source = request.headers.get("origin") or request.headers.get("referer")
+        if source is not None and not local_origin(source):
+            return _forbidden("Refused: this request came from another site.")
+    return await call_next(request)
+
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)      # added last, so it runs first
 
 
 async def _call(fn, *args):
