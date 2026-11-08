@@ -20,10 +20,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-import requests
 import yfinance as yf
 
-from webapp import latency
+from webapp import dhan_guard, latency
 
 logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
@@ -174,11 +173,8 @@ class Dhan:
         return bool(self.client_id and self.token)
 
     def post(self, path: str, body: dict) -> dict:
-        r = requests.post(
-            f"{DHAN_BASE}{path}", json=body, timeout=15,
-            headers={"access-token": self.token, "client-id": self.client_id,
-                     "Content-Type": "application/json", "Accept": "application/json"},
-        )
+        # Only market-data paths pass the guard; an account path raises DhanAccountAccessBlocked before sending.
+        r = dhan_guard.request("POST", f"{DHAN_BASE}{path}", json=body, timeout=15, token=self.token, client_id=self.client_id)
         try:
             data = r.json()
         except ValueError:
@@ -213,7 +209,7 @@ def _scrip_master_path() -> Path:
     path = CACHE_DIR / "dhan-scrip-master.csv"
     if not path.exists() or datetime.fromtimestamp(path.stat().st_mtime).date() != datetime.now().date():
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        r = requests.get(SCRIP_MASTER_URL, timeout=60)
+        r = dhan_guard.request("GET", SCRIP_MASTER_URL, timeout=60)
         r.raise_for_status()
         path.write_bytes(r.content)
     return path
@@ -530,13 +526,3 @@ def _need_dhan_options(inst: dict) -> None:
         raise DataError("The option chain needs Dhan. Add DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN to .env.")
     if not inst["has_options"]:
         raise DataError(f"Option chain is available for indices here ({', '.join(INDICES)}).")
-
-
-def dhan_profile() -> dict | None:
-    if not dhan.enabled:
-        return None
-    try:
-        r = requests.get(f"{DHAN_BASE}/profile", headers={"access-token": dhan.token}, timeout=10)
-        return r.json() if r.status_code == 200 else {"error": r.text[:200]}
-    except Exception as exc:
-        return {"error": str(exc)}
