@@ -670,13 +670,16 @@ $("#jrHorizon").onclick = (e) => {
   document.querySelectorAll("#jrHorizon button").forEach((x) => x.classList.toggle("active", x === b));
   loadJournal();
 };
+// The tradebook's raw bytes; the server accepts only octet-stream, CSV or .xlsx bodies (415 otherwise).
+async function uploadJournal(f) {
+  const r = await api("/api/journal/upload?name=" + encodeURIComponent(f.name),
+    { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: await f.arrayBuffer() });
+  await loadJournalFiles(r.name);
+}
 $("#jrUpload").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
   const n = $("#jrNotice"); n.hidden = true;
-  try {
-    const r = await api("/api/journal/upload?name=" + encodeURIComponent(f.name), { method: "POST", body: await f.arrayBuffer() });
-    await loadJournalFiles(r.name);
-  } catch (err) { n.hidden = false; n.textContent = err.message; }
+  try { await uploadJournal(f); } catch (err) { n.hidden = false; n.textContent = err.message; }
   e.target.value = "";
 };
 const money = (x) => (x == null ? "—" : (x < 0 ? "−" : "") + "₹" + fmt0(Math.abs(x)));
