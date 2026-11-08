@@ -709,6 +709,37 @@ def run_expired(run: dict) -> bool:
     return not run.get("run_id") or run.get("day") != signals.now_ist().date().isoformat()
 
 
+# Audit M7: keep the exact text each run's ranking LLM was sent. ask_rank_llm and ai_ranked are fingerprinted (forward test
+# v3), so they stay as they are: start() hands ai_ranked this capture as its ``llm``, and the capture calls ask_rank_llm.
+def _rank_user_message(ctx: dict, candidates: list[dict]) -> str:
+    """The user message exactly as ask_rank_llm builds it (a test checks the two expressions stay identical)."""
+    user = (f"DATA:\n{json.dumps(ctx, default=str)}\n\nCANDIDATES (per lot; the app sizes nothing):\n"
+            f"{json.dumps(candidates, default=str)}")
+    return user
+
+
+def _capture_rank_input(run_id: str):
+    """An ``llm`` for ai_ranked: saves {run_id, system, user, sha256} to reports/ai_runs/inputs/<run_id>.json, then asks
+    the module's ask_rank_llm. ``sha256`` is of the two messages as JSON, [["system", ...], ["user", ...]]. A failed
+    save is logged and never stops the ranking."""
+    import hashlib
+
+    def capture(ctx: dict, candidates: list[dict]) -> RankedAnswer:
+        try:
+            user = _rank_user_message(ctx, candidates)
+            sent = json.dumps([["system", RANK_SYSTEM], ["user", user]], ensure_ascii=False)
+            d = _runs_dir() / "inputs"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / f"{run_id}.json").write_text(json.dumps({"run_id": run_id, "system": RANK_SYSTEM, "user": user,
+                                                          "sha256": hashlib.sha256(sent.encode("utf-8")).hexdigest()},
+                                                         ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            logger.exception("the ranking LLM's input was not saved")
+        return ask_rank_llm(ctx, candidates)
+
+    return capture
+
+
 # ---------------------------------------------------------------- background jobs (the agents take several minutes)
 
 _jobs: dict[str, dict] = {}
@@ -738,10 +769,12 @@ def start(symbol: str, expiry: str | None = None, mode: str = "full") -> str:
 
     def run():
         try:
-            res = ai_ranked(symbol, expiry, agents=(lambda s: research) if research else full_research, progress=stage)
+            run_id = uuid.uuid4().hex[:12]                 # known before the ranking, so its LLM input is saved under it (M7)
+            res = ai_ranked(symbol, expiry, agents=(lambda s: research) if research else full_research, progress=stage,
+                            llm=_capture_rank_input(run_id))
             res["mode"] = mode
             from webapp import signals
-            res["run_id"], res["day"] = uuid.uuid4().hex[:12], signals.now_ist().date().isoformat()
+            res["run_id"], res["day"] = run_id, signals.now_ist().date().isoformat()
             from webapp import trade_record
             res["market_closed"] = trade_record.entry_allowed() is not None   # last prices: an analysis, not a trade to record
             try:
