@@ -4,7 +4,7 @@ One JSON line per entry. Each line holds the hash of the line before it, so an e
 chain. A signal registered at or after 09:15 IST on its entry date is refused. A trade not registered before entry does not
 count. A missed day is recorded as missed and can never be filled in later.
 
-Every check-then-append holds ``locked(path)`` (audit H3): one process-wide lock plus an OS lock on a ``<registry>.lock``
+Every check-then-append holds ``locked(path)`` (audit H3): a per-registry in-process lock plus an OS lock on a ``<registry>.lock``
 file next to the registry, so two analyses running at once (threads or processes) can't both pass a duplicate check or
 chain two rows to the same previous row.
 """
@@ -32,8 +32,9 @@ class RegistryError(RuntimeError):
     """A late signal, a duplicate, a backfill, or a broken hash chain."""
 
 
-_LOCK = threading.RLock()                 # process-wide; the OS lock below covers other processes
-_held: dict[str, list] = {}               # lock file -> [open handle, depth]; changed only while _LOCK is held
+_GUARD = threading.Lock()                 # guards _locks only; never held while waiting
+_locks: dict[str, threading.RLock] = {}   # lock file -> its re-entrant in-process lock (threads); the OS lock covers processes
+_held: dict[str, list] = {}               # lock file -> [open handle, depth]; touched only by the thread holding that path's RLock
 LOCK_TIMEOUT = 30.0
 
 if os.name == "nt":
@@ -67,11 +68,18 @@ else:
 @contextmanager
 def locked(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
     """Hold the registry at ``path`` for a read -> check -> append sequence. Re-entrant in the same thread; other threads
-    and other processes wait. The OS releases the file lock if the process dies, so a crash leaves no stale lock."""
+    and other processes wait up to ``timeout`` seconds in all, then get a RegistryError. Each registry has its own lock,
+    so holding one never blocks a writer of another. The OS releases the file lock if the process dies, so a crash
+    leaves no stale lock."""
     lock_file = Path(str(path) + ".lock")
     key = os.path.normcase(os.path.abspath(lock_file))
-    with _LOCK:
-        if key in _held:                  # this thread already holds it (RLock): just nest
+    deadline = _clock.monotonic() + timeout
+    with _GUARD:
+        lk = _locks.setdefault(key, threading.RLock())
+    if not lk.acquire(timeout=max(timeout, 0.0)):
+        raise RegistryError(f"{Path(path).name} is locked by another writer in this process")
+    try:
+        if key in _held:                  # this thread already holds it: just nest
             _held[key][1] += 1
             try:
                 yield
@@ -80,7 +88,6 @@ def locked(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
             return
         lock_file.parent.mkdir(parents=True, exist_ok=True)
         fh = open(lock_file, "a+b")       # noqa: SIM115 (held across the yield)
-        deadline = _clock.monotonic() + timeout
         while not _try_os_lock(fh):
             if _clock.monotonic() >= deadline:
                 fh.close()
@@ -95,6 +102,8 @@ def locked(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
                 _os_unlock(fh)
             finally:
                 fh.close()
+    finally:
+        lk.release()
 
 
 def _hash(body: dict) -> str:
