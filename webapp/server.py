@@ -562,7 +562,7 @@ def _store_unavailable(exc: Exception) -> HTTPException:
 
 class TakeRequest(BaseModel):
     """The page sends only which trade of which run; any other field (a price, say) is ignored."""
-    run_id: str
+    run_id: str | None = None                          # missing / null / "": the usual "not on file" refusal, saved
     candidate: int = Field(ge=0, strict=True)          # strict: true / 1.5 / "1" are refused, not coerced
     confirm: bool = Field(default=False, strict=True)
 
@@ -571,7 +571,7 @@ class TakeRequest(BaseModel):
 def trade_take(req: TakeRequest):
     """Take trade ``candidate`` of AI run ``run_id`` as a dummy one-lot trade, priced by the server from a fresh
     chain now. Any price in the body is ignored."""
-    run_id, candidate = req.run_id, req.candidate
+    run_id, candidate = req.run_id or "", req.candidate
     try:
         try:
             return trade_record.take_from_run(run_id, candidate, confirm=req.confirm)
@@ -582,6 +582,8 @@ def trade_take(req: TakeRequest):
         except trade_record.TradeError as exc:
             trade_record.record_refused(run_id, candidate, exc, "you")   # kept under My picks, outside the stats
             raise HTTPException(400, f"Not taken: {exc}") from exc
+        except (KeyError, TypeError, ValueError) as exc:                   # the take path's own checks (e.g. an
+            raise HTTPException(400, f"Not taken: {exc}") from exc         # unknown strategy direction)
     except _store_corrupt() as exc:
         raise _store_unavailable(exc) from exc
 

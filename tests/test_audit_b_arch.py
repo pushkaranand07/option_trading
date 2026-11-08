@@ -123,9 +123,9 @@ def taken(monkeypatch):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("body", [{}, {"run_id": "r1"}, {"candidate": 0}, {"run_id": "r1", "candidate": -1},
-                                  {"run_id": "r1", "candidate": "abc"}, {"run_id": "r1", "candidate": 1.5},
-                                  {"run_id": "r1", "candidate": True}, {"run_id": None, "candidate": 0},
+@pytest.mark.parametrize("body", [{}, {"run_id": "r1"}, {"run_id": "r1", "candidate": -1},     # a missing run_id: see
+                                  {"run_id": "r1", "candidate": "abc"}, {"run_id": "r1", "candidate": 1.5},  # test_audit_b_l4_take
+                                  {"run_id": "r1", "candidate": True}, {"run_id": 7, "candidate": 0},
                                   {"run_id": "r1", "candidate": 0, "confirm": "maybe"}])
 def test_a_badly_typed_take_is_422_and_nothing_is_taken(client, taken, body):
     r = client.post("/api/trades", json=body, headers=HEADER)
@@ -143,4 +143,5 @@ def test_a_typed_take_reaches_the_record_and_prices_in_the_body_are_ignored(clie
 
 @pytest.mark.unit
 def test_the_take_endpoint_declares_its_model():
-    assert server.TakeRequest.model_json_schema()["required"] == ["run_id", "candidate"]
+    schema = server.TakeRequest.model_json_schema()
+    assert schema["required"] == ["candidate"] and set(schema["properties"]) == {"run_id", "candidate", "confirm"}
