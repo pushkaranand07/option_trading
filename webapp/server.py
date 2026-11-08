@@ -121,10 +121,15 @@ async def same_origin_writes(request: Request, call_next):
 UPSTREAM_ERRORS: tuple[type[BaseException], ...] = (md.DataError, nse_oc.ChainError, requests.RequestException)
 
 
-def internal_error(exc: BaseException) -> JSONResponse:
+def log_error(exc: BaseException) -> str:
+    """Log the exception's traceback under a short new id, and return the id (what the page may show)."""
     error_id = uuid.uuid4().hex[:10]
     logger.error("Internal error %s: %s", error_id, type(exc).__name__, exc_info=(type(exc), exc, exc.__traceback__))
-    return JSONResponse({"detail": "Internal error", "error_id": error_id}, status_code=500)
+    return error_id
+
+
+def internal_error(exc: BaseException) -> JSONResponse:
+    return JSONResponse({"detail": "Internal error", "error_id": log_error(exc)}, status_code=500)
 
 
 @app.middleware("http")
@@ -164,19 +169,52 @@ def index():
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
+def _optional(module, name: str):
+    """A function another track adds (``trade_record.store_problem`` / ``monitor_status``), or one answering None
+    while this server runs code without it."""
+    return getattr(module, name, None) or (lambda: None)
+
+
 @app.get("/api/status")
 def status():
+    """Everything the page's banners need. Audit M4: each part is checked on its own, so one failing check (say, a
+    server running code older than the files on disk) is listed under ``degraded`` instead of making this a 500."""
+    degraded: list[dict] = []
+
+    def part(name: str, check, fallback=None):
+        try:
+            return check()
+        except Exception as exc:
+            degraded.append({"part": name, "reason": f"could not be checked (error id {log_error(exc)}); "
+                                                     "see the server log, or restart the server"})
+            return fallback
+
+    azure_problem = part("azure", ai.azure_problem, "The Azure settings could not be checked.")
+    source = part("calendar", lambda: getattr(signals.nse_calendar(), "source", None), "unknown")
+    if source == "weekends only":
+        calendar_warning = ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
+                            "so a market holiday would show as open.")
+    elif source == "unknown":
+        calendar_warning = "The NSE holiday calendar could not be checked: whether the market is open may be wrong."
+    else:
+        calendar_warning = None
+    v2 = part("v2", ai_test.today_status, {"version": getattr(ai_test, "VERSION", None), "state": "ERROR",
+                                           "reason": "today's v2 status could not be checked", "fingerprint_problem": None})
+    if isinstance(v2, dict) and v2.get("state") == "ERROR" and not any(d["part"] == "v2" for d in degraded):
+        degraded.append({"part": "v2", "reason": v2.get("reason") or "today's v2 status could not be checked"})
     return {
-        "dhan": md.dhan.enabled,
-        "azure": ai.azure_problem() is None,
-        "azure_problem": ai.azure_problem(),
-        "market_open": signals.market_open(),
-        "muhurat": signals.muhurat_today(),
-        "calendar_warning": ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
-                             "so a market holiday would show as open." if signals.nse_calendar().source == "weekends only" else None),
-        "v2": ai_test.today_status(),
-        "code": build_info.status(),
+        "dhan": part("dhan", lambda: bool(md.dhan.enabled), False),
+        "azure": azure_problem is None,
+        "azure_problem": azure_problem,
+        "market_open": part("market_open", signals.market_open),
+        "muhurat": part("muhurat", signals.muhurat_today),
+        "calendar_warning": calendar_warning,
+        "v2": v2,
+        "code": part("code", build_info.status),                           # running commit vs checkout, "stale"
+        "store_problem": part("store_problem", _optional(trade_record, "store_problem")),
+        "monitor": part("monitor", _optional(trade_record, "monitor_status")),
         "indices": [{"symbol": k, "name": v[0]} for k, v in md.INDICES.items()],
+        "degraded": degraded,
     }
 
 
