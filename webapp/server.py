@@ -353,8 +353,16 @@ def journal_files():
     return quant.journal_files()
 
 
+# The page sends the file's bytes as application/octet-stream; text/csv and the .xlsx type are accepted too. Anything
+# else (text/plain, a form) is what a cross-site form can send without a preflight, so it is refused (audit M2).
+UPLOAD_TYPES = ("application/octet-stream", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @app.post("/api/journal/upload")
 async def journal_upload(request: Request, name: str):
+    ctype = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if ctype not in UPLOAD_TYPES:
+        raise HTTPException(415, f"Send the file with Content-Type {UPLOAD_TYPES[0]} (or text/csv / the .xlsx type).")
     try:
         return {"name": quant.save_upload(name, await request.body())}
     except ValueError as exc:
