@@ -65,10 +65,14 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 
 // ---------- status + quotes ----------
 const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; el.textContent = text || ""; } };
-// The page-wide banners' text from /api/status (null: no banner).
+// The page-wide banners' text from /api/status (null: no banner). store_problem, monitor and degraded are optional:
+// an older server sends none of them.
 const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
   v2: st?.v2?.fingerprint_problem ? `${ftName()} forward test: ${st.v2.fingerprint_problem}.` : null,
-  code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null });
+  code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null,
+  store: st?.store_problem ? `Trade record unreadable: ${st.store_problem}. Taking, closing and deleting trades is blocked until the file is fixed; a backup copy of it was made first.` : null,
+  monitor: st?.monitor?.fail_count >= 3 ? `Auto-settle is failing: ${st.monitor.fail_count} checks in a row${st.monitor.last_error ? ` (last error: ${st.monitor.last_error})` : ""}. Open paper trades are not being closed at their target, stop or exit time until it recovers${st.monitor.last_ok_at ? `; it last worked at ${String(st.monitor.last_ok_at).replace("T", " ")}` : ""}.` : null,
+  degraded: st?.degraded?.length ? `Running with parts missing: ${st.degraded.map((d) => `${d.part}${d.reason ? ` (${d.reason})` : ""}`).join("; ")}.` : null });
 // The forward test's version as the server reports it (data keys keep the name "v2"; the test running is v3).
 const ftName = () => `v${S.status?.v2?.version || "3"}`;
 // Did today's answer count for the forward test: YES / NO / NOT YET (the server says why).
@@ -89,6 +93,9 @@ async function loadStatus() {
     banner("#calWarn", b.calendar);
     banner("#v2Warn", b.v2);
     banner("#codeWarn", b.code);
+    banner("#storeWarn", b.store);
+    banner("#monitorWarn", b.monitor);
+    banner("#degradedWarn", b.degraded);
     document.querySelectorAll(".v2-line").forEach((e) => (e.innerHTML = v2LineHtml()));
   } catch (e) { console.warn(e); }
 }
