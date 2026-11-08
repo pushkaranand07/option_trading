@@ -205,7 +205,7 @@ def _back_up_damaged(raw: bytes) -> str:
                 return old.name
         except OSError:
             continue
-    copy = STORE.with_name(f"{STORE.name}.corrupt-{_clock():%Y%m%d-%H%M%S}")
+    copy = STORE.with_name(f"{STORE.name}.corrupt-{_clock():%Y%m%d-%H%M%S}-{sha[:8]}")   # unique per content
     try:
         copy.write_bytes(raw)
     except OSError as exc:
@@ -939,6 +939,7 @@ def delete(trade_id: str) -> None:
 _monitor_started = False
 _monitor_lock = threading.Lock()                 # guards _monitor_started and _monitor
 _monitor = {"running": False, "last_ok_at": None, "last_error": None, "fail_count": 0}
+_logged_problem: str | None = None               # the damaged-store problem whose traceback was already logged
 
 
 def monitor_status() -> dict:
@@ -948,25 +949,32 @@ def monitor_status() -> dict:
 
 
 def _monitor_tick() -> bool:
-    """One check: while the market is open and a trade is open, apply the rules (refresh_open). A failure is logged
-    with its traceback and counted, never raised, so the monitor keeps going. True when the check succeeded."""
+    """One check: while the market is open and a trade is open, apply the rules (refresh_open); with the market closed
+    the file is not even read. A failure is counted and logged with its traceback, never raised, so the monitor keeps
+    going; a damaged store's traceback is logged once per distinct problem (later ticks at debug). True on success."""
+    global _logged_problem
     from webapp import signals
 
     try:
-        with _lock:
-            rows = _load()
-        repair = _repair_range_trades(rows)              # in memory: a bug-closed condor counts as open (and is saved)
-        if signals.market_open() and (repair or any(t["status"] == "open" for t in rows)):
-            refresh_open()
+        if signals.market_open():
+            with _lock:
+                rows = _load()
+            repair = _repair_range_trades(rows)          # in memory: a bug-closed condor counts as open (and is saved)
+            if repair or any(t["status"] == "open" for t in rows):
+                refresh_open()
     except Exception as exc:                               # a failed check must not stop the monitor: log and count it
         with _monitor_lock:
             _monitor["fail_count"] += 1
             _monitor["last_error"] = f"{_clock():%Y-%m-%d %H:%M:%S} {type(exc).__name__}: {str(exc)[:300]}"
             n = _monitor["fail_count"]
-        logger.exception("trade record monitor: the check failed (%d in a row)", n)
+            repeat = isinstance(exc, StoreCorrupt) and str(exc) == _logged_problem
+            _logged_problem = str(exc) if isinstance(exc, StoreCorrupt) else None
+        logger.log(logging.DEBUG if repeat else logging.ERROR, "trade record monitor: the check failed (%d in a row)", n,
+                   exc_info=True)
         return False
     with _monitor_lock:
         _monitor.update(last_ok_at=_clock().strftime("%Y-%m-%d %H:%M:%S"), last_error=None, fail_count=0)
+        _logged_problem = None
     return True
 
 
