@@ -75,10 +75,24 @@ def fingerprint_problem(spec: dict | None = None) -> str | None:
 
 
 def today_status(now: datetime | None = None) -> dict:
-    """Did today's answer count: YES, NO, NOT YET or NO SESSION, with the reason."""
+    """Did today's answer count: YES, NO, NOT YET or NO SESSION, with the reason. Never raises (audit M4): a missing
+    spec, an unreadable or old-format registry row or a failed source lookup gives state ERROR, and is logged."""
+    now = (now or datetime.now(IST)).astimezone(IST)
+    try:
+        return _today_status(now)
+    except Exception as exc:
+        logger.exception("today's forward-test status could not be worked out")
+        try:
+            fp = fingerprint_problem()
+        except Exception as fexc:
+            fp = f"could not check the fingerprint: {type(fexc).__name__}: {str(fexc)[:150]}"
+        return {"version": VERSION, "day": now.date().isoformat(), "fingerprint_problem": fp, "state": "ERROR",
+                "reason": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+def _today_status(now: datetime) -> dict:
     from webapp import signals, trade_record
 
-    now = (now or datetime.now(IST)).astimezone(IST)
     day, fp = now.date(), fingerprint_problem()
     out = {"version": VERSION, "day": day.isoformat(), "fingerprint_problem": fp}
     if day < FIRST_SESSION:
