@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -61,12 +62,23 @@ async def lifespan(_app: FastAPI):
     are daemon threads, so they end with the process."""
     for name, start in (("refresh-ahead", lambda: md.start_refresh_ahead()),
                         ("trade monitor", lambda: trade_record.start_monitor()),
-                        ("v2 startup check", lambda: v2_startup_check())):
+                        ("v2 startup check", lambda: v2_startup_check()),
+                        ("trade refresh", lambda: _refresh_in_background())):
         _step("Start-up", name, start)
     yield
     for name, module, hook in (("refresh-ahead", md, "stop_refresh_ahead"), ("trade monitor", trade_record, "stop_monitor")):
         if stop := getattr(module, hook, None):
             _step("Shutdown", name, stop)
+
+
+def _refresh_in_background() -> None:
+    """Settle open trades once at start-up (trade_record.refresh_open, Track A: overview() no longer writes, and the
+    monitor settles only while the market is open), in a daemon thread so start-up never waits on a chain fetch."""
+    refresh = getattr(trade_record, "refresh_open", None)
+    if refresh is None:
+        return
+    threading.Thread(target=_step, args=("Start-up", "trade refresh", refresh), name="trade-refresh-at-start",
+                     daemon=True).start()
 
 
 def _step(phase: str, name: str, fn) -> None:
@@ -586,6 +598,20 @@ def trade_take(req: TakeRequest):
             raise HTTPException(400, f"Not taken: {exc}") from exc         # unknown strategy direction)
     except _store_corrupt() as exc:
         raise _store_unavailable(exc) from exc
+
+
+@app.post("/api/trades/refresh")
+async def trades_refresh():
+    """Settle open trades now (targets, stops, expiry) with trade_record.refresh_open (Track A). The monitor does
+    this only while the market is open, so a trade that expired waits for the next session unless this is called."""
+    refresh = getattr(trade_record, "refresh_open", None)
+    if refresh is None:
+        raise HTTPException(501, "This server's trade record can't refresh open trades yet: update and restart it.")
+    try:
+        result = await _call(refresh)
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
+    return {"ok": True, "result": result if isinstance(result, (dict, list, str, int, float, type(None))) else None}
 
 
 @app.post("/api/trades/{trade_id}/close")
