@@ -70,7 +70,7 @@ const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; 
 const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
   v2: st?.v2?.fingerprint_problem ? `${ftName()} forward test: ${st.v2.fingerprint_problem}.` : null,
   code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null,
-  store: st?.store_problem ? `Trade record unreadable: ${st.store_problem}. Taking, closing and deleting trades is blocked until the file is fixed; a backup copy of it was made first.` : null,
+  store: st?.store_problem ? `Trade record problem: ${st.store_problem}` : null,     // the server's message is complete: what failed, any copy made, writes stopped
   monitor: st?.monitor?.fail_count >= 3 ? `Auto-settle is failing: ${st.monitor.fail_count} checks in a row${st.monitor.last_error ? ` (last error: ${st.monitor.last_error})` : ""}. Open paper trades are not being closed at their target, stop or exit time until it recovers${st.monitor.last_ok_at ? `; it last worked at ${String(st.monitor.last_ok_at).replace("T", " ")}` : ""}.` : null,
   degraded: st?.degraded?.length ? `Running with parts missing: ${st.degraded.map((d) => `${d.part}${d.reason ? ` (${d.reason})` : ""}`).join("; ")}.` : null });
 // The forward test's version as the server reports it (data keys keep the name "v2"; the test running is v3).

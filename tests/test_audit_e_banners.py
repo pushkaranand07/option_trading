@@ -19,9 +19,9 @@ def banners(status):
 
 @pytest.mark.unit
 def test_an_unreadable_trade_record_gives_a_red_banner_saying_writes_are_blocked():
-    b = banners({"store_problem": "trades.json is not valid JSON (line 3)"})
-    assert "trades.json is not valid JSON (line 3)" in b["store"]
-    assert "blocked" in b["store"] and "backup" in b["store"]
+    msg = "The trade record file trades.json cannot be opened (x). Nothing will be written to the trade record until it can be read again."
+    b = banners({"store_problem": msg})
+    assert b["store"] == f"Trade record problem: {msg}"            # the server's message says writes are blocked; nothing added
 
 
 @pytest.mark.unit

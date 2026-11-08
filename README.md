@@ -123,7 +123,7 @@ network.
 **Restart the server after every pull or merge.** Python code is loaded once at start-up, so a server left running
 keeps the old code. Until you restart it, every page shows a red banner: "This server runs code from <commit> ...
 Restart the server to run the latest code." The page also shows a red banner when the trade record cannot be read
-(writes are blocked and a backup copy is made), when auto-settle has failed 3 times in a row, and a notice when a
+(writes are blocked; a damaged file is copied aside first), when auto-settle has failed 3 times in a row, and a notice when a
 part of the server is degraded.
 
 **Scheduled jobs** (Windows Task Scheduler, [docs/development/scheduled-job-operations.md](docs/development/scheduled-job-operations.md)):
