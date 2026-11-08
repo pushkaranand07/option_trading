@@ -1767,10 +1767,43 @@ function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChar
 
 
 
-// What one lot ties up, as Dhan's order screen shows it: a bought option or debit spread costs its net premium
-// (exact); a credit spread blocks margin, about its worst case once the bought leg is placed first (Dhan sets the exact figure).
+// What one lot ties up: a bought option or debit spread costs its net premium (exact). For a credit spread we only
+// know its worst case; the margin Dhan blocks is NOT that number. It is set by Dhan (SPAN + exposure, more on expiry
+// day), usually far above it, and a naked SELL blocks about ₹1 lakh+. Never shown as margin.
 function lotMoney(debit, perLot) {
-  return debit ? { v: perLot, label: "you pay" } : { v: perLot, label: "≈ margin (Dhan sets exact)" };
+  return debit ? { v: perLot, label: "you pay" } : { v: perLot, label: "max loss · Dhan margin is much higher" };
+}
+
+// ---------- the user's budget: one lot, only single BUY options it can pay for (display only) ----------
+// The AI still ranks all its trades and the forward test still counts its #1 unchanged; this only decides what the
+// simple card offers. A trade with a SELL leg needs Dhan margin far above a small budget, so it is never offered.
+const BUDGET = Number(store("budget")) || 15000;
+function budgetPick(trades) {   // the AI's best-ranked trade that is one bought option costing ≤ BUDGET for 1 lot
+  return trades.find((c) => c.levels?.legs?.length === 1 && c.levels.legs[0].action === "BUY"
+    && c.priced?.debit && c.priced.outlay_per_lot <= BUDGET) || null;
+}
+function budgetCardHtml(sym, res) {
+  const head = `<div class="ai-head"><b>For your ₹${fmt0(BUDGET)} · 1 lot</b></div>`;
+  if (S.status?.muhurat) return `<div class="budget-card">${head}<div class="call stop"><b>No trade today.</b> Muhurat day: you don't trade it. The data is still saved.</div></div>`;
+  const c = budgetPick(res.trades || []);
+  if (!c) return `<div class="budget-card">${head}<div class="call stop"><b>No trade today.</b> None of the AI's trades is a single BUY that costs ₹${fmt0(BUDGET)} or less for 1 lot. Don't force one.</div></div>`;
+  const l = c.levels.legs[0], lot = c.priced.lot, a = c.plan, name = NAMES[sym] || sym, pay = l.price * lot;
+  const ok = legLevelsOk(l, l.premium_at_target, l.premium_at_stop);
+  const exits = ok
+    ? `<div class="lv"><span>Take profit: sell at</span><b class="up">₹${fmt(l.premium_at_target)}</b><small>you make about +₹${fmt0(l.pnl_target_per_lot)}</small></div>
+       <div class="lv"><span>Stop loss: sell at</span><b class="down">₹${fmt(l.premium_at_stop)}</b><small>you lose about −₹${fmt0(-l.pnl_stop_per_lot)}</small></div>`
+    : `<div class="lv"><span>Exit</span><b>by hand</b><small>sell when ${esc(name)} reaches ${fmt0(a.underlying_target)} (profit) or ${fmt0(a.underlying_stop)} (stop)</small></div>`;
+  const stale = res.market_closed || res.expired
+    ? `<div class="notice">These are last-close prices, not live. Run Quick analysis after 9:15 AM before buying.</div>` : "";
+  return `<div class="budget-card">${head}${stale}
+    <div class="budget-order"><span class="leg-tag buy">BUY</span> <b>${esc(contractName(sym, c.expiry || res.expiry, l))}</b> <span class="muted">(1 lot = ${lot} qty)</span></div>
+    <div class="levels">
+      <div class="lv"><span>Buy at</span><b>₹${fmt(l.price)} or less</b><small>you pay ${rupee(pay)} · ₹${fmt0(BUDGET - pay)} stays free</small></div>
+      ${exits}
+    </div>
+    <div class="small">Buy only while ${esc(name)} is between <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b>.
+      ${ok ? "In Dhan: Super order with this target and stop loss." : ""} <b>Exit by 3:15 PM no matter what.</b> Worst case you lose the ${rupee(pay)} you paid.</div>
+    <div class="small muted">AI's #${c.rank} of ${res.trades.length}. Not a proven edge; ${COST_NOTE}.</div></div>`;
 }
 
 // The trade in plain Hinglish (user's choice): which option to buy or sell, at what price, what one lot of each costs
@@ -1783,7 +1816,8 @@ function plainTradeHtml(c, sym) {
       @ ₹${fmt(l.price)} → 1 lot (${lot}) ${l.action === "BUY" ? "ka" : "bechne pe"} <b>${rupee(l.price * lot)}</b> ${l.action === "BUY" ? "dega" : "milega"}</li>`).join("");
   const total = pr.debit
     ? `Kul milake tu <b>${rupee(pr.outlay_per_lot)} dega</b> (1 lot). Yahi tera max nuksaan hai.${pr.max_profit_per_lot != null ? ` Max fayda <b class="up">${rupee(pr.max_profit_per_lot)}</b>.` : ""}`
-    : `Kul milake tujhe <b>${rupee(pr.net_per_unit * lot)} milega</b> (1 lot), par Dhan lagbhag <b>${rupee(pr.outlay_per_lot)}</b> margin rok lega. Yahi tera max nuksaan hai. Max fayda <b class="up">${rupee(pr.max_profit_per_lot)}</b>.`;
+    : `Kul milake tujhe <b>${rupee(pr.net_per_unit * lot)} milega</b> (1 lot). Max nuksaan <b class="down">${rupee(pr.outlay_per_lot)}</b>, max fayda <b class="up">${rupee(pr.max_profit_per_lot)}</b>.
+       Par margin Dhan isse kaafi zyada rokega (BUY wala pehle fill na ho to ₹1 lakh+): Dhan mein check kar.`;
   const exit = legs.length === 1
     ? `Dhan mein Super order laga: target <b class="up">₹${fmt(legs[0].premium_at_target)}</b>, stop loss <b class="down">₹${fmt(legs[0].premium_at_stop)}</b>.`
     : CREDIT.includes(a.strategy)
@@ -1832,9 +1866,11 @@ function aiListHtml(sym, res) {
     ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
   const closedNote = (res.expired ? `<div class="notice">Yeh run expired hai (kisi aur din ka): sirf dekhne ke liye. Uske prices aaj ke nahi, isliye Take band hai. Analysis dobara chala.</div>` : "")
     + (res.market_closed ? `<div class="notice">Yeh run market band hone pe hua: prices last close ke hain, in pe asli order nahi lagta. Take band hai, aur AI record mein nahi gaya. 9:15 ke baad Quick analysis chala.</div>` : "");
-  if (!res.trades.length) return closedNote + `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
+  if (!res.trades.length) return budgetCardHtml(sym, res) + closedNote + `<div class="call stop"><b>No trade.</b> The AI found no candidate the evidence supports.${research}</div>${read}`;
   const cards = res.trades.map((c, i) => tradeCard(c, i, sym, v === i, res.market_closed || res.expired)).join("");
-  return `<div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}</div></div>
+  return `${budgetCardHtml(sym, res)}
+    <div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}
+      <div class="small muted">The full list, for the forward test and for reading. Trades with a SELL leg need far more than ₹${fmt0(BUDGET)}.</div></div></div>
     ${closedNote}${read}
     <div class="ai-trades">${cards}</div>
     <div class="small muted">Strongest first, by the whole analysis, not by profit size. Pulse priced each at the live bid / ask of the run and set its entry zone, target and stop by a fixed rule.
