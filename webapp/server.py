@@ -54,15 +54,26 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Start-up work, run when the server starts (not when the module is imported, so tests and scripts that import
-    it start no threads): the refresh-ahead thread, the trade monitor, and the v2 fingerprint check."""
+    it start no threads): the refresh-ahead thread, the trade monitor, and the v2 fingerprint check.
+
+    On shutdown it calls the stop hooks ``market_data.stop_refresh_ahead`` / ``trade_record.stop_monitor`` when those
+    modules have them (other tracks' files; neither has one yet). Without them nothing is left hanging: both threads
+    are daemon threads, so they end with the process."""
     for name, start in (("refresh-ahead", lambda: md.start_refresh_ahead()),
                         ("trade monitor", lambda: trade_record.start_monitor()),
                         ("v2 startup check", lambda: v2_startup_check())):
-        try:
-            start()
-        except Exception:                             # one failed start must not keep the page down
-            logger.exception("Start-up step failed: %s", name)
+        _step("Start-up", name, start)
     yield
+    for name, module, hook in (("refresh-ahead", md, "stop_refresh_ahead"), ("trade monitor", trade_record, "stop_monitor")):
+        if stop := getattr(module, hook, None):
+            _step("Shutdown", name, stop)
+
+
+def _step(phase: str, name: str, fn) -> None:
+    try:
+        fn()
+    except Exception:                                 # one failed step must not keep the page down or hang shutdown
+        logger.exception("%s step failed: %s", phase, name)
 
 
 app = FastAPI(title="Pulse Trader", lifespan=lifespan)
