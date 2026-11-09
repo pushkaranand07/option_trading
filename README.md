@@ -191,7 +191,8 @@ None of this is evidence of an edge. Six closed bets cannot tell skill from luck
   not been checked against real Dhan contract notes.
 - **The monitor runs inside the server process,** with no supervisor. If the server stops, trades are not settled;
   while it runs, the page shows a red banner after 3 failed checks in a row.
-- **Single process, JSON file store.** Run one worker only. `overview()` fetches prices while holding the store lock.
+- **Single process, JSON file store.** Run one worker only. The store lock covers file reads and writes only; prices are
+  fetched outside it. A malformed row is set aside (named on the page) and left in the file untouched.
 - **No authentication.** The Host, Origin and `X-Pulse-Request` checks stop other web pages, not other programs
   on this computer: anything running as you can still call the API. Run it on 127.0.0.1 only.
 - **Backups:** the forward-test backup script runs by hand and may point at the same disk.
@@ -212,7 +213,7 @@ None of this is evidence of an edge. Six closed bets cannot tell skill from luck
 | `option_backtester/` | Options backtesting engine (adapted from optopsy, AGPL v3) |
 | `scripts/` | Data download, store build, research runs, daily and morning jobs, forward-test settle and backup |
 | `docs/` | Architecture, features, frozen test specs, one change record per change (`PA_XX`) |
-| `tests/` | about 2,200 tests (`pytest`); a Node harness renders the page in tests |
+| `tests/` | about 2,600 tests (`pytest`); a Node harness renders the page in tests |
 | `cli/` | Terminal interface to the multi-agent analysis |
 
 ## Development
