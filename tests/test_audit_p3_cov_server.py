@@ -17,8 +17,21 @@ from fastapi.testclient import TestClient
 from tests import test_audit_b_support as support
 from tradingagents.dataflows.errors import VendorError
 from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
-from webapp import (ai, ai_test, build_info, latency, market_data as md, morning, option_chain as nse_oc, planner, quant,
-                    server, signals, strategist, trade_record as tr)
+from webapp import (
+    ai,
+    ai_test,
+    build_info,
+    latency,
+    market_data as md,
+    morning,
+    option_chain as nse_oc,
+    planner,
+    quant,
+    server,
+    signals,
+    strategist,
+    trade_record as tr,
+)
 
 client, loopback = support.client, support.loopback          # the shared fixtures
 H = support.HEADER
