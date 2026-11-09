@@ -11,8 +11,8 @@ import { $, PREVIEW_AT, istNow, store } from "./util.js";
 // The chain comes from NSE (OI in units, as trading apps show it). The AI proposes one defined-risk strategy or
 // none; the server checks it and prices it at the bid / ask, per lot.
 // Every 15 s, only on the Plan tab during the live session (outside it the chain does not move).
-export function pollNseChains() {
-  if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym));
+export function pollNseChains() {     // returns the loads, so the scheduler sees them pending and never overlaps a run
+  if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") return Promise.all((planEntries() || []).map(([sym]) => loadNseChain(sym)));
 }
 
 export async function loadNseChain(sym, expiry) {

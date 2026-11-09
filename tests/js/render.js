@@ -44,16 +44,20 @@ const resolve = (spec, from) => path.resolve(path.dirname(from), spec.split("?")
   const main = load(path.join(JS, "main.js"));
   await main.link((spec, ref) => load(resolve(spec, ref.identifier)));
   await main.evaluate();
-  const owner = {};
-  for (const [file, m] of modules) {                  // the exports, as globals of the sandbox (live: a getter per name)
+  // The exports go on one object the test's expression is evaluated against (live: a getter per name), NOT on the
+  // sandbox's globals: there a module that forgot an import would still find the name, hiding a ReferenceError the
+  // browser throws (audit 2026-11: planchart.js / lineOpts).
+  const exportsByName = {}, owner = {};
+  for (const [file, m] of modules) {
     for (const name of Object.keys(m.namespace)) {
-      if (name in ctx) throw new Error(`${path.basename(file)} exports ${name}, which ${owner[name] || "the sandbox"} already has`);
+      if (name in exportsByName || name in ctx) throw new Error(`${path.basename(file)} exports ${name}, which ${owner[name] || "the sandbox"} already has`);
       owner[name] = path.basename(file);
-      Object.defineProperty(ctx, name, { get: () => m.namespace[name], configurable: true });
+      Object.defineProperty(exportsByName, name, { get: () => m.namespace[name], enumerable: true });
     }
   }
   const input = fs.readFileSync(0, "utf8");
   vm.runInContext(`var ARGS = ${input || "[]"};`, ctx);
-  const x = await vm.runInContext(process.argv[2], ctx);   // an async call is awaited
+  ctx.__exports = exportsByName;
+  const x = await vm.runInContext(`with (__exports) { ${process.argv[2]} }`, ctx);   // an async call is awaited
   process.stdout.write(String(x));
 })().catch((e) => { process.stderr.write(String(e?.stack || e)); process.exit(1); });

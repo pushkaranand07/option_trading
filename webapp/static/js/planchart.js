@@ -1,6 +1,6 @@
 // The Plan tab's live chart per index, with its layers, drawings and readout.
 import { api } from "./api.js";
-import { chart, chartOff, chartProblem, ema } from "./chart.js";
+import { chart, chartOff, chartProblem, ema, lineOpts } from "./chart.js";
 import { cls, esc, fmt, fmt0, pct, srcLabel } from "./format.js";
 import { planEntries } from "./plan.js";
 import { S } from "./state.js";
