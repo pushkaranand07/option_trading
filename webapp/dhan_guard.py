@@ -49,9 +49,14 @@ class DhanAccountAccessBlocked(PermissionError):
 
 
 def _target(method: str, url_or_path: str) -> tuple[str, str, str, str]:
+    """(METHOD, host, checked path, url to send). The checked path is the normalised one; when the raw URL differs
+    from it in any way (a query, a fragment, "..", "//", a trailing slash), the path returned is a marker that is
+    never allowed, so what is checked is exactly what is sent."""
     url = url_or_path if "://" in url_or_path else API + url_or_path
     parts = urlsplit(url)
     path = posixpath.normpath(parts.path) if parts.path else "/"     # "/v2/marketfeed/../orders" -> "/v2/orders"
+    if parts.query or parts.fragment or parts.path != path:
+        path = f"<not exact: {url_or_path}>"
     return method.upper(), (parts.hostname or "").lower(), path, url
 
 
