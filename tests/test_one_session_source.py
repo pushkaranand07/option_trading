@@ -22,7 +22,7 @@ def test_a_trade_the_gate_let_in_is_counted_at_any_wall_clock_hour(tmp_path, mon
     monkeypatch.setattr(tr, "_market_open", lambda *a: True)                    # the session, for now and for any moment
     with time_machine.travel(IST.localize(datetime(2026, 11, 5, hour, 0)), tick=False):
         tr.take(RESULT)
-        o = tr.overview(chain(*PAST_STOP))
+        o = tr.refresh_open(chain(*PAST_STOP))
     assert (o["stats"]["closed"], o["stats"]["losses"]) == (1, 1), hour
 
 

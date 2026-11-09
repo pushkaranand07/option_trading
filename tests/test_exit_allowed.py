@@ -45,7 +45,7 @@ def test_a_trade_past_expiry_settles_with_the_market_closed_by_hand_and_by_the_m
                          confirm=True)                                           # a second bearish one: added to the bet on OK
     market["open"] = False
     assert tr.close(by_hand["id"])["reason"] == "expired"
-    o = tr.overview(lambda *a: pytest.fail("no chain after expiry"))
+    o = tr.refresh_open(lambda *a: pytest.fail("no chain after expiry"))
     assert any(t["id"] == by_monitor["id"] and t["reason"] == "expired" for t in o["closed"])
 
 
@@ -53,10 +53,10 @@ def test_a_trade_past_expiry_settles_with_the_market_closed_by_hand_and_by_the_m
 def test_the_monitor_settles_with_the_market_open_and_not_with_it_closed(market):
     t = tr.take(RESULT)
     market["open"] = False
-    o = tr.overview(chain(*PAST_STOP))
+    o = tr.refresh_open(chain(*PAST_STOP))
     assert o["open"][0]["live"]["flags"] == [] and o["open"][0]["live"]["market_closed"] is True and o["stats"]["closed"] == 0
     market["open"] = True
-    o = tr.overview(chain(*PAST_STOP))
+    o = tr.refresh_open(chain(*PAST_STOP))
     assert o["closed"][0]["id"] == t["id"] and o["closed"][0]["reason"] == "stop reached"
 
 
@@ -64,5 +64,6 @@ def test_the_monitor_settles_with_the_market_open_and_not_with_it_closed(market)
 def test_exits_ask_exit_allowed_and_only_the_market_state():
     assert "exit_allowed()" in inspect.getsource(tr.close) and "entry_allowed()" not in inspect.getsource(tr.close)
     assert "exit_allowed()" in inspect.getsource(tr.overview) and "_market_open()" not in inspect.getsource(tr.overview)
+    assert "exit_allowed()" in inspect.getsource(tr.refresh_open) and "_market_open()" not in inspect.getsource(tr.refresh_open)
     gate = inspect.getsource(tr.exit_allowed)
     assert "_market_open()" in gate and "entry_allowed" not in gate and "_same_bet" not in gate
