@@ -1,11 +1,12 @@
 """The Plan tab's trades and labels. The typed word of docs/root_cause_v1.md item 4 and the UNTESTED label were removed by the
 user on 2026-11-04 (docs/PA_52, spec v2 ui_until_verdict). Reads the page source; not a browser test."""
 
+import json
 from pathlib import Path
 
 import pytest
 
-from tests.test_ui_regressions import app_source
+from tests.test_ui_regressions import app_source, pytestmark as _needs_node, render
 
 APP = app_source()                              # the page's script: every module under webapp/static/js
 
@@ -88,10 +89,12 @@ def test_a_run_stays_fixed_until_the_next_run():
 
 
 @pytest.mark.unit
+@_needs_node
 def test_every_trade_shows_the_money_one_lot_needs():
     assert "lotMoney(c.priced.debit, c.priced.outlay_per_lot)" in _function("tradeCard") and "1 lot <b>${rupee(m.v)}</b>" in _function("tradeCard")
     assert "Money for 1 lot" in _function("stratHtml") and "in them" in _function("viewHtml") and "Money, 1 lot" in _function("tradeDetailHtml")
-    assert '"max loss · Dhan margin is much higher"' in _function("lotMoney") and "Dhan sets exact" not in _function("lotMoney")   # max loss is not margin
+    debit, credit = json.loads(render("JSON.stringify([lotMoney(true, 9000).label, lotMoney(false, 4200).label])"))
+    assert debit == "you pay" and credit == "max loss · Dhan margin is much higher" and "Dhan sets exact" not in credit   # max loss is not margin
 
 
 @pytest.mark.unit

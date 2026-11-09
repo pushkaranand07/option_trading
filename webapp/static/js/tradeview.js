@@ -1,6 +1,6 @@
 // HTML builders for the AI's trades: the budget card, the ranked list and the trade card.
 import { COST_NOTE, cap, contractName, esc, fmt, fmt0, money, pnl, rupee } from "./format.js";
-import { BUDGET, budgetPick, lotMoney } from "./rules.js";
+import { RULES, budget, budgetPick, clock12, lotMoney } from "./rules.js";
 import { NAMES, S } from "./state.js";
 
 export const STRAT_NAMES = { no_trade: "No trade", long_call: "Buy a call", long_put: "Buy a put", bull_call_spread: "Bull call spread",
@@ -12,10 +12,9 @@ export const STRAT_NAMES = { no_trade: "No trade", long_call: "Buy a call", long
 //  hedge    — the BUY leg of a credit spread: plain Limit, no target / stop; close it right after the SELL leg exits
 //  together — debit spread / iron condor legs: Limit orders, closed together by hand at the index levels
 //             (a stop on the bought leg alone could leave the sold leg naked)
-export const CREDIT = ["bear_call_spread", "bull_put_spread"];
 export function legRole(strategy, legs, l) {
   if (legs.length === 1) return "super";
-  if (CREDIT.includes(strategy)) return l.action === "SELL" ? "super" : "hedge";
+  if (RULES.credit_strategies.includes(strategy)) return l.action === "SELL" ? "super" : "hedge";
   return "together";
 }
 export function legLevelsOk(l, tgt, stop) {          // the Super-order rule; anything else is not enterable in Dhan
@@ -77,7 +76,7 @@ export function stratHtml(res, sym) {
   const together = !sp ? "" : `<div class="together small"><b>Manage the ${pr.legs.length} orders as one trade.</b>
       ${sp.debit ? `You pay <b>${rupee(sp.now)}</b> for the spread.` : `You receive <b>${rupee(sp.now)}</b> for the spread.`}
       Place the <b>BUY</b> leg first, then the SELL leg (Dhan gives a margin benefit for a hedged position).
-      ${CREDIT.includes(a.strategy)
+      ${RULES.credit_strategies.includes(a.strategy)
         ? `Put the <b>Super order</b> (target + stop loss) on the <b>SELL</b> leg only. When it fills at its target or stop, <b>sell the BUY leg</b> straight away. Never put a stop loss on the BUY leg: if it fired alone, the sold leg would be left unprotected.`
         : `Dhan's Super order cannot manage this spread safely, so use plain Limit orders and close <b>both</b> legs by hand when ${esc(name)} reaches its target or stop (the spread is then worth about <b class="up">${rupee(sp.at_target)}</b> or <b class="down">${rupee(sp.at_stop)}</b>). Buy back the <b>SELL</b> leg first, then sell the BUY leg.`}</div>`;
   const econ = pr ? `<div class="levels">
@@ -136,7 +135,7 @@ export function plainTradeHtml(c, sym) {
        Par margin Dhan isse kaafi zyada rokega (BUY wala pehle fill na ho to ₹1 lakh+): Dhan mein check kar.`;
   const exit = legs.length === 1
     ? `Dhan mein Super order laga: target <b class="up">₹${fmt(legs[0].premium_at_target)}</b>, stop loss <b class="down">₹${fmt(legs[0].premium_at_stop)}</b>.`
-    : CREDIT.includes(a.strategy)
+    : RULES.credit_strategies.includes(a.strategy)
       ? `Super order (target + stop) sirf SELL wale pe laga; woh nikle to BUY wala turant bech de.`
       : `Dhan ka Super order spread pe nahi chalta: dono saath haath se band kar. Pehle SELL wala wapas kharid, phir BUY wala bech.`;
   return `<div class="plain-trade"><b>Dekh bhai:</b><ol>${lines}</ol>
@@ -144,7 +143,7 @@ export function plainTradeHtml(c, sym) {
     <div>Lena tab jab ${esc(name)} <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b> ke beech ho.
       ${esc(name)} <b class="up">${fmt0(a.underlying_target)}</b> pahunche to profit book kar (~<b class="up">+₹${fmt0(lv.pnl_target_per_lot)}</b>);
       <b class="down">${fmt0(a.underlying_stop)}</b> aaye to nikal ja (~<b class="down">−₹${fmt0(-lv.pnl_stop_per_lot)}</b>). ${exit}
-      Expiry wale din 3:15 se pehle band kar.</div></div>`;
+      Expiry wale din ${clock12(RULES.exit_by, false)} se pehle band kar.</div></div>`;
 }
 
 // One trade as a compact card that fits the page width: the summary line, each Dhan order with its entry,
@@ -186,7 +185,7 @@ export function aiListHtml(sym, res) {
   const cards = res.trades.map((c, i) => tradeCard(c, i, sym, v === i, res.market_closed || res.expired)).join("");
   return `${budgetCardHtml(sym, res)}
     <div class="rank-head"><div><h4 class="mini-h">The AI's ${res.trades.length} strongest trades · run at ${esc(res.asked_at)} · expiry ${esc(res.expiry)}</h4>${research}
-      <div class="small muted">The full list, for the forward test and for reading. Trades with a SELL leg need far more than ₹${fmt0(BUDGET)}.</div></div></div>
+      <div class="small muted">The full list, for the forward test and for reading. Trades with a SELL leg need far more than ₹${fmt0(budget())}.</div></div></div>
     ${closedNote}${read}
     <div class="ai-trades">${cards}</div>
     <div class="small muted">Strongest first, by the whole analysis, not by profit size. Pulse priced each at the live bid / ask of the run and set its entry zone, target and stop by a fixed rule.
@@ -195,10 +194,10 @@ export function aiListHtml(sym, res) {
 }
 
 export function budgetCardHtml(sym, res) {
-  const head = `<div class="ai-head"><b>For your ₹${fmt0(BUDGET)} · 1 lot</b></div>`;
+  const head = `<div class="ai-head"><b>For your ₹${fmt0(budget())} · 1 lot</b></div>`;
   if (S.status?.muhurat) return `<div class="budget-card">${head}<div class="call stop"><b>No trade today.</b> Muhurat day: you don't trade it. The data is still saved.</div></div>`;
   const c = budgetPick(res.trades || []);
-  if (!c) return `<div class="budget-card">${head}<div class="call stop"><b>No trade today.</b> None of the AI's trades is a single BUY that costs ₹${fmt0(BUDGET)} or less for 1 lot. Don't force one.</div></div>`;
+  if (!c) return `<div class="budget-card">${head}<div class="call stop"><b>No trade today.</b> None of the AI's trades is a single BUY that costs ₹${fmt0(budget())} or less for 1 lot. Don't force one.</div></div>`;
   const l = c.levels.legs[0], lot = c.priced.lot, a = c.plan, name = NAMES[sym] || sym, pay = l.price * lot;
   const ok = legLevelsOk(l, l.premium_at_target, l.premium_at_stop);
   const exits = ok
@@ -210,10 +209,10 @@ export function budgetCardHtml(sym, res) {
   return `<div class="budget-card">${head}${stale}
     <div class="budget-order"><span class="leg-tag buy">BUY</span> <b>${esc(contractName(sym, c.expiry || res.expiry, l))}</b> <span class="muted">(1 lot = ${lot} qty)</span></div>
     <div class="levels">
-      <div class="lv"><span>Buy at</span><b>₹${fmt(l.price)} or less</b><small>you pay ${rupee(pay)} · ₹${fmt0(BUDGET - pay)} stays free</small></div>
+      <div class="lv"><span>Buy at</span><b>₹${fmt(l.price)} or less</b><small>you pay ${rupee(pay)} · ₹${fmt0(budget() - pay)} stays free</small></div>
       ${exits}
     </div>
     <div class="small">Buy only while ${esc(name)} is between <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b>.
-      ${ok ? "In Dhan: Super order with this target and stop loss." : ""} <b>Exit by 3:15 PM no matter what.</b> Worst case you lose the ${rupee(pay)} you paid.</div>
+      ${ok ? "In Dhan: Super order with this target and stop loss." : ""} <b>Exit by ${clock12(RULES.exit_by)} no matter what.</b> Worst case you lose the ${rupee(pay)} you paid.</div>
     <div class="small muted">AI's #${c.rank} of ${res.trades.length}. Not a proven edge; ${COST_NOTE}.</div></div>`;
 }

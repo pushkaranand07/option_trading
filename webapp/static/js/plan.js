@@ -4,6 +4,7 @@ import { esc, fmt, fmt0, mdHtml, pc, pct } from "./format.js";
 import { loadNseChain } from "./nsechain.js";
 import { drawPlanChartLines, loadPlanCharts, planCharts } from "./planchart.js";
 import { REGIME_TEXT } from "./risk.js";
+import { RULES } from "./rules.js";
 import { NAMES, S, nameOf } from "./state.js";
 import { loadLatestRun, loadResearch, renderStrat } from "./strat.js";
 import { $, PREVIEW_AT, dur, istNow, toMins } from "./util.js";
@@ -18,7 +19,7 @@ export function phase(sess) {
   if (m < toMins(sess.pre_open)) return { key: "pre", text: `Before the market. Opens at ${sess.open} — in ${dur(open - m)}. Read the morning view below.` };
   if (m < open) return { key: "preopen", text: `Pre-open auction. Trading starts at ${sess.open} — in ${dur(open - m)}.` };
   if (m < first) return { key: "wait", text: `Market open. The rule waits for the first half hour — trade signal from ${sess.first_signal} (in ${dur(first - m)}).` };
-  if (m < close) return { key: "live", text: `Market open — closes at ${sess.close} (in ${dur(close - m)}). Exit intraday trades by 15:15.` };
+  if (m < close) return { key: "live", text: `Market open — closes at ${sess.close} (in ${dur(close - m)}). Exit intraday trades by ${RULES.exit_by}.` };
   return { key: "after", text: `Market closed for today at ${sess.close}. Next session: ${sess.next_session}.` };
 }
 
@@ -36,7 +37,7 @@ export function muhuratPhase(sess, mu, m) {
 export function renderSession() {
   const s = S.morning?.session; if (!s) return;
   const ph = phase(s);
-  const steps = [["Pre-open", s.pre_open], ["Open", s.open], ["Signal from", s.first_signal], ["Exit intraday by", "15:15"],
+  const steps = [["Pre-open", s.pre_open], ["Open", s.open], ["Signal from", s.first_signal], ["Exit intraday by", RULES.exit_by],
     ["Close", s.close + (s.index_derivatives_close !== s.close ? ` (index F&O ${s.index_derivatives_close})` : "")]];
   $("#sessionBar").innerHTML = `<div class="body"><div class="session-top"><div><div class="ask">${esc(s.weekday)} ${esc(s.date)}</div>
       <div class="phase ${ph.key}">${esc(ph.text)}</div></div><div class="clock num">${istNow().hhmm} IST</div></div>

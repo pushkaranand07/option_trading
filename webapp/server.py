@@ -42,6 +42,7 @@ from webapp import (  # noqa: E402
     option_chain as nse_oc,
     planner,
     quant,
+    rules,
     signals,
     strategist,
     timeutil,
@@ -225,6 +226,12 @@ def _optional(module, name: str):
     """A function another track adds (``trade_record.store_problem`` / ``monitor_status``), or one answering None
     while this server runs code without it."""
     return getattr(module, name, None) or (lambda: None)
+
+
+@app.get("/api/rules")
+def trading_rules():
+    """The trading rules the page shows and applies: budget card, exit time, money labels (webapp/rules.py)."""
+    return rules.rules()
 
 
 @app.get("/api/status")

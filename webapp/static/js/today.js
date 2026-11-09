@@ -2,6 +2,7 @@
 import { api } from "./api.js";
 import { drawPlanLines } from "./chart.js";
 import { cls, esc, fmt, fmt0, pct, rupee, sign, srcLabel } from "./format.js";
+import { RULES, clock12 } from "./rules.js";
 import { S, nameOf } from "./state.js";
 import { $ } from "./util.js";
 
@@ -29,11 +30,11 @@ export function renderHero(p) {
 
   let what;
   if (v.safe && idx) what = `Buy ${esc(name)} ${fmt0(leg.strike)} ${leg.kind}${leg.expiry ? ` · expiry ${esc(leg.expiry)}` : " · nearest weekly expiry"}`;
-  else if (v.safe) what = up ? `Buy ${esc(p.symbol)} shares for today (intraday)` : `Short-sell ${esc(p.symbol)} for today, buy back by 3:15 PM`;
+  else if (v.safe) what = up ? `Buy ${esc(p.symbol)} shares for today (intraday)` : `Short-sell ${esc(p.symbol)} for today, buy back by ${clock12(RULES.exit_by)}`;
   else if (live) what = `A ${esc(v.setup)} setup is showing, but it hasn't been reliable enough to take.`;
   else what = "No clean setup right now. Sitting out is the safe choice.";
 
-  const when = p.market_open ? "" : `<div class="small warn-c">Market is closed. This reads the last session; check again after 9:45 AM.</div>`;
+  const when = p.market_open ? "" : `<div class="small warn-c">Market is closed. This reads the last session; check again after ${clock12(RULES.entry_from)}.</div>`;
 
   const conf = live ? `<div class="conf small muted"><b>no edge evidence</b></div>` : "";
 
@@ -51,7 +52,7 @@ export function renderHero(p) {
             <small>Expect it to move about ₹${fmt(leg.move_target)} to the target and ₹${fmt(leg.move_sl)} to the stop. Lot size ${leg.lot}. Add Dhan for exact premiums.</small></div></div>`;
     } else if (!idx) {
       const risk = Math.abs(s.entry - s.stop_loss);
-      extra = `<div class="lv wide"><div><span>If you are willing to lose ₹1,000</span><b>${Math.max(1, Math.floor(1000 / risk))} shares</b>
+      extra = `<div class="lv wide"><div><span>If you are willing to lose ₹${fmt0(RULES.stock_risk_rupees)}</span><b>${Math.max(1, Math.floor(RULES.stock_risk_rupees / risk))} shares</b>
         <small>risk ₹${fmt(risk)} per share · reward ₹${fmt(Math.abs(s.target - s.entry))} per share</small></div></div>`;
     }
     right = `<div class="levels">
@@ -70,13 +71,13 @@ export function renderHero(p) {
       `Buy <b>1 lot of ${esc(name)} ${fmt0(leg.strike)} ${leg.kind}</b> while ${esc(name)} is near <b>${fmt(s.entry)}</b>${leg.premium ? ` (premium about ${rupee(leg.premium)})` : ""}.`,
       `Set your stop loss right away: exit if ${esc(name)} goes ${dir} <b>${fmt(s.stop_loss)}</b>${leg.stop_loss ? ` or the premium drops to <b>${rupee(leg.stop_loss)}</b>` : ""}.`,
       `Book profit when ${esc(name)} ${tgtDir} <b>${fmt(s.target)}</b>${leg.target ? ` (premium about <b>${rupee(leg.target)}</b>)` : ""}.`,
-      "If neither happens, exit by <b>3:15 PM</b>. Don't hold options overnight on this plan.",
+      `If neither happens, exit by <b>${clock12(RULES.exit_by)}</b>. Don't hold options overnight on this plan.`,
       "One trade a day. If the stop loss hits, you're done for today.",
     ] : [
       `${up ? "Buy" : "Short-sell"} near <b>${fmt(s.entry)}</b> as an <b>intraday (MIS)</b> order.`,
       `Set your stop loss right away at <b>${fmt(s.stop_loss)}</b>.`,
       `Book profit at <b>${fmt(s.target)}</b>.`,
-      "If neither happens, exit by <b>3:15 PM</b>.",
+      `If neither happens, exit by <b>${clock12(RULES.exit_by)}</b>.`,
       "One trade a day. If the stop loss hits, you're done for today.",
     ];
     below = `<ol class="steps">${steps.map((x) => `<li><span>${x}</span></li>`).join("")}</ol>
@@ -114,7 +115,7 @@ export function renderRecord(p) {
     <td class="${cls(x.avg_r)}">${x.avg_r != null ? sign(x.avg_r) + x.avg_r : "—"}</td></tr>`).join("");
   const side = (k, label) => { const x = r.by_side[k]; return x.trades ? `${label}: no edge evidence (${x.trades} trades)` : `${label}: none`; };
   $("#record").innerHTML = `<div class="card-head"><h2>Track record of this setup</h2></div>
-    <div class="body"><p class="small muted" style="margin-top:0">We replayed this exact rule over the last ${r.days} trading days: one trade a day, entry after 9:45 AM, exit by 3:15 PM, ${r.cost_pct}% costs included.</p>
+    <div class="body"><p class="small muted" style="margin-top:0">We replayed this exact rule over the last ${r.days} trading days: one trade a day, entry after ${clock12(RULES.entry_from)}, exit by ${clock12(RULES.exit_by)}, ${r.cost_pct}% costs included.</p>
       <table class="t"><thead><tr><th>Profit target</th><th>Trades</th><th>Edge evidence</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="small" style="margin:10px 0 0">${side("BUY", "Buy setups")} · ${side("SELL", "Sell setups")}</p>
       <p class="note">"Avg result" is the average gain per trade as a share of what you risked: +0.10 means you made 10% of your risk per trade on average.</p></div>`;
