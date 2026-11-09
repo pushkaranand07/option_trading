@@ -60,7 +60,11 @@ def offline(monkeypatch):
 def test_index_names_the_script_by_version_and_is_never_cached(client):
     r = client.get("/")
     assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"
-    assert "/static/app.js?v=" in r.text and "/static/style.css?v=" in r.text
+    # The script is ES modules since p3-appjs: main.js and style.css carry ?v=, and an import map gives every module
+    # its versioned URL, so a changed module is never served stale (same guarantee as the old app.js?v=).
+    assert "/static/js/main.js?v=" in r.text and "/static/style.css?v=" in r.text
+    assert '<script type="importmap">' in r.text and '"/static/js/planchart.js": "/static/js/planchart.js?v=' in r.text
+    assert "/static/app.js" not in r.text
 
 
 @pytest.mark.unit
