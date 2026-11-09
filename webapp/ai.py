@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 import threading
 import uuid
-from datetime import date, datetime
+
+from webapp import timeutil
 
 STEP_LABELS = {
     "market_report": "Price & indicator analysis done",
@@ -39,7 +40,7 @@ def start(symbol: str, yahoo_symbol: str, analysts: list[str]) -> str:
     job_id = uuid.uuid4().hex[:12]
     with _lock:
         _jobs[job_id] = {"id": job_id, "symbol": symbol, "status": "running", "steps": [],
-                         "started": datetime.now().strftime("%H:%M")}
+                         "started": timeutil.now_ist().strftime("%H:%M")}
     threading.Thread(target=_run, args=(job_id, yahoo_symbol, analysts), daemon=True).start()
     return job_id
 
@@ -59,7 +60,7 @@ def _run(job_id: str, ticker: str, analysts: list[str]) -> None:
         from tradingagents.graph.trading_graph import TradingAgentsGraph
 
         graph = TradingAgentsGraph(selected_analysts=analysts, config=build_default_config())
-        trade_date = date.today().isoformat()
+        trade_date = timeutil.today_ist().isoformat()
         # The same steps as TradingAgentsGraph.propagate, streamed to report progress.
         with run_config(graph.config):
             init = graph.create_run_state(ticker, trade_date)
@@ -72,7 +73,7 @@ def _run(job_id: str, ticker: str, analysts: list[str]) -> None:
                     if final_state.get(key) and label not in job["steps"]:
                         job["steps"].append(label)
             graph.record_decision(ticker, trade_date, final_state)
-        job.update(status="done", rating=run_rating(final_state), finished=datetime.now().strftime("%H:%M"),
+        job.update(status="done", rating=run_rating(final_state), finished=timeutil.now_ist().strftime("%H:%M"),
                    reports={k: final_state.get(v, "") for k, v in REPORTS.items() if final_state.get(v)})
     except Exception as exc:
         msg = str(exc)

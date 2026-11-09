@@ -8,9 +8,12 @@ the best bid / ask, plus the strike's put-call ratio. NSE reports open interest 
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
-from webapp import market_data as md
+from webapp import market_data as md, timeutil
+
+logger = logging.getLogger(__name__)
 
 CONTRACT_INFO = "/api/option-chain-contract-info"
 CHAIN = "/api/option-chain-v3"
@@ -34,6 +37,28 @@ def expiries(symbol: str, client=None) -> list[str]:
     if not out:
         raise ChainError(f"NSE lists no option expiries for {symbol} (SENSEX trades on BSE, not NSE).")
     return out
+
+
+def valid_expiries(symbol: str) -> list[str]:
+    """The option expiries that can be asked for, in NSE's spelling (``17-Nov-2026``): NSE's list; with Dhan enabled
+    its ``/optionchain/expirylist`` (cached for the day) is a cross-check, and the list when NSE has none. Never
+    raises: ``[]`` when neither source has one."""
+    symbol = symbol.upper()
+    try:
+        nse = expiries(symbol)
+    except Exception:
+        nse = []
+    dhan = []
+    if md.dhan.enabled and symbol in md.INDICES:
+        try:
+            raw = md._cache.get(("dhan expiries day", symbol, timeutil.today_ist().isoformat()), 86400,
+                                lambda: md.expiries(symbol))
+            dhan = [datetime.strptime(x, "%Y-%m-%d").strftime("%d-%b-%Y") for x in raw or []]
+        except Exception:
+            dhan = []
+    if nse and dhan and set(dhan) - set(nse):
+        logger.warning("expiries of %s differ: NSE %s, Dhan %s", symbol, nse, dhan)
+    return list(nse or dhan)
 
 
 def _leg(o: dict | None, lot: int) -> dict | None:
@@ -106,10 +131,10 @@ def lot_size(symbol: str) -> int:
     if symbol in md.INDICES:
         return int(md.index_lots().get(symbol) or md.INDICES[symbol][4])
     try:
-        from datetime import date, timedelta
+        from datetime import timedelta
 
         from tradingagents.analytics import datastore as ds
-        fo = ds.load("fo_summary", symbols=[symbol], start=date.today() - timedelta(days=30))
+        fo = ds.load("fo_summary", symbols=[symbol], start=timeutil.today_ist() - timedelta(days=30))
         if len(fo):
             return int(fo.sort_values("trade_date")["lot_size"].iloc[-1])
     except Exception:
@@ -134,22 +159,31 @@ def _contract(identifier: str, client) -> dict:
             "last": prices[-1] if prices else None}
 
 
-def chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None) -> dict:
-    """The chain for ``symbol`` (NSE index or F&O stock) and ``expiry`` (default: the nearest), cached 10 s."""
+def _pick_expiry(expiry: str | None, exps: list[str], strict: bool) -> str:
+    """``expiry`` when NSE lists it; otherwise the nearest, or (``strict``) a ChainError for a named unknown expiry."""
+    if strict and expiry and expiry not in exps:
+        raise ChainError(f"unknown expiry {expiry}; valid: {', '.join(exps)}")
+    return expiry if expiry in exps else exps[0]
+
+
+def chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None, *, strict: bool = False) -> dict:
+    """The chain for ``symbol`` (NSE index or F&O stock) and ``expiry`` (default: the nearest), cached 10 s.
+    An expiry NSE doesn't list gets the nearest one, unless ``strict``: then it raises ChainError."""
     symbol = symbol.upper()
     client = client or _client()
     exps = expiries(symbol, client)
-    expiry = expiry if expiry in exps else exps[0]
+    expiry = _pick_expiry(expiry, exps, strict)
     return md._cache.get(("nse chain", symbol, expiry), CACHE_SECONDS, lambda: _chain(symbol, expiry, exps, lot, client))
 
 
-def full_chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None) -> dict:
+def full_chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None, *,
+               strict: bool = False) -> dict:
     """Every strike of the chain (no display window), for pricing legs already held: a leg can drift far from the
-    money. Same NSE fetch as ``chain`` (cached together)."""
+    money. Same NSE fetch as ``chain`` (cached together); ``strict`` as there."""
     symbol = symbol.upper()
     client = client or _client()
     exps = expiries(symbol, client)
-    expiry = expiry if expiry in exps else exps[0]
+    expiry = _pick_expiry(expiry, exps, strict)
     return md._cache.get(("nse chain full", symbol, expiry), CACHE_SECONDS, lambda: _chain(symbol, expiry, exps, lot, client, 10 ** 6))
 
 
@@ -164,4 +198,4 @@ def _chain(symbol: str, expiry: str, exps: list[str], lot: int | None, client, s
     if lot is None:
         lot = lot_size(symbol)
     return shape(raw, int(lot), strikes_each_side) | {"symbol": symbol, "expiry": expiry, "expiries": exps,
-                                                      "fetched": datetime.now().strftime("%H:%M:%S")}
+                                                      "fetched": timeutil.now_ist().strftime("%H:%M:%S")}

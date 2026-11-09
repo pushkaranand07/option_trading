@@ -11,18 +11,19 @@ import contextlib
 import csv
 import json
 import logging
+import math
 import os
 import threading
 import time as _time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
 
-from webapp import dhan_guard, latency
+from webapp import dhan_guard, latency, timeutil
 
 logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
@@ -71,20 +72,31 @@ class _TTLCache:
         self._key_locks: dict = {}
         self._lock = threading.Lock()
 
-    def get(self, key, ttl: float, fn):
+    def get(self, key, ttl: float, fn, miss_ttl: float | None = None):
+        """``miss_ttl``: when given, a held value of None (a failed lookup) is kept only this long instead of ``ttl``."""
+        def fresh(hit, now):
+            return hit and now - hit[0] < (miss_ttl if miss_ttl is not None and hit[1] is None else ttl)
+
         now = _time.monotonic()
         with self._lock:
             self._uses[key] = (fn, ttl, now)
             hit = self._d.get(key)
-            if hit and now - hit[0] < ttl:
+            if fresh(hit, now):
                 return hit[1]
             key_lock = self._key_locks.setdefault(key, threading.Lock())
         with key_lock:
             with self._lock:
                 hit = self._d.get(key)
-                if hit and _time.monotonic() - hit[0] < ttl:     # another caller fetched it meanwhile
+                if fresh(hit, _time.monotonic()):                  # another caller fetched it meanwhile
                     return hit[1]
             return self._fetch(key, fn)
+
+    def peek(self, key, ttl: float):
+        """The value if one younger than ``ttl`` is held, else None; never fetches and never marks the key as read
+        (so it does not keep the key hot for ``refresh_ahead``)."""
+        with self._lock:
+            hit = self._d.get(key)
+            return hit[1] if hit and _time.monotonic() - hit[0] < ttl else None
 
     def _fetch(self, key, fn):
         started = _time.monotonic()
@@ -207,7 +219,8 @@ dhan = Dhan()
 def _scrip_master_path() -> Path:
     """Dhan's public instrument list (no login needed), downloaded at most once a day."""
     path = CACHE_DIR / "dhan-scrip-master.csv"
-    if not path.exists() or datetime.fromtimestamp(path.stat().st_mtime).date() != datetime.now().date():
+    if (not path.exists()
+            or datetime.fromtimestamp(path.stat().st_mtime, timeutil.IST).date() != timeutil.today_ist()):
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         r = dhan_guard.request("GET", SCRIP_MASTER_URL, timeout=60)
         r.raise_for_status()
@@ -329,6 +342,7 @@ def quotes(symbols: list[str]) -> dict[str, dict]:
 
 def _quotes(insts: list[dict]) -> dict[str, dict]:
     out: dict[str, dict] = {}
+    session = _warm_prev_closes(insts)
     dhan_insts = [i for i in insts if i["id"] is not None] if dhan.enabled else []
     if dhan_insts:
         body: dict[str, list[int]] = {}
@@ -340,33 +354,182 @@ def _quotes(insts: list[dict]) -> dict[str, dict]:
                 row = (data.get(i["segment"]) or {}).get(str(i["id"]))
                 if row and row.get("last_price"):
                     ltp, prev = float(row["last_price"]), float((row.get("ohlc") or {}).get("close") or 0)
-                    out[i["symbol"]] = _quote_row(i, ltp, prev, row.get("ohlc") or {}, "dhan")
+                    out[i["symbol"]] = _quote_row(i, ltp, prev, row.get("ohlc") or {}, "dhan",
+                                                  checked=_checked_prev(i, prev, "dhan", session))
         except DataError:
             pass
     for i in insts:
         if i["symbol"] not in out:
-            q = _cache.get(("yq", i["yahoo"]), 15, lambda i=i: _yahoo_quote(i))
+            q = _cache.get(("yq", i["yahoo"]), 15, lambda i=i: _yahoo_quote(i, session))
             if q:
                 out[i["symbol"]] = q
     return out
 
 
-def _quote_row(inst, ltp, prev, ohlc, source):
+def _quote_row(inst, ltp, prev, ohlc, source, checked: tuple[float | None, str, str | None] | None = None):
+    """``checked``: (previous close, its source, warning) from ``prev_close``; it replaces the vendor's ``prev``."""
+    prev_source, warning = source, None
+    if checked is not None and _valid_close(checked[0]):
+        prev, prev_source, warning = checked
+    if not _valid_close(prev):                                # NaN / inf / 0 / negative: never emitted
+        prev, prev_source = None, "none"
+        warning = "No valid previous close from any source; change not shown."
     chg = ltp - prev if prev else 0.0
-    return {"symbol": inst["symbol"], "name": inst["name"], "ltp": round(ltp, 2), "prev_close": round(prev, 2),
-            "change": round(chg, 2), "change_pct": round(chg / prev * 100, 2) if prev else 0.0,
-            "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"), "source": source}
+    row = {"symbol": inst["symbol"], "name": inst["name"], "ltp": round(ltp, 2),
+           "prev_close": round(prev, 2) if prev else None,
+           "change": round(chg, 2), "change_pct": round(chg / prev * 100, 2) if prev else 0.0,
+           "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"), "source": source,
+           "prev_close_source": prev_source}
+    if warning:
+        row["prev_close_warning"] = warning
+    return row
 
 
-def _yahoo_quote(inst) -> dict | None:
+def _yahoo_quote(inst, session: date | None = None) -> dict | None:
     try:
         fi = yf.Ticker(inst["yahoo"]).fast_info
         ltp, prev = float(fi["last_price"]), float(fi["previous_close"])
         ohlc = {"open": round(float(fi["open"]), 2), "high": round(float(fi["day_high"]), 2),
                 "low": round(float(fi["day_low"]), 2)}
-        return _quote_row(inst, ltp, prev, ohlc, "yahoo")
+        return _quote_row(inst, ltp, prev, ohlc, "yahoo", checked=_checked_prev(inst, prev, "yahoo", session))
     except Exception:
         return None
+
+
+# ---------- previous close (audit M1) ----------
+
+PREV_CLOSE_TOLERANCE = 0.005     # sources further apart than 0.5% are reported in the quote row
+PREV_MISS_TTL = 30               # seconds a failed previous-close lookup is remembered before it is tried again
+
+
+def _valid_close(v) -> bool:
+    """A usable close: a finite number above zero (NaN, inf, 0 and negatives count as missing)."""
+    try:
+        return math.isfinite(float(v)) and float(v) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def quote_session_date(now: datetime | None = None, calendar=None) -> date:
+    """The session the live price belongs to: today once today's session (or its Muhurat hour) has reached its
+    pre-open, else the last session before today. Before Monday's open the price is still Friday's (or a weekend
+    Muhurat session's)."""
+    from tradingagents.dataflows.vendors.nse.calendar import SessionState
+    from webapp import signals
+
+    cal = calendar or signals.nse_calendar()
+    now = (now or timeutil.now_ist()).astimezone(timeutil.IST)
+    today = now.date()
+    if cal.is_trading_day(today):
+        state = cal.muhurat_state(now) or cal.session_state(now)
+        if state not in (SessionState.PRE_MARKET, SessionState.NO_SESSION):
+            return today
+    return cal.previous_session(today)
+
+
+def _close_before(df: pd.DataFrame | None, session: date, expected: date) -> float | None:
+    """The last daily close strictly before ``session``, if the bars hold the expected previous session."""
+    if df is None or df.empty:
+        return None
+    days = pd.Index([ts.date() for ts in df.index])
+    before = df[days < session]
+    if before.empty or before.index[-1].date() < expected:     # the bars miss that session (a vendor gap)
+        return None
+    close = float(before["close"].iloc[-1])
+    return close if _valid_close(close) else None
+
+
+def _reference_close(inst: dict, session: date, expected: date) -> tuple[float, str] | None:
+    """(close, source) of the previous session from the app's own daily bars, else Dhan's daily history."""
+    src = None
+    try:
+        # A chart's fresh 1D bars if held; else fetched here, under the caller's 600 s "prev" key. Not through
+        # candles(): that would keep its 20 s key hot and refresh_ahead would re-download it every ~20 s.
+        df, src = _cache.peek(("c", inst["symbol"], "1D"), 20) or _candles(inst, "1D")    # 20 s: candles' 1D ttl
+        value = _close_before(df, session, expected)
+        if value is not None:
+            return value, f"bars ({src})"
+    except DataError:
+        pass
+    if dhan.enabled and inst["id"] is not None and src != "dhan":
+        try:
+            value = _close_before(_dhan_bars(inst, "1D"), session, expected)
+            if value is not None:
+                return value, "dhan daily"
+        except DataError:
+            pass
+    return None
+
+
+def prev_close(inst: dict, ltp_session_date: date, *, vendor: float | None = None, vendor_source: str = "vendor",
+               calendar=None) -> tuple[float | None, str, str | None]:
+    """(previous close, its source, warning or None) for a price from ``ltp_session_date``.
+
+    The previous close is the close of the last completed session strictly before the quote's session (NSE
+    calendar: weekends, holidays and Muhurat sessions), from the app's own daily bars; without them from Dhan's
+    daily history (Dhan enabled only); then the vendor's own value. When two available sources differ by more than
+    ``PREV_CLOSE_TOLERANCE`` the warning names both."""
+    from webapp import signals
+
+    cal = calendar or signals.nse_calendar()
+    expected = cal.previous_session(ltp_session_date)
+    found = _cached_reference(inst, ltp_session_date, expected)
+    sources = [found] if found else []
+    if _valid_close(vendor):
+        sources.append((float(vendor), vendor_source))
+    if not sources:
+        return None, "none", None
+    value, source = sources[0]
+    warning = None
+    for other, other_source in sources[1:]:
+        gap = abs(other - value) / value
+        if gap > PREV_CLOSE_TOLERANCE:
+            warning = (f"Previous close differs between sources: {source} {value:,.2f} vs {other_source} "
+                       f"{other:,.2f} ({gap:.1%}); using {source} (close of {expected:%d-%b}).")
+    return value, source, warning
+
+
+def _cached_reference(inst: dict, session: date, expected: date) -> tuple[float, str] | None:
+    """``_reference_close`` cached per symbol and session: 600 s when found, PREV_MISS_TTL when not."""
+    return _cache.get(("prev", inst["symbol"], session.isoformat()), 600,
+                      lambda: _reference_close(inst, session, expected), miss_ttl=PREV_MISS_TTL)
+
+
+PREV_WORKERS = 8      # daily-bars downloads at once when a cold quote request needs several previous closes
+
+
+def _warm_prev_closes(insts: list[dict]) -> date | None:
+    """Fetch the previous closes of ``insts`` in parallel before the quote rows are built (a cold request with N
+    symbols then costs about one daily-bars download, not N). Returns the quote session, or None if unknown."""
+    from webapp import signals
+
+    try:
+        session = quote_session_date()
+        expected = signals.nse_calendar().previous_session(session)
+    except Exception as exc:
+        logger.warning("quote session unknown: %s", exc)
+        return None
+
+    def one(inst):
+        try:
+            _cached_reference(inst, session, expected)
+        except Exception as exc:                              # the row falls back to the vendor's value
+            logger.warning("previous close lookup for %s failed: %s", inst["symbol"], exc)
+
+    if len(insts) > 1:
+        with ThreadPoolExecutor(min(PREV_WORKERS, len(insts))) as pool:
+            list(pool.map(one, insts))
+    return session
+
+
+def _checked_prev(inst: dict, vendor: float, vendor_source: str,
+                  session: date | None = None) -> tuple[float | None, str, str | None]:
+    """``prev_close`` for a quote now; the vendor's value alone if the calendar or the bars fail outright."""
+    try:
+        return prev_close(inst, session or quote_session_date(), vendor=vendor, vendor_source=vendor_source)
+    except Exception as exc:                                  # a quote is never lost over its previous close
+        logger.warning("previous close check for %s failed: %s", inst["symbol"], exc)
+        return vendor, vendor_source, None
 
 
 # ---------- candles ----------
@@ -408,26 +571,35 @@ def candles(symbol: str, tf: str = "5m") -> tuple[pd.DataFrame, str]:
     return _cache.get(("c", inst["symbol"], tf), ttl, lambda: _candles(inst, tf))
 
 
+def _dhan_bars(inst: dict, tf: str) -> pd.DataFrame | None:
+    """Dhan's bars for ``tf`` (intraday or daily history), or None when Dhan returns none; raises DataError."""
+    interval, days, _, _ = TIMEFRAMES[tf]
+    now = datetime.now(IST)
+    body = {"securityId": str(inst["id"]), "exchangeSegment": inst["segment"],
+            "instrument": inst["kind"], "oi": False}
+    if interval:
+        body |= {"interval": interval,
+                 "fromDate": (now - timedelta(days=days)).strftime("%Y-%m-%d 09:00:00"),
+                 "toDate": (now + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")}
+        data = dhan.post("/charts/intraday", body)
+    else:
+        body |= {"expiryCode": 0, "fromDate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
+                 "toDate": (now + timedelta(days=1)).strftime("%Y-%m-%d")}
+        data = dhan.post("/charts/historical", body)
+    if not data.get("timestamp"):
+        return None
+    df = pd.DataFrame({k: data[k] for k in ("open", "high", "low", "close", "volume")},
+                      index=pd.to_datetime(data["timestamp"], unit="s", utc=True).tz_convert(IST))
+    return df.astype(float)
+
+
 def _candles(inst: dict, tf: str) -> tuple[pd.DataFrame, str]:
-    interval, days, y_period, y_interval = TIMEFRAMES[tf]
+    _, _, y_period, y_interval = TIMEFRAMES[tf]
     if dhan.enabled and inst["id"] is not None:
-        now = datetime.now(IST)
-        body = {"securityId": str(inst["id"]), "exchangeSegment": inst["segment"],
-                "instrument": inst["kind"], "oi": False}
         try:
-            if interval:
-                body |= {"interval": interval,
-                         "fromDate": (now - timedelta(days=days)).strftime("%Y-%m-%d 09:00:00"),
-                         "toDate": (now + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")}
-                data = dhan.post("/charts/intraday", body)
-            else:
-                body |= {"expiryCode": 0, "fromDate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
-                         "toDate": (now + timedelta(days=1)).strftime("%Y-%m-%d")}
-                data = dhan.post("/charts/historical", body)
-            if data.get("timestamp"):
-                df = pd.DataFrame({k: data[k] for k in ("open", "high", "low", "close", "volume")},
-                                  index=pd.to_datetime(data["timestamp"], unit="s", utc=True).tz_convert(IST))
-                return df.astype(float), "dhan"
+            df = _dhan_bars(inst, tf)
+            if df is not None:
+                return df, "dhan"
         except DataError:
             pass
     try:
@@ -489,9 +661,15 @@ def expiries(symbol: str) -> list[str]:
                       lambda: dhan.post("/optionchain/expirylist", body).get("data", []))
 
 
-def option_chain(symbol: str, expiry: str | None = None, strikes_each_side: int = 15) -> dict:
+def option_chain(symbol: str, expiry: str | None = None, strikes_each_side: int = 15, *, strict: bool = False) -> dict:
+    """Dhan's chain for ``expiry`` (default: the nearest). ``strict``: an expiry Dhan doesn't list raises DataError
+    instead of being sent as given."""
     inst = instrument(symbol)
     _need_dhan_options(inst)
+    if strict and expiry:
+        valid = expiries(symbol) or []
+        if expiry not in valid:
+            raise DataError(f"unknown expiry {expiry}; valid: {', '.join(valid)}")
     expiry = expiry or (expiries(symbol) or [None])[0]
     if not expiry:
         raise DataError("Dhan returned no expiries.")

@@ -206,7 +206,7 @@ def _save_holidays(holidays: dict[date, str]) -> None:
         path = _saved_holidays_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"saved_at": datetime.now().isoformat(timespec="seconds"),
+        tmp.write_text(json.dumps({"saved_at": now_ist().replace(tzinfo=None).isoformat(timespec="seconds"),
                                    "holidays": {d.strftime("%d-%b-%Y"): n for d, n in sorted(holidays.items())}}), encoding="utf-8")
         tmp.replace(path)
     except OSError as exc:

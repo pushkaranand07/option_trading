@@ -26,6 +26,7 @@ from pathlib import Path
 from statistics import NormalDist
 
 from tradingagents.dataflows.config import get_config
+from tradingagents.dataflows.vendors.nse.calendar import now_ist
 
 _SCHEMA = [
     """CREATE TABLE IF NOT EXISTS trades (
@@ -81,7 +82,7 @@ _COMPARE = ("credit", "lot", "max_risk", "exit_date", "exit_reason", "pnl", "ret
 def update(strategy: PaperStrategy, trades: list, path: Path | None = None, now: datetime | None = None) -> dict:
     """Record the strategy's trades entered on/after its start date. Returns counts of
     new, newly closed and integrity events."""
-    now = (now or datetime.now()).isoformat(timespec="seconds")
+    now = (now or now_ist().replace(tzinfo=None)).isoformat(timespec="seconds")      # naive IST, as before
     fresh = {r["key"]: r for r in (_row(strategy.name, t) for t in trades)
              if date.fromisoformat(r["entry_date"]) >= strategy.start}
     counts = {"new": 0, "closed": 0, "integrity": 0}

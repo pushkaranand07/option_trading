@@ -22,7 +22,6 @@ import json
 import shutil
 from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -31,7 +30,7 @@ import pandas as pd
 from tradingagents.analytics import datastore as ds
 from tradingagents.analytics.backfill import load_manifest, raw_path, raw_root
 from tradingagents.analytics.implied_vol import DEFAULT_RISK_FREE
-from tradingagents.dataflows.vendors.nse.calendar import ARCHIVE_HOLES
+from tradingagents.dataflows.vendors.nse.calendar import ARCHIVE_HOLES, now_ist
 
 SUMMARY, CHAIN = "base_fo_summary", "base_option_chain"
 DATASETS = (SUMMARY, CHAIN)
@@ -194,7 +193,7 @@ def _snapshot(path: Path) -> Path | None:
         return None
     folder = path.parent.parent / "_snapshots" / path.parent.name
     folder.mkdir(parents=True, exist_ok=True)
-    dest = folder / f"{path.stem}-{datetime.now():%Y%m%d-%H%M%S}{path.suffix}"
+    dest = folder / f"{path.stem}-{now_ist():%Y%m%d-%H%M%S}{path.suffix}"
     shutil.copy2(path, dest)
     return dest
 
@@ -259,7 +258,7 @@ def write_manifest(root: Path, raw: Path, ok: dict) -> Path:
                 "source": "NSE F&O bhavcopy (nsearchives.nseindia.com /content/historical/DERIVATIVES/... legacy, "
                           "/content/fo/BhavCopy_NSE_FO_... UDiFF)",
                 "downloaded": [min(fetched), max(fetched)] if fetched else None,
-                "built_at": datetime.now().isoformat(timespec="seconds"),
+                "built_at": now_ist().replace(tzinfo=None).isoformat(timespec="seconds"),
             }
     path = root / "base_manifest.json"
     path.write_text(json.dumps(entries, indent=1, sort_keys=True), encoding="utf-8")
