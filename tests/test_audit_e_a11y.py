@@ -114,8 +114,8 @@ def test_the_nse_chain_is_not_polled_outside_the_live_session():
       S.tab = 'plan'; S.sym = 'NIFTY'; S.morning = { session: null, indices: { NIFTY: {} } };
       pollNseChains(); JSON.stringify(SENT)"""))
     assert out == []
-    app = app_source()
-    assert "setInterval(pollNseChains, 15000)" in app
+    polled = json.loads(render("JSON.stringify(poller.tasks.filter((t) => t.fn === pollNseChains).map((t) => [t.every, t.when()]))"))
+    assert polled == [[15000, True]]          # the page's scheduler calls it every 15 s; it decides itself whether to fetch
 
 
 # A rating's verdict box: one class per tone, each naming its fill and its text colour.

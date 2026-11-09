@@ -6,6 +6,7 @@ import { pollNseChains } from "./nsechain.js";
 import { loadChain } from "./options.js";
 import { loadLive, renderSession } from "./plan.js";
 import { loadRecord } from "./record.js";
+import { createScheduler } from "./scheduler.js";
 import { S } from "./state.js";
 import { TABS, showTab } from "./tabs.js";
 import { loadPlan } from "./today.js";
@@ -21,6 +22,17 @@ $("#themeBtn").onclick = () => {
 };
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyChartTheme());
 
+// ---------- the pollers: one scheduler, started once the status has loaded ----------
+export const poller = createScheduler()
+  .every("quotes", 3000, loadQuotes)
+  .every("candles", 5000, loadCandles)
+  .every("plan", 15000, loadPlan)
+  .every("option chain", 4000, loadChain, () => S.tab === "options")
+  .every("status", 60000, loadStatus)
+  .every("trade record", 15000, loadRecord, () => S.tab === "record")
+  .every("plan tab", 15000, () => { renderSession(); return loadLive(); }, () => S.tab === "plan")
+  .every("nse chains", 15000, pollNseChains);             // itself only on the Plan tab during the live session
+
 // ---------- start ----------
 (async function init() {
   applyChartTheme();
@@ -28,12 +40,5 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
   renderChips(); renderInst();
   showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("tab") || "plan");
   loadQuotes(); loadCandles(); loadPlan();
-  setInterval(loadQuotes, 3000);
-  setInterval(loadCandles, 5000);
-  setInterval(loadPlan, 15000);
-  setInterval(() => { if (S.tab === "options") loadChain(); }, 4000);
-  setInterval(loadStatus, 60000);
-  setInterval(() => { if (S.tab === "record") loadRecord(); }, 15000);
-  setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
-  setInterval(pollNseChains, 15000);
+  poller.start();
 })();
