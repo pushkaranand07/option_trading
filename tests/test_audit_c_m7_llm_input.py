@@ -101,7 +101,7 @@ def test_the_capture_hands_over_the_same_objects_unchanged(fake_llm):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("bad", ["../evil", "ABC123", "abc 1", "", r"abc\..\x"])
+@pytest.mark.parametrize("bad", ["../evil", "ABC123", "abc 1", "", r"abc\..\x", 123, None])
 def test_a_run_id_that_is_not_hex_saves_nothing_but_still_ranks(fake_llm, tmp_path, bad):
     assert st._capture_rank_input(bad)(CTX, CANDS) is fake_llm["answer"]
     assert fake_llm["calls"] == [(CTX, CANDS)]

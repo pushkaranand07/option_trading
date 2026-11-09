@@ -729,7 +729,7 @@ def _capture_rank_input(run_id: str):
     import re
 
     def capture(ctx: dict, candidates: list[dict]) -> RankedAnswer:
-        if not re.fullmatch(r"[0-9a-f]+", run_id or ""):
+        if not (isinstance(run_id, str) and re.fullmatch(r"[0-9a-f]+", run_id)):
             logger.warning("the ranking LLM's input was not saved: run id %r is not hex", run_id)
             return ask_rank_llm(ctx, candidates)
         try:
