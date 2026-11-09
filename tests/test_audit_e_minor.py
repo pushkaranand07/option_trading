@@ -16,12 +16,18 @@ def banners(status):
 @pytest.mark.unit
 @_needs_node
 def test_the_degraded_notice_leaves_out_parts_another_banner_already_shows():
-    b = banners({"degraded": [{"part": "calendar", "reason": "could not be checked (error id a1)"},
-                              {"part": "v2", "reason": "today's v2 status could not be checked"},
-                              {"part": "azure", "reason": "could not be checked (error id b2)"}]})
-    assert "azure" in b["degraded"] and "calendar" not in b["degraded"] and "v2" not in b["degraded"]
+    # calendar is always shown by #calWarn; v2 only while a v2 line is on the page (audit follow-up: the v2 line
+    # exists only on the Plan tab, so elsewhere the notice must carry it). Both cases are asserted.
+    parts = [{"part": "calendar", "reason": "could not be checked (error id a1)"},
+             {"part": "v2", "reason": "today's v2 status could not be checked"},
+             {"part": "azure", "reason": "could not be checked (error id b2)"}]
+    with_line = render("degradedText(ARGS[0], true)", parts)
+    assert "azure" in with_line and "calendar" not in with_line and "v2" not in with_line
+    without_line = render("degradedText(ARGS[0], false)", parts)
+    assert "azure" in without_line and "calendar" not in without_line and "v2" in without_line
     only_shown_elsewhere = [{"part": "calendar", "reason": "x"}, {"part": "v2", "reason": "y"}]
-    assert banners({"degraded": only_shown_elsewhere})["degraded"] is None
+    assert render("String(degradedText(ARGS[0], true))", only_shown_elsewhere) == "null"
+    assert banners({"degraded": [{"part": "calendar", "reason": "x"}]})["degraded"] is None     # via bannerTexts
 
 
 @pytest.mark.unit
