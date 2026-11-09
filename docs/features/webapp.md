@@ -121,7 +121,7 @@ Indices offered: NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, SENSEX (`market_data.IN
   59–60 calendar days.)
 - **Separate from the NSE safeguards.** The web app does not use the NSE vendor layer (publication status, dated lot
   sizes, missing-session checks).
-- `market_data.dhan_profile()` exists but no endpoint uses it.
+- Every Dhan call goes through `webapp/dhan_guard.py` (market data only, no override); the old unused `market_data.dhan_profile()` (an account endpoint) was removed in the 2026-11 audit fix.
 
 ## 6. Files
 

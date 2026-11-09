@@ -10,7 +10,9 @@ export async function api(path, opts) {
   const r = await fetch(path, opts);
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {                            // a detail may be an object (409: {message, ...}); the message is what is shown
-    const msg = (typeof body.detail === "object" ? body.detail?.message : body.detail) || `HTTP ${r.status}`;
+    // 409: {message, ...}; 422 (FastAPI validation): a list of {loc, msg}; else a string.
+    const detail = Array.isArray(body.detail) ? body.detail.map((d) => d?.msg).filter(Boolean).join("; ") : body.detail;
+    const msg = (typeof detail === "object" ? detail?.message : detail) || `HTTP ${r.status}`;
     const e = new Error(body.error_id ? `${msg} (error id ${body.error_id}; the server log has the details)` : msg);
     e.status = r.status; e.detail = body.detail; e.errorId = body.error_id;
     throw e;

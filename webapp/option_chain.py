@@ -46,7 +46,8 @@ def valid_expiries(symbol: str) -> list[str]:
     symbol = symbol.upper()
     try:
         nse = expiries(symbol)
-    except Exception:
+    except Exception:                                    # never raises; the cause is logged, not lost
+        logger.warning("NSE expiry list for %s unavailable", symbol, exc_info=True)
         nse = []
     dhan = []
     if md.dhan.enabled and symbol in md.INDICES:
@@ -55,6 +56,7 @@ def valid_expiries(symbol: str) -> list[str]:
                                 lambda: md.expiries(symbol))
             dhan = [datetime.strptime(x, "%Y-%m-%d").strftime("%d-%b-%Y") for x in raw or []]
         except Exception:
+            logger.warning("Dhan expiry list for %s unavailable", symbol, exc_info=True)
             dhan = []
     if nse and dhan and set(dhan) - set(nse):
         logger.warning("expiries of %s differ: NSE %s, Dhan %s", symbol, nse, dhan)
