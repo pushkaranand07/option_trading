@@ -57,7 +57,7 @@ Key files:
 | [webapp/ai_test.py](webapp/ai_test.py) | Forward test v3: registration before entry, prompt fingerprint |
 | [webapp/dhan_guard.py](webapp/dhan_guard.py) | The one door to Dhan: market data only, account endpoints blocked |
 | [webapp/build_info.py](webapp/build_info.py) | The running commit; the page warns when the server runs older code |
-| [webapp/static/app.js](webapp/static/app.js) | The page (plain JS, no build step) |
+| [webapp/static/js/main.js](webapp/static/js/main.js) | The page: ES modules under `webapp/static/js/` (plain JS, no build step), one scheduler for its polling |
 | `tradingagents/` | Multi-agent framework, NSE data vendors, analytics and research code |
 
 ## Setup (Windows)
@@ -89,7 +89,7 @@ every variable with a one-line comment.
 **Dhan is used for market data only.** Every Dhan request goes through
 [webapp/dhan_guard.py](webapp/dhan_guard.py), which allows only quotes, charts, the option chain, the expiry list and
 the public security master. Orders, positions, holdings, funds, the trade book and any unknown endpoint are blocked
-before a request is sent. The only override is `DHAN_ACCOUNT_ACCESS=1`, which this project never sets; leave it unset.
+before a request is sent. There is no override: the old `DHAN_ACCOUNT_ACCESS` switch was removed, so reaching the account would need a code change.
 Each Dhan call is logged without the token (`_audit/dhan_calls.log`, or `DHAN_CALL_LOG`).
 
 **Build the NSE data store** (one time; slow, resumable):
@@ -204,7 +204,7 @@ None of this is evidence of an edge. Six closed bets cannot tell skill from luck
 | Path | What is there |
 |---|---|
 | `webapp/` | The web app: server, strategist, trade record, morning plan, forward test |
-| `webapp/static/` | The page: `index.html`, `app.js`, `style.css` |
+| `webapp/static/` | The page: `index.html`, `js/` (ES modules), `style.css`, `vendor/` (pinned libraries) |
 | `tradingagents/agents/`, `tradingagents/graph/` | Multi-agent LLM framework (from TradingAgents) |
 | `tradingagents/dataflows/vendors/nse/` | NSE data: calendar, derivatives, flows, indices |
 | `tradingagents/analytics/` | Data store, volatility, regime, backtests, costs, gates, paper ledger, journal |
