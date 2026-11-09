@@ -165,7 +165,22 @@ def _pick_expiry(expiry: str | None, exps: list[str], strict: bool) -> str:
     """``expiry`` when NSE lists it; otherwise the nearest, or (``strict``) a ChainError for a named unknown expiry."""
     if strict and expiry and expiry not in exps:
         raise ChainError(f"unknown expiry {expiry}; valid: {', '.join(exps)}")
-    return expiry if expiry in exps else exps[0]
+    return expiry if expiry in exps else _default_expiry(exps)
+
+
+def _default_expiry(exps: list[str]) -> str:
+    """The nearest expiry still trading: from 15:30 IST on an expiry day NSE may still list today's (expired) contract
+    first, so the next one is the default then (re-audit S2: /api/rank priced dead contracts after the close). Before
+    15:30, and when nothing later is listed, the nearest as before."""
+    now = timeutil.now_ist()
+    if len(exps) > 1 and (now.hour, now.minute) >= (15, 30):
+        try:
+            first = datetime.strptime(exps[0], "%d-%b-%Y").date()
+        except ValueError:
+            return exps[0]
+        if first <= now.date():
+            return exps[1]
+    return exps[0]
 
 
 def chain(symbol: str, expiry: str | None = None, lot: int | None = None, client=None, *, strict: bool = False) -> dict:
