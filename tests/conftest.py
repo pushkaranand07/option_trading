@@ -43,6 +43,8 @@ def _own_file_locations():
 
 _own_file_locations()
 
+pytest_plugins = ["tests.fixtures_shared"]
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _no_real_reports(tmp_path_factory):

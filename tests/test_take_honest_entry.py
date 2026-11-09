@@ -10,8 +10,7 @@ import pytz
 from fastapi import HTTPException
 
 from tests.test_strategist import CHAIN, _q
-from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
-from webapp import option_chain as oc, server, signals, strategist as st, trade_record as tr
+from webapp import server, strategist as st, trade_record as tr
 
 IST = pytz.timezone("Asia/Kolkata")
 THU = (2026, 11, 12)                                 # a weekday; the calendar below has no holidays
@@ -31,30 +30,7 @@ def chain(spot=22600, **quotes):
     return CHAIN | {"spot": spot, "expiry": EXPIRY, "rows": rows, "summary": {"atm_iv": 14.0, "resistance": 23000, "support": 22000}}
 
 
-@pytest.fixture
-def world(tmp_path, monkeypatch):
-    monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
-    monkeypatch.setattr(st, "_runs_dir", lambda: tmp_path / "runs")
-    monkeypatch.setattr(signals, "nse_calendar", lambda: NSECalendar(holidays={}))
-    clock = {"now": at(10, 0)}
-    monkeypatch.setattr(signals, "now_ist", lambda: clock["now"])
-    live = {"chain": chain()}
-
-    def fetch(symbol, expiry):
-        if isinstance(live["chain"], Exception):
-            raise live["chain"]
-        ch = live["chain"]                               # NSE stamps each chain; a test that sets none gets "now"
-        return ch if "timestamp" in ch else ch | {"timestamp": clock["now"].strftime("%d-%b-%Y %H:%M:%S")}
-
-    monkeypatch.setattr(oc, "chain", fetch)
-    ctx = {"spot": 22600, "days_to_expiry": 22, "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": chain()["summary"]}}
-    cands = st.rank("NIFTY", built=(ctx, chain()), top=50)["candidates"]
-    call = next(c for c in cands if c["plan"]["strategy"] == "long_call" and c["priced"]["legs"][0]["strike"] == 22600.0)
-    spread = next(c for c in cands if c["plan"]["strategy"] == "bull_call_spread")
-    run = {"symbol": "NIFTY", "expiry": EXPIRY, "spot": 22600, "lot": 65, "trades": [call, spread], "asked_at": "2026-11-12 09:58",
-           "run_id": "run1", "day": "2026-11-12"}
-    st.save_run(run)
-    return {"clock": clock, "live": live, "run": run, "call": call}
+# The ``world`` fixture these tests use is in tests/fixtures_shared.py (shared with other modules).
 
 
 class Resp:

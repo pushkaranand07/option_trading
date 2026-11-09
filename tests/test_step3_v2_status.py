@@ -8,7 +8,7 @@ from datetime import date, datetime
 import pytest
 import pytz
 
-from tests.test_take_honest_entry import chain, take, world  # noqa: F401  (world is a fixture)
+from tests.test_take_honest_entry import chain, take
 from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
 from tradingagents.research import ai_settle, registry
 from webapp import ai_test, server, signals, trade_record as tr
@@ -75,7 +75,7 @@ def test_weekends_and_days_before_the_first_session(reg):
     assert ai_test.today_status(t((2026, 11, 14), 11))["state"] == "NO SESSION"
     s = ai_test.today_status(t((2026, 11, 6), 11))
     assert s["state"] == "NO" and "before v3" in s["reason"]
-    assert ai_test.FIRST_SESSION == date(2026, 11, 9) and tr.FIRST_SESSION is ai_test.FIRST_SESSION    # one definition
+    assert date(2026, 11, 9) == ai_test.FIRST_SESSION and tr.FIRST_SESSION is ai_test.FIRST_SESSION    # one definition
 
 
 @pytest.fixture

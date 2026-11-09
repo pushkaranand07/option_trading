@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from tests.test_take_honest_entry import at, chain, take, world  # noqa: F401  (world is a fixture)
+from tests.test_take_honest_entry import chain, take
 from tradingagents.dataflows.errors import VendorError, VendorUnavailableError
 from tradingagents.dataflows.vendors.nse import calendar as nse_cal
 from tradingagents.dataflows.vendors.nse.calendar import NSECalendar

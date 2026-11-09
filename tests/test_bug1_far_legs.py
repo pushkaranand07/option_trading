@@ -32,13 +32,7 @@ def chain(rows, spot=24557.6):
             "rows": [{"strike": k, "ce": v.get("ce"), "pe": v.get("pe")} for k, v in sorted(rows.items())]}
 
 
-@pytest.fixture
-def condor(tmp_path, monkeypatch):
-    monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
-    monkeypatch.setattr(tr, "_market_open", lambda *a: True)
-    t = tr.take(CONDOR, source="ai")
-    monkeypatch.setattr(oc, "chain", lambda *a, **k: chain(NEAR))                 # the display window: the puts fell out
-    return t
+# The ``condor`` fixture these tests use is in tests/fixtures_shared.py (shared with other modules).
 
 
 @pytest.mark.unit

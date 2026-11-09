@@ -1,7 +1,6 @@
 """The Plan tab's trades and labels. The typed word of docs/root_cause_v1.md item 4 and the UNTESTED label were removed by the
 user on 2026-11-04 (docs/PA_52, spec v2 ui_until_verdict). Reads the page source; not a browser test."""
 
-import re
 from pathlib import Path
 
 import pytest

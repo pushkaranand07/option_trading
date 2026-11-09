@@ -23,16 +23,30 @@ jobs:
             tz: America/New_York
     env:
       TZ: ${{ matrix.tz }}
+      # The suite reads and writes UTF-8 (rupee signs, page sources) and must not pick up a .env.
+      PYTHONUTF8: "1"
+      TRADINGAGENTS_NO_DOTENV: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install (with dev extras)
+      # The UI harness tests run the page's script under Node (tests/js/render.js); without it they skip.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install (package, dev + quant + bedrock extras, web app)
+        # quant: the analytics and model tests import arch, hmmlearn, lightgbm, scikit-learn, pyarrow, openpyxl.
+        # bedrock: one construction test (importorskip otherwise). webapp/requirements.txt: FastAPI for the
+        # server tests; httpx is what FastAPI's TestClient needs. The chronos extra (PyTorch) is left out, so
+        # tests/test_quant_chronos.py skips here.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,quant,bedrock]" -r webapp/requirements.txt httpx
+      - name: Check Node is on PATH for the UI harness
+        run: node --version
       - name: Run test suite
+        # --strict-markers and -m "not integration" come from addopts in pyproject.toml.
         run: pytest -q
 
   smoke-install:
@@ -62,6 +76,6 @@ jobs:
       - name: Install ruff
         run: pip install "ruff>=0.16"
       - name: Lint the repository
-        # The repo is fully clean under the strict select, so we lint everything
-        # (generated results/ is excluded via pyproject extend-exclude).
+        # Lints everything under the [tool.ruff] settings in pyproject.toml; any error fails the job.
+        # Only results/ and option_backtester/ (upstream style) are excluded, via extend-exclude.
         run: ruff check .
