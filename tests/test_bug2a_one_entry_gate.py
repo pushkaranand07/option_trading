@@ -6,8 +6,8 @@ import inspect
 
 import pytest
 
-from tests.test_step1c_ai_auto_take import ai_rows, run_ai  # noqa: F401  (fixtures)
-from tests.test_take_honest_entry import CHAIN, take, world  # noqa: F401
+from tests.test_step1c_ai_auto_take import ai_rows
+from tests.test_take_honest_entry import take
 from webapp import signals, strategist as st, trade_record as tr
 
 REASON = "the session gate says no (test)"

@@ -6,14 +6,15 @@ from datetime import date
 
 import pytest
 
-from tests.test_take_honest_entry import at, chain, take, world  # noqa: F401  (world is a fixture)
+from tests.test_take_honest_entry import chain, take
+from tests.test_ui_regressions import app_source
 from tradingagents.dataflows.errors import VendorError, VendorUnavailableError
 from tradingagents.dataflows.vendors.nse import calendar as nse_cal
 from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
 from tradingagents.dataflows.vendors.nse.client import Fetched
 from webapp import server, signals
 
-APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 
 
 def stamped(ts, **kw):

@@ -8,20 +8,29 @@ then open http://localhost:8000
 from __future__ import annotations
 
 import logging
+import re
+import threading
 import time
+import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
-from dotenv import load_dotenv
+import requests
+
+# The package loads the repo's own .env (ROOT/.env, never a parent's; nothing under pytest or with
+# TRADINGAGENTS_NO_DOTENV=1, audit H4) when imported; import it first so the keys are there for the modules below.
+import tradingagents  # noqa: F401,I001
 
 ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(ROOT / ".env")
 
-from fastapi import Body, FastAPI, HTTPException, Request  # noqa: E402
+from fastapi import FastAPI, HTTPException, Query, Request  # noqa: E402
 from fastapi.concurrency import run_in_threadpool  # noqa: E402
-from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
 
 from webapp import (  # noqa: E402
     ai,
@@ -33,16 +42,55 @@ from webapp import (  # noqa: E402
     option_chain as nse_oc,
     planner,
     quant,
+    rules,
     signals,
     strategist,
+    timeutil,
     trade_record,
 )
 
 STATIC = Path(__file__).parent / "static"
-app = FastAPI(title="Pulse Trader")
-app.mount("/static", StaticFiles(directory=STATIC), name="static")
-md.start_refresh_ahead()
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start-up work, run when the server starts (not when the module is imported, so tests and scripts that import
+    it start no threads): the refresh-ahead thread, the trade monitor, and the v2 fingerprint check.
+
+    On shutdown it calls the stop hooks ``market_data.stop_refresh_ahead`` / ``trade_record.stop_monitor`` when those
+    modules have them (other tracks' files; neither has one yet). Without them nothing is left hanging: both threads
+    are daemon threads, so they end with the process."""
+    for name, start in (("refresh-ahead", lambda: md.start_refresh_ahead()),
+                        ("trade monitor", lambda: trade_record.start_monitor()),
+                        ("v2 startup check", lambda: v2_startup_check()),
+                        ("trade refresh", lambda: _refresh_in_background())):
+        _step("Start-up", name, start)
+    yield
+    for name, module, hook in (("refresh-ahead", md, "stop_refresh_ahead"), ("trade monitor", trade_record, "stop_monitor")):
+        if stop := getattr(module, hook, None):
+            _step("Shutdown", name, stop)
+
+
+def _refresh_in_background() -> None:
+    """Settle open trades once at start-up (trade_record.refresh_open, Track A: overview() no longer writes, and the
+    monitor settles only while the market is open), in a daemon thread so start-up never waits on a chain fetch."""
+    refresh = getattr(trade_record, "refresh_open", None)
+    if refresh is None:
+        return
+    threading.Thread(target=_step, args=("Start-up", "trade refresh", refresh), name="trade-refresh-at-start",
+                     daemon=True).start()
+
+
+def _step(phase: str, name: str, fn) -> None:
+    try:
+        fn()
+    except Exception:                                 # one failed step must not keep the page down or hang shutdown
+        logger.exception("%s step failed: %s", phase, name)
+
+
+app = FastAPI(title="Pulse Trader", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 @app.middleware("http")
@@ -55,38 +103,177 @@ async def time_requests(request: Request, call_next):
     return response
 
 
+# ---------- who may talk to the server (audit H2: DNS rebinding and CSRF) ----------
+# The server is for this computer's browser only. A page on another site can make the browser send requests here
+# (a form post, or DNS rebinding where attacker.example resolves to 127.0.0.1), so:
+#   * only Host 127.0.0.1 / localhost is served (anything else: 400, from TrustedHostMiddleware below);
+#   * a request that can change something (not GET / HEAD / OPTIONS) needs the header X-Pulse-Request: 1, which a
+#     cross-site form cannot set and a cross-site fetch cannot send without a CORS preflight this server never
+#     answers; and when the browser names an Origin (or, without one, a Referer), it must be this computer's.
+
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+REQUEST_HEADER = "X-Pulse-Request"
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_LOCAL_ORIGIN = re.compile(r"http://(127\.0\.0\.1|localhost)(:\d{1,5})?")
+
+
+def local_origin(value: str) -> bool:
+    """Is an Origin / Referer value this computer's page (http://127.0.0.1 or http://localhost, any port)?"""
+    parts = urlsplit(value)
+    return bool(parts.scheme and parts.netloc) and _LOCAL_ORIGIN.fullmatch(f"{parts.scheme}://{parts.netloc}") is not None
+
+
+def _forbidden(message: str) -> JSONResponse:
+    return JSONResponse({"detail": message}, status_code=403)
+
+
+@app.middleware("http")
+async def same_origin_writes(request: Request, call_next):
+    if request.method not in SAFE_METHODS:
+        if request.headers.get(REQUEST_HEADER) != "1":
+            return _forbidden(f"Refused: a request that changes something must carry the header {REQUEST_HEADER}: 1.")
+        source = request.headers.get("origin") or request.headers.get("referer")
+        if source is not None and not local_origin(source):
+            return _forbidden("Refused: this request came from another site.")
+    return await call_next(request)
+
+
+# ---------- errors the page sees (audit L4) ----------
+# Bad input: 400 / 422 with a message written here. Known not-found: 404. Upstream data errors (Yahoo, Dhan, NSE)
+# carry messages the app wrote for the user, so they stay 502 with that message. Anything else is a bug: the page
+# gets 500 {"detail": "Internal error", "error_id"} and the traceback is logged under that id, never sent.
+
+def _upstream_errors() -> tuple[type[BaseException], ...]:
+    """The domain errors the data routes reach, all with messages the app writes for the user: the web app's own
+    (market_data.DataError, option_chain.ChainError), the package's vendor taxonomy (VendorError: NSE / Yahoo /
+    Alpha Vantage failed, throttled, no data or not configured), HTTP clients (requests; curl_cffi, which yfinance
+    uses), and the Dhan guard refusing a non-market-data call."""
+    from tradingagents.dataflows.errors import VendorError
+    from webapp import dhan_guard
+
+    errors: list[type[BaseException]] = [md.DataError, nse_oc.ChainError, VendorError, requests.RequestException]
+    try:
+        from curl_cffi.requests.exceptions import RequestException as CurlRequestException
+        errors.append(CurlRequestException)
+    except ImportError:                               # yfinance without curl_cffi
+        pass
+    if blocked := getattr(dhan_guard, "DhanAccountAccessBlocked", None):
+        errors.append(blocked)
+    return tuple(errors)
+
+
+UPSTREAM_ERRORS: tuple[type[BaseException], ...] = _upstream_errors()
+
+
+def log_error(exc: BaseException) -> str:
+    """Log the exception's traceback under a short new id, and return the id (what the page may show)."""
+    error_id = uuid.uuid4().hex[:10]
+    logger.error("Internal error %s: %s", error_id, type(exc).__name__, exc_info=(type(exc), exc, exc.__traceback__))
+    return error_id
+
+
+def internal_error(exc: BaseException) -> JSONResponse:
+    return JSONResponse({"detail": "Internal error", "error_id": log_error(exc)}, status_code=500)
+
+
+@app.middleware("http")
+async def errors_have_an_id(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:                          # an unhandled exception in any endpoint
+        return internal_error(exc)
+
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)      # added last, so it runs first
+
+
 async def _call(fn, *args):
+    """Run a blocking data call off the event loop. An upstream data error is a 502 with its own (app-written)
+    message; any other exception propagates and becomes a 500 with an error id."""
     try:
         return await run_in_threadpool(fn, *args)
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+async def _symbol(symbol: str) -> str:
+    """The instrument's canonical symbol, looked up off the event loop (md.instrument may parse the scrip master)."""
+    return (await _call(md.instrument, symbol))["symbol"]
 
 
 @app.get("/")
 def index():
-    """The page, with its script and styles named by their current version (the files' modified time), and itself
-    never cached: after an update the browser loads the new app.js instead of running a cached one."""
+    """The page, with its scripts and styles named by their current version (the files' modified time), and itself
+    never cached: after an update the browser loads the new code instead of running a cached one.
+
+    The script is ES modules (static/js, entry main.js). main.js and style.css get ``?v=`` in their tags; the modules
+    main.js imports get theirs from an import map written into the page, which maps each module's plain URL (what a
+    relative import resolves to) to its versioned one, so a changed module is fetched afresh even when main.js is not."""
+    import json
+
     from fastapi.responses import HTMLResponse
 
     html = (STATIC / "index.html").read_text(encoding="utf-8")
-    for name in ("app.js", "style.css"):
+    for name in ("js/main.js", "style.css"):
         html = html.replace(f'/static/{name}"', f'/static/{name}?v={int((STATIC / name).stat().st_mtime)}"')
+    modules = {f"/static/js/{p.name}": f"/static/js/{p.name}?v={int(p.stat().st_mtime)}" for p in sorted((STATIC / "js").glob("*.js"))}
+    importmap = f'<script type="importmap">{json.dumps({"imports": modules})}</script>'
+    html = re.sub(r"<!-- importmap:[^>]*-->", lambda _m: importmap, html, count=1)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+def _optional(module, name: str):
+    """A function another track adds (``trade_record.store_problem`` / ``monitor_status``), or one answering None
+    while this server runs code without it."""
+    return getattr(module, name, None) or (lambda: None)
+
+
+@app.get("/api/rules")
+def trading_rules():
+    """The trading rules the page shows and applies: budget card, exit time, money labels (webapp/rules.py)."""
+    return rules.rules()
 
 
 @app.get("/api/status")
 def status():
+    """Everything the page's banners need. Audit M4: each part is checked on its own, so one failing check (say, a
+    server running code older than the files on disk) is listed under ``degraded`` instead of making this a 500."""
+    degraded: list[dict] = []
+
+    def part(name: str, check, fallback=None):
+        try:
+            return check()
+        except Exception as exc:
+            degraded.append({"part": name, "reason": f"could not be checked (error id {log_error(exc)}); "
+                                                     "see the server log, or restart the server"})
+            return fallback
+
+    azure_problem = part("azure", ai.azure_problem, "The Azure settings could not be checked.")
+    source = part("calendar", lambda: getattr(signals.nse_calendar(), "source", None), "unknown")
+    if source == "weekends only":
+        calendar_warning = ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
+                            "so a market holiday would show as open.")
+    elif source == "unknown":
+        calendar_warning = "The NSE holiday calendar could not be checked: whether the market is open may be wrong."
+    else:
+        calendar_warning = None
+    v2 = part("v2", ai_test.today_status, {"version": getattr(ai_test, "VERSION", None), "state": "ERROR",
+                                           "reason": "today's v2 status could not be checked", "fingerprint_problem": None})
+    if isinstance(v2, dict) and v2.get("state") == "ERROR" and not any(d["part"] == "v2" for d in degraded):
+        degraded.append({"part": "v2", "reason": v2.get("reason") or "today's v2 status could not be checked"})
     return {
-        "dhan": md.dhan.enabled,
-        "azure": ai.azure_problem() is None,
-        "azure_problem": ai.azure_problem(),
-        "market_open": signals.market_open(),
-        "muhurat": signals.muhurat_today(),
-        "calendar_warning": ("NSE's holiday list could not be loaded and none is saved: only weekends count as closed, "
-                             "so a market holiday would show as open." if signals.nse_calendar().source == "weekends only" else None),
-        "v2": ai_test.today_status(),
-        "code": build_info.status(),
+        "dhan": part("dhan", lambda: bool(md.dhan.enabled), False),
+        "azure": azure_problem is None,
+        "azure_problem": azure_problem,
+        "market_open": part("market_open", signals.market_open),
+        "muhurat": part("muhurat", signals.muhurat_today),
+        "calendar_warning": calendar_warning,
+        "v2": v2,
+        "code": part("code", build_info.status),                           # running commit vs checkout, "stale"
+        "store_problem": part("store_problem", _optional(trade_record, "store_problem")),
+        "monitor": part("monitor", _optional(trade_record, "monitor_status")),
         "indices": [{"symbol": k, "name": v[0]} for k, v in md.INDICES.items()],
+        "degraded": degraded,
     }
 
 
@@ -115,9 +302,9 @@ async def quotes(symbols: str):
 
 
 @app.get("/api/candles/{symbol}")
-async def candles(symbol: str, tf: str = "5m", limit: int = 1500):
+async def candles(symbol: str, tf: str = "5m", limit: Annotated[int, Query(ge=1, le=5000)] = 1500):
     df, source = await _call(md.candles, symbol, tf)
-    open_now = signals.market_open()
+    open_now = await run_in_threadpool(signals.market_open)            # reads the NSE calendar (may fetch it)
     age, stale = md.bar_age(df), md.stale_bars(df, tf, open_now)
     df = df.iloc[-limit:]
     bars = [{"time": int(ts.timestamp()), "open": r.open, "high": r.high, "low": r.low,
@@ -132,8 +319,29 @@ async def plan(symbol: str):
     return await _call(planner.plan, symbol)
 
 
+def known_expiry(symbol: str, expiry: str | None, listing) -> None:
+    """Audit L1: an expiry asked for must be one of the symbol's, or 400 with the valid list (the chain code would
+    otherwise answer for another expiry without saying so). Checked here, at the HTTP layer only: option_chain.chain
+    stays lenient for the forward test. No expiry means the nearest, unchecked; with no ``listing`` (Track D's
+    ``option_chain.valid_expiries`` not present) the route stays lenient as before."""
+    if not expiry or listing is None:
+        return
+    valid = list(listing(symbol))
+    if not valid:                                     # the sources answered nothing: not the user's mistake
+        raise HTTPException(502, f"The expiry list for {symbol} is unavailable right now (expiry list unavailable): "
+                                 "try again in a moment.")
+    if expiry not in valid:
+        raise HTTPException(400, {"message": f"{expiry} is not an expiry of {symbol}: pick one of {', '.join(valid) or 'none listed'}.",
+                                  "valid_expiries": valid})
+
+
+def _nse_expiries():
+    return getattr(nse_oc, "valid_expiries", None)
+
+
 @app.get("/api/optionchain/{symbol}")
 async def option_chain(symbol: str, expiry: str | None = None):
+    await _call(known_expiry, symbol, expiry, md.expiries)          # the Dhan chain: Dhan's own expiry list
     chain = await _call(md.option_chain, symbol, expiry)
     chain["view"] = signals.option_view(chain["rows"], chain["spot"])
     return chain
@@ -174,13 +382,14 @@ async def morning_plan(date: str | None = None):
     if date:
         from datetime import date as _date
         try:
-            saved = morning.load(_date.fromisoformat(date))
+            day = _date.fromisoformat(date)
         except ValueError as exc:
             raise HTTPException(400, "date must be YYYY-MM-DD") from exc
+        saved = await run_in_threadpool(morning.load, day)
         if saved is None:
             raise HTTPException(404, f"No saved plan for {date}")
         return saved | {"ai_job": morning.ai_status()}
-    plan = morning.load()
+    plan = await run_in_threadpool(morning.load)
     if plan is None:
         plan = await _call(morning.build, None, False)
     plan["ai_job"] = morning.ai_status()
@@ -190,8 +399,7 @@ async def morning_plan(date: str | None = None):
 @app.get("/api/morning/context/{symbol}")
 async def morning_context(symbol: str):
     """The morning view for any instrument, built now (the 8:30 job covers NIFTY and BANKNIFTY, with AI)."""
-    from datetime import date as _date
-    return {"context": await _call(morning.context, md.instrument(symbol)["symbol"], _date.today()), "ai": None}
+    return {"context": await _call(morning.context, await _symbol(symbol), timeutil.today_ist()), "ai": None}
 
 
 @app.post("/api/morning/refresh")
@@ -214,10 +422,12 @@ def morning_ai():
 @app.get("/api/chain/{symbol}")
 async def nse_chain(symbol: str, expiry: str | None = None):
     try:
-        return await run_in_threadpool(nse_oc.chain, md.instrument(symbol)["symbol"], expiry)
+        sym = await _symbol(symbol)
+        await run_in_threadpool(known_expiry, sym, expiry, _nse_expiries())
+        return await run_in_threadpool(nse_oc.chain, sym, expiry)
     except nse_oc.ChainError as exc:
         raise HTTPException(404, str(exc)) from exc
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(502, str(exc)) from exc
 
 
@@ -228,7 +438,7 @@ async def nse_contract(id: str):
         return await run_in_threadpool(nse_oc.contract, id)
     except nse_oc.ChainError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(502, str(exc)) from exc
 
 
@@ -236,10 +446,12 @@ async def nse_contract(id: str):
 async def trade_rank(symbol: str, expiry: str | None = None):
     """Pulse's ranked trades for the instrument: strikes, entry, target and stop for each, best first (no LLM)."""
     try:
-        return await run_in_threadpool(strategist.rank, md.instrument(symbol)["symbol"], expiry)
+        sym = await _symbol(symbol)
+        await run_in_threadpool(known_expiry, sym, expiry, _nse_expiries())
+        return await run_in_threadpool(strategist.rank, sym, expiry)
     except nse_oc.ChainError as exc:
         raise HTTPException(404, str(exc)) from exc
-    except Exception as exc:
+    except UPSTREAM_ERRORS as exc:
         raise HTTPException(502, str(exc)) from exc
 
 
@@ -312,17 +524,41 @@ def journal_files():
     return quant.journal_files()
 
 
+# The page sends the file's bytes as application/octet-stream; text/csv and the .xlsx type are accepted too. Anything
+# else (text/plain, a form) is what a cross-site form can send without a preflight, so it is refused (audit M2).
+UPLOAD_TYPES = ("application/octet-stream", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+async def _read_capped(request: Request, cap: int) -> bytes:
+    """The request body, at most ``cap`` bytes (audit L2). No Content-Length, or one over the cap, is refused before
+    a byte is read; while reading, a running total stops a body that is longer than its Content-Length said."""
+    too_big = f"File is larger than {cap // (1024 * 1024)} MB." if cap >= 1024 * 1024 else f"File is larger than {cap} bytes."
+    length = request.headers.get("content-length", "")
+    if not length.isdigit():
+        raise HTTPException(413, "Upload refused: the file's size was not sent (Content-Length).")
+    if int(length) > cap:
+        raise HTTPException(413, too_big)
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > cap:
+            raise HTTPException(413, too_big)
+    return bytes(data)
+
+
 @app.post("/api/journal/upload")
 async def journal_upload(request: Request, name: str):
+    ctype = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if ctype not in UPLOAD_TYPES:
+        raise HTTPException(415, f"Send the file with Content-Type {UPLOAD_TYPES[0]} (or text/csv / the .xlsx type).")
+    data = await _read_capped(request, quant.MAX_UPLOAD)
     try:
-        return {"name": quant.save_upload(name, await request.body())}
+        return {"name": await run_in_threadpool(quant.save_upload, name, data)}
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-# ---------- Trade Record: dummy trades taken from the AI strategist ----------
-
-trade_record.start_monitor()
+# ---------- Trade Record: dummy trades taken from the AI strategist (the monitor starts in the lifespan) ----------
 
 
 @app.get("/api/trades")
@@ -333,34 +569,75 @@ async def trades():
 @app.get("/api/trades.csv")
 def trades_csv():
     """Every trade of both views with where it came from (download)."""
-    from datetime import date as _date
-
     from fastapi.responses import Response
 
     return Response(trade_record.history_csv(), media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="trade_history_{_date.today()}.csv"'})
+                    headers={"Content-Disposition": f'attachment; filename="trade_history_{timeutil.today_ist()}.csv"'})
+
+
+class _NoStoreCorrupt(Exception):
+    """Stands in for trade_record.StoreCorrupt while the loaded trade_record has none (never raised)."""
+
+
+def _store_corrupt() -> type[Exception]:
+    return getattr(trade_record, "StoreCorrupt", None) or _NoStoreCorrupt
+
+
+def _store_unavailable(exc: Exception) -> HTTPException:
+    """Track A raises StoreCorrupt on a write when the trade store can't be read: nothing is saved until it is fixed."""
+    return HTTPException(503, f"The trade record can't be saved right now: {exc}")
+
+
+class TakeRequest(BaseModel):
+    """The page sends only which trade of which run; any other field (a price, say) is ignored."""
+    run_id: str | None = None                          # missing / null / "": the usual "not on file" refusal, saved
+    candidate: int = Field(ge=0, strict=True)          # strict: true / 1.5 / "1" are refused, not coerced
+    confirm: bool = Field(default=False, strict=True)
 
 
 @app.post("/api/trades")
-def trade_take(body: dict = Body(...)):
+def trade_take(req: TakeRequest):
     """Take trade ``candidate`` of AI run ``run_id`` as a dummy one-lot trade, priced by the server from a fresh
     chain now. Any price in the body is ignored."""
+    run_id, candidate = req.run_id or "", req.candidate
     try:
-        run_id, candidate = str(body.get("run_id") or ""), int(body.get("candidate"))
-        return trade_record.take_from_run(run_id, candidate, confirm=bool(body.get("confirm")))
-    except trade_record.BetExists as exc:                                  # ask first; nothing written
-        raise HTTPException(409, {"message": str(exc), **exc.details}) from exc
-    except trade_record.TradeError as exc:
-        trade_record.record_refused(run_id, candidate, exc, "you")       # kept under My picks, outside the stats
-        raise HTTPException(400, f"Not taken: {exc}") from exc
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(400, f"Not taken: {exc}") from exc
+        try:
+            return trade_record.take_from_run(run_id, candidate, confirm=req.confirm)
+        except _store_corrupt():
+            raise
+        except trade_record.BetExists as exc:                              # ask first; nothing written
+            raise HTTPException(409, {"message": str(exc), **exc.details}) from exc
+        except trade_record.TradeError as exc:
+            trade_record.record_refused(run_id, candidate, exc, "you")   # kept under My picks, outside the stats
+            raise HTTPException(400, f"Not taken: {exc}") from exc
+        except (KeyError, TypeError, ValueError) as exc:                   # the take path's own checks (e.g. an
+            raise HTTPException(400, f"Not taken: {exc}") from exc         # unknown strategy direction)
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
+
+
+@app.post("/api/trades/refresh")
+async def trades_refresh():
+    """Settle open trades now (targets, stops, expiry) with trade_record.refresh_open (Track A). The monitor does
+    this only while the market is open, so a trade that expired waits for the next session unless this is called."""
+    refresh = getattr(trade_record, "refresh_open", None)
+    if refresh is None:
+        raise HTTPException(501, "This server's trade record can't refresh open trades yet: update and restart it.")
+    try:
+        result = await _call(refresh)
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
+    except trade_record.TradeError as exc:            # as close and delete: the record's own message
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "result": result if isinstance(result, (dict, list, str, int, float, type(None))) else None}
 
 
 @app.post("/api/trades/{trade_id}/close")
 async def trade_close(trade_id: str):
     try:
         return await run_in_threadpool(trade_record.close, trade_id)
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
     except trade_record.TradeError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -369,6 +646,8 @@ async def trade_close(trade_id: str):
 def trade_delete(trade_id: str):
     try:
         trade_record.delete(trade_id)
+    except _store_corrupt() as exc:
+        raise _store_unavailable(exc) from exc
     except trade_record.TradeError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"ok": True}
@@ -380,6 +659,3 @@ async def journal(name: str, horizon: str = "all"):
         return await run_in_threadpool(quant.journal, name, horizon)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-
-
-v2_startup_check()          # a mismatch is logged at startup and shown on every page (never auto-updated)

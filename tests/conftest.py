@@ -43,6 +43,35 @@ def _own_file_locations():
 
 _own_file_locations()
 
+pytest_plugins = ["tests.fixtures_shared"]
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_real_reports(tmp_path_factory):
+    """Point every data file the web app writes at a directory of the suite's own (audit 2026-11).
+
+    The paths are fixed under the repository's reports/ folder, which holds the user's real trade record and
+    forward-test registry. Since the server's lifespan starts the trade monitor and a start-up refresh, any
+    TestClient test could otherwise write the real trades.json during market hours. Tests that set their own
+    paths with monkeypatch still do; this is the floor under them."""
+    from webapp import ai_test, dhan_guard, morning, quant, strategist, trade_record
+
+    root = tmp_path_factory.mktemp("reports")
+    saved = {(trade_record, "STORE"): trade_record.STORE, (ai_test, "REGISTRY"): ai_test.REGISTRY,
+             (ai_test, "CHAINS"): ai_test.CHAINS, (quant, "JOURNAL_DIR"): quant.JOURNAL_DIR,
+             (morning, "PLAN_DIR"): morning.PLAN_DIR, (strategist, "_runs_dir"): strategist._runs_dir,
+             (dhan_guard, "LOG"): dhan_guard.LOG}
+    trade_record.STORE = root / "trade_record" / "trades.json"
+    ai_test.REGISTRY = root / "ai_test" / "v3" / "registry.jsonl"
+    ai_test.CHAINS = root / "ai_test" / "v3" / "chains"
+    quant.JOURNAL_DIR = root / "journal"
+    morning.PLAN_DIR = root / "morning"
+    strategist._runs_dir = lambda: root / "ai_runs"
+    dhan_guard.LOG = root / "dhan_calls.log"
+    yield root
+    for (module, name), value in saved.items():
+        setattr(module, name, value)
+
 
 def pytest_addoption(parser):
     parser.addoption("--clock", default=None, metavar="ISO",

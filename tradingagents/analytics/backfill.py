@@ -19,12 +19,13 @@ import csv
 import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 from tradingagents.dataflows.config import get_config
 from tradingagents.dataflows.errors import VendorUnavailableError
 from tradingagents.dataflows.files import replace_file
+from tradingagents.dataflows.vendors.nse.calendar import now_ist
 from tradingagents.dataflows.vendors.nse.client import NSEDataNotPublishedError
 from tradingagents.dataflows.vendors.nse.derivatives import UDIFF_SINCE, legacy_url, udiff_url
 
@@ -192,4 +193,4 @@ def backfill(
 
 
 def _now() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+    return now_ist().replace(tzinfo=None).isoformat(timespec="seconds")    # naive IST, as stamped before

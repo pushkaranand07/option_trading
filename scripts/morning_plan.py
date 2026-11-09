@@ -18,9 +18,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from dotenv import load_dotenv  # noqa: E402
+import tradingagents  # noqa: E402
 
-load_dotenv(ROOT / ".env")        # a scheduled run has no shell environment: the LLM settings come from here
+# A scheduled run has no shell environment: the LLM settings come from the repo .env, loaded by the package's own
+# loader so TRADINGAGENTS_NO_DOTENV=1 turns it off here too (audit 2026-11).
+tradingagents._load_env()
 
 from webapp import morning  # noqa: E402
 

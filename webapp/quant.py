@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from webapp import timeutil
+
 ROOT = Path(__file__).resolve().parent.parent
 JOURNAL_DIR = ROOT / "reports" / "journal"
 MARKET_MAP = ROOT / "reports" / "market_map" / "india-market-map.html"
@@ -87,7 +89,7 @@ def freshness(as_of: date | str | None, now: datetime | None = None, calendar=No
     if calendar is None:
         from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
         calendar = NSECalendar.from_nse()
-    now = now or datetime.now()
+    now = now or timeutil.now_ist().replace(tzinfo=None)          # India time, whatever the PC runs in (L6)
     today = now.date()
     if isinstance(as_of, str):
         as_of = date.fromisoformat(as_of[:10])
@@ -120,7 +122,7 @@ RISK_TTL = 60   # built from end-of-day files that change once a night; a minute
 def risk(symbol: str, on: date | None = None, root: Path | None = None) -> dict:
     from webapp import market_data as md
 
-    on = on or date.today()
+    on = on or timeutil.today_ist()
     return md._cache.get(("risk", symbol.upper(), on, str(root)), RISK_TTL, lambda: _risk(symbol, on, root))
 
 
@@ -275,13 +277,53 @@ def _table(df: pd.DataFrame) -> list[dict]:
     return out
 
 
+XLSX_MAX_UNPACKED = 8 * 1024 * 1024      # a Dhan tradebook unpacks to well under 1 MB; 20 MB took 43 s to parse
+XLSX_MAX_RATIO = 100                     # deflate on real sheets is ~5-20:1; zip bombs are 1000:1
+
+
+def check_xlsx_size(path: Path) -> None:
+    """Refuse an .xlsx (a zip) that would unpack to more than 8 MB, or has an entry compressed more than 100:1,
+    before anything parses it (audit L2: a 0.30 MB file expanded to 88 MB, 133 s and 422 MB of RAM). Reads only the
+    zip's directory. Decided by content, not by the name: pd.read_excel picks openpyxl for any zip, so a bomb named
+    .xls would get past a name check. A file that isn't a zip (a binary .xls is OLE, a .csv is text) passes."""
+    import zipfile
+
+    if not zipfile.is_zipfile(path):
+        return
+    too_big = (f"{path.name} is too large when unpacked to be a Dhan tradebook: export it again from Dhan and "
+               "upload that file.")
+    with zipfile.ZipFile(path) as z:
+        entries = z.infolist()
+    if sum(e.file_size for e in entries) > XLSX_MAX_UNPACKED:
+        raise ValueError(too_big)
+    for e in entries:
+        if e.file_size > XLSX_MAX_RATIO * max(e.compress_size, 1):
+            raise ValueError(too_big)
+
+
+def _read_tradebook(jr, path: Path) -> pd.DataFrame:
+    """``jr.read_tradebook``, with any parse failure of a user's file turned into a ValueError with a plain message
+    (audit L2: a broken .xlsx raised zipfile.BadZipFile, a 500). The tradebook reader's own messages are kept."""
+    unreadable = (f"{path.name} could not be read as a tradebook: export it again from Dhan as .csv or .xlsx and "
+                  "upload that file.")
+    try:
+        check_xlsx_size(path)
+        return jr.read_tradebook(path)
+    except UnicodeDecodeError as exc:                 # a ValueError, but its text is the codec's, not ours
+        raise ValueError(unreadable) from exc
+    except ValueError:
+        raise
+    except Exception as exc:                          # BadZipFile, xlrd / openpyxl / csv errors, KeyError ...
+        raise ValueError(unreadable) from exc
+
+
 def journal(name: str, horizon: str = "all") -> dict:
     from tradingagents.analytics import journal as jr
 
     path = JOURNAL_DIR / safe_name(name)
     if not path.exists():
         raise ValueError(f"{path.name} is not in reports/journal/.")
-    trades = jr.read_tradebook(path)
+    trades = _read_tradebook(jr, path)
     trips, still_open = jr.round_trips(trades)
     horizons = {"all": "all", "intraday": jr.HORIZONS[0], "week": jr.HORIZONS[1], "month": jr.HORIZONS[2],
                 "long": jr.HORIZONS[3]}

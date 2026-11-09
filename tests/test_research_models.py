@@ -136,6 +136,7 @@ def test_a_sequence_only_looks_back_and_a_gap_stays_empty():
 
 @pytest.mark.unit
 def test_a_sequence_prediction_for_d_does_not_change_with_later_rows():
+    pytest.importorskip("torch", reason="the sequence model needs torch (the 'chronos' extra), not in the README install")
     f, seq = _panel()
     f = f.assign(panel_row=np.arange(len(f)))
     y = (f["f1"].to_numpy() > 0)

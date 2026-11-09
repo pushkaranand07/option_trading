@@ -9,7 +9,6 @@ import pytest
 
 from webapp import strategist as st, trade_record as tr
 
-
 # ---------------------------------------------------------------- one direction function
 
 @pytest.mark.unit
@@ -156,7 +155,7 @@ def test_grouping_reads_find_bet():
 
 # ---------------------------------------------------------------- adding to a bet: you confirm, the AI adds and logs it
 
-from tests.test_take_honest_entry import take as take_via_server, world  # noqa: E402,F401  (world is a fixture)
+from tests.test_take_honest_entry import take as take_via_server  # noqa: E402
 from tests.test_trade_record import RESULT  # noqa: E402
 
 

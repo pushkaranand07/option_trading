@@ -1,0 +1,2 @@
+# Vendored libraries are kept byte for byte (their SHA-384 is checked): no line-ending conversion.
+*.js -text

@@ -20,6 +20,8 @@ from pathlib import Path
 
 import numpy as np
 
+from webapp.timeutil import now_ist
+
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -121,7 +123,7 @@ def ai_view(ticker: str, day: date) -> dict:
 
 def build(day: date | None = None, with_ai: bool = True, calendar=None, keep_ai: bool = True) -> dict:
     day = day or date.today()
-    plan = {"built_at": datetime.now().strftime("%Y-%m-%d %H:%M"), "session": session(day, calendar), "indices": {}}
+    plan = {"built_at": now_ist().strftime("%Y-%m-%d %H:%M"), "session": session(day, calendar), "indices": {}}
     old = load(day) if keep_ai else None
     with ThreadPoolExecutor(len(INDICES)) as pool:              # the indices' data is independent
         contexts = dict(zip(INDICES, pool.map(lambda s: context(s, day), INDICES), strict=True))
@@ -148,7 +150,7 @@ def start_ai_build() -> dict:
 
     if _ai_job["running"]:
         return dict(_ai_job)
-    _ai_job.update(running=True, started=datetime.now().strftime("%H:%M"), error=None)
+    _ai_job.update(running=True, started=now_ist().strftime("%H:%M"), error=None)
 
     def run():
         try:

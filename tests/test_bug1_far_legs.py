@@ -32,19 +32,13 @@ def chain(rows, spot=24557.6):
             "rows": [{"strike": k, "ce": v.get("ce"), "pe": v.get("pe")} for k, v in sorted(rows.items())]}
 
 
-@pytest.fixture
-def condor(tmp_path, monkeypatch):
-    monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
-    monkeypatch.setattr(tr, "_market_open", lambda *a: True)
-    t = tr.take(CONDOR, source="ai")
-    monkeypatch.setattr(oc, "chain", lambda *a, **k: chain(NEAR))                 # the display window: the puts fell out
-    return t
+# The ``condor`` fixture these tests use is in tests/fixtures_shared.py (shared with other modules).
 
 
 @pytest.mark.unit
 def test_legs_outside_the_display_window_are_priced_from_the_full_chain_and_settle(condor, monkeypatch):
     monkeypatch.setattr(oc, "full_chain", lambda *a, **k: chain(NEAR | FAR), raising=False)
-    o = tr.overview()                                                              # the default path the server uses
+    o = tr.refresh_open()                                                          # the default path the monitor uses
     c = next(t for t in o["ai"]["closed"] if t["id"] == condor["id"])
     assert c["reason"] == "range broken" and [x["exit"] for x in c["legs"]] == [9.3, 7.25, 592, 455]
 
@@ -60,12 +54,12 @@ def test_close_by_hand_uses_the_full_chain(condor, monkeypatch):
 @pytest.mark.unit
 def test_a_leg_missing_even_from_the_full_chain_is_exit_pending_not_a_crash(condor, monkeypatch, caplog):
     monkeypatch.setattr(oc, "full_chain", lambda *a, **k: chain(NEAR | {23600.0: FAR[23600.0]}), raising=False)  # 23450 PE nowhere
-    o = tr.overview()
+    o = tr.refresh_open()
     t = next(x for x in o["ai"]["open"] if x["id"] == condor["id"])
     assert t["live"]["pnl"] is None and t["live"]["pending"] == ["23450 PE"]
     assert [a["kind"] for a in t["alerts"]].count("exit_pending") == 1 and t["alerts"][-1]["legs"] == ["23450 PE"]
     assert any("exit pending" in r.getMessage() and "23450 PE" in r.getMessage() for r in caplog.records)
-    tr.overview()                                                                  # a second look adds no second alert
+    tr.refresh_open()                                                            # a second look adds no second alert
     assert [a["kind"] for a in tr._load()[0]["alerts"]].count("exit_pending") == 1
     html = subprocess.run(["node", str(ROOT / "tests" / "js" / "render.js"), "openRowHtml(ARGS[0])"], input=json.dumps([t]),
                           capture_output=True, text=True, encoding="utf-8", timeout=60)

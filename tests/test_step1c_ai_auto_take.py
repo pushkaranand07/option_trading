@@ -2,34 +2,16 @@
 chain, bid / ask, stale-quote and entry-zone checks), after the ranking; a refused pick is kept as "not taken" with
 its reason. The real start() runs with the LLM step replaced; the v2 registry is replaced too (its own path)."""
 
-import time
-
 import pytest
 
-from tests.test_take_honest_entry import _q, chain, world  # noqa: F401  (world is a fixture)
-from webapp import ai_test, server, strategist as st, trade_record as tr
+from tests.test_take_honest_entry import _q, chain
+from tests.test_ui_regressions import app_source
+from webapp import trade_record as tr
 
-APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 
 
-@pytest.fixture
-def run_ai(world, monkeypatch):
-    """Run start() to the end with the ranking replaced by the fixture's run (its prices are the run's)."""
-    monkeypatch.setattr(st, "agents_view", lambda symbol: {"rating": "Hold", "decision": "d"})
-    monkeypatch.setattr(st, "save_research", lambda symbol, r, day=None: r)
-    monkeypatch.setattr(ai_test, "record", lambda *a, **k: None)
-    ranked = {k: v for k, v in world["run"].items() if k not in ("run_id", "day")}
-    monkeypatch.setattr(st, "ai_ranked", lambda *a, **k: dict(ranked, trades=list(ranked["trades"])))
-
-    def go():
-        job = st.start("NIFTY", mode="full")
-        for _ in range(200):
-            j = st.job(job)
-            if j["status"] != "running":
-                return j
-            time.sleep(0.02)
-        raise AssertionError("the run did not finish")
-    return go
+# The ``world`` and ``run_ai`` fixtures these tests use are in tests/fixtures_shared.py (shared with other modules).
 
 
 def ai_rows():

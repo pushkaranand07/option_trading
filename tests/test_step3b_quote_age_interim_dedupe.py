@@ -7,7 +7,7 @@ import importlib.util
 import pytest
 
 from tests.test_step3_v2_status import LEGS, register
-from tests.test_take_honest_entry import chain, take, world  # noqa: F401  (world is a fixture)
+from tests.test_take_honest_entry import chain, take
 from tradingagents.research import ai_settle
 from webapp import ai_test, trade_record as tr
 

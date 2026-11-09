@@ -1,4 +1,4 @@
-"""UI regression tests: what the page SHOWS, checked by running the real webapp/static/app.js in Node (tests/js/render.js)
+"""UI regression tests: what the page SHOWS, checked by running the real page script (webapp/static/js) in Node (tests/js/render.js)
 on sample data. They guard behaviours from steps 1-3 and the trade record so a redesign cannot drop them silently:
 My picks and AI #1 stats shown apart, not-taken rows listed with their reason, expired or market-closed runs without a
 Take button, the v2 status line, the fingerprint-mismatch banner, the warnings shown as text, what was bought and for
@@ -18,6 +18,13 @@ from webapp import strategist as st
 
 ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is needed to run the page's script")
+
+
+def app_source() -> str:
+    """The page's script as one text, for the tests that read it: every ES module under webapp/static/js (until
+    2026-11 it was the single file webapp/static/app.js). Each file ends with a newline, so a function still ends at
+    the first "\\n}\\n" after it."""
+    return "\n".join(p.read_text(encoding="utf-8") for p in sorted((ROOT / "webapp" / "static" / "js").glob("*.js")))
 
 
 def render(expr: str, *args) -> str:

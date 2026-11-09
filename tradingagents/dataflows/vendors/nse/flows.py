@@ -93,7 +93,7 @@ def record_history(published: date, rows: list[FlowRow], source: str, path: Path
         writer = csv.DictWriter(handle, fieldnames=HISTORY_FIELDS)
         if new_file:
             writer.writeheader()
-        stamp = datetime.now().isoformat(timespec="seconds")
+        stamp = now_ist().replace(tzinfo=None).isoformat(timespec="seconds")
         for row in rows:
             writer.writerow({"date": published.isoformat(), "category": row.category,
                              "buy_cr": row.buy_cr, "sell_cr": row.sell_cr, "net_cr": row.net_cr,

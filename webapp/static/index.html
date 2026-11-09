@@ -4,12 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pulse Trader</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%2304724f'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='18' font-weight='700' fill='%23fff' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
-  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+  <!-- Pinned libraries, served from this server (sources and SHA-384 in static/vendor/README.md). -->
+  <script src="/static/vendor/lightweight-charts-4.2.0.standalone.production.js"></script>
+  <script src="/static/vendor/marked-12.0.2.min.js"></script>
+  <script src="/static/vendor/purify-3.1.6.min.js"></script>
 </head>
 <body>
 <header class="topbar">
@@ -38,6 +40,9 @@
 <div id="calWarn" class="notice" role="alert" hidden></div>
 <div id="v2Warn" class="notice danger" role="alert" hidden></div>
 <div id="codeWarn" class="notice danger" role="alert" hidden></div>
+<div id="storeWarn" class="notice danger" role="alert" hidden></div>
+<div id="monitorWarn" class="notice danger" role="alert" hidden></div>
+<div id="degradedWarn" class="notice" role="alert" hidden></div>
 <div id="instArea">
   <section class="inst page-inner">
     <div>
@@ -197,6 +202,7 @@
   <p class="disclaimer">Pulse shows rule-based setups checked against history, research results and AI opinions. Past results do not
     guarantee future ones, and no strategy wins every time. This is not investment advice and no orders are placed.</p>
 </main>
-<script src="/static/app.js"></script>
+<!-- importmap: server.index() lists each module here with its version, so a changed module is never taken from the cache -->
+<script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

@@ -36,6 +36,7 @@ from tradingagents.analytics.datastore import (
     write_parquet,
 )
 from tradingagents.analytics.universe import HISTORY_START, YAHOO_TICKERS
+from tradingagents.dataflows.vendors.nse.calendar import now_ist
 
 INDEX_SYMBOLS = ("NIFTY", "BANKNIFTY", "INDIAVIX")
 PRICE_COLUMNS = ["trade_date", "symbol", "open", "high", "low", "close", "adj_close", "volume",
@@ -77,7 +78,7 @@ MARKET_CLOSED_BY = 16   # NSE closes 15:30 IST; by 16:00 the day's bar is final
 def last_complete_session_date(now: datetime | None = None) -> date:
     """Today once the market has closed, else yesterday: before the close today's bar is
     a live, unfinished session and must not be stored as a finished day."""
-    now = now or datetime.now()
+    now = now or now_ist().replace(tzinfo=None)
     return now.date() if now.hour >= MARKET_CLOSED_BY else now.date() - timedelta(days=1)
 
 
