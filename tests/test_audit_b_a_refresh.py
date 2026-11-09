@@ -71,7 +71,8 @@ def test_a_corrupt_store_is_503_and_a_vendor_failure_502(client, monkeypatch):
 
 
 @pytest.fixture
-def quiet_start(monkeypatch):
+def quiet_start(monkeypatch, tmp_path):
+    monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")                 # never the real store
     monkeypatch.setattr(md, "start_refresh_ahead", lambda *a, **k: None)
     monkeypatch.setattr(tr, "start_monitor", lambda *a, **k: None)
     monkeypatch.setattr(server, "v2_startup_check", lambda: None)

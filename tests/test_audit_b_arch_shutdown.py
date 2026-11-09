@@ -15,7 +15,8 @@ client, loopback = support.client, support.loopback          # the shared fixtur
 
 
 @pytest.fixture
-def no_starts(monkeypatch):
+def no_starts(monkeypatch, tmp_path):
+    monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")                 # never the real store
     monkeypatch.setattr(md, "start_refresh_ahead", lambda *a, **k: None)
     monkeypatch.setattr(tr, "start_monitor", lambda *a, **k: None)
     monkeypatch.setattr(server, "v2_startup_check", lambda: None)

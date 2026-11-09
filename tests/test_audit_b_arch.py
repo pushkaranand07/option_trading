@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pandas as pd
@@ -57,14 +58,20 @@ def test_importing_the_server_starts_no_threads_and_runs_no_startup_work():
 
 
 @pytest.mark.unit
-def test_the_lifespan_runs_the_startup_work_once(loopback, monkeypatch):
-    calls = []
+def test_the_lifespan_runs_the_startup_work_once(loopback, monkeypatch, tmp_path):
+    """Safe on its own: the store is a temp file and refresh_open (Track A; the lifespan runs it once in a thread)
+    is a fake, so entering the lifespan never touches reports/trade_record/trades.json."""
+    calls, refreshed = [], threading.Event()
+    monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")
     monkeypatch.setattr(md, "start_refresh_ahead", lambda *a, **k: calls.append("refresh-ahead"))
     monkeypatch.setattr(tr, "start_monitor", lambda *a, **k: calls.append("trade-monitor"))
     monkeypatch.setattr(server, "v2_startup_check", lambda: calls.append("v2-check"))
+    monkeypatch.setattr(tr, "refresh_open", lambda *a, **k: calls.append(("trade-refresh", tr.STORE)) or refreshed.set(), raising=False)
     with TestClient(server.app, base_url="http://127.0.0.1") as c:
         assert c.get("/api/latency").status_code == 200
-    assert sorted(calls) == ["refresh-ahead", "trade-monitor", "v2-check"]
+        assert refreshed.wait(5)
+    assert sorted(map(str, calls)) == sorted(map(str, ["refresh-ahead", "trade-monitor", "v2-check", ("trade-refresh", tmp_path / "trades.json")]))
+    assert not (tmp_path / "trades.json").exists()                            # the fakes wrote nothing
 
 
 def _off_loop(log, name):
