@@ -112,23 +112,43 @@ def _hash(body: dict) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def read(path: Path) -> list[dict]:
-    """The registry's rows. Readers take no lock, and every append ends with a newline, so a final line without one is
-    an append still being written: it is left out (logged at debug), never parsed. A complete bad line still raises."""
+UNTERMINATED = "unterminated final line: repair by hand"
+
+
+def _unterminated(path: Path) -> bool:
+    """A non-empty file whose last byte is not a newline. Every append ends with one."""
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return False
+    with open(p, "rb") as fh:
+        fh.seek(-1, os.SEEK_END)
+        return fh.read(1) != b"\n"
+
+
+def read(path: Path, *, strict: bool = False) -> list[dict]:
+    """The registry's rows. Every append ends with a newline.
+
+    Lenient (the default, for readers that take no lock: today_status, ai_settle, trade_record): a final line without a
+    newline may be an append still being written, so it is left out (logged at debug), never parsed.
+    Strict (verify, and every read made while holding ``locked``): no append can be in progress then, so such a line is a
+    crash leftover or an edit, and it raises RegistryError; it is never hidden or appended to. A complete bad line
+    raises in both modes."""
     p = Path(path)
     if not p.exists():
         return []
     text = p.read_text(encoding="utf-8")
     if text and not text.endswith("\n"):
+        if strict:
+            raise RegistryError(f"{p.name}: {UNTERMINATED}")
         text, _, partial = text.rpartition("\n")
         logger.debug("%s: left out a final line with no newline (an append in progress): %r", p.name, partial[:80])
     return [json.loads(x) for x in text.splitlines() if x.strip()]
 
 
 def verify(path: Path) -> int:
-    """Check the whole chain; returns the number of entries, or raises."""
+    """Check the whole chain (strict: an unterminated final line fails); returns the number of entries, or raises."""
     prev = GENESIS
-    rows = read(path)
+    rows = read(path, strict=True)
     for i, row in enumerate(rows):
         body = {k: v for k, v in row.items() if k != "hash"}
         if row.get("prev_hash") != prev or _hash(body) != row.get("hash"):
@@ -140,10 +160,12 @@ def verify(path: Path) -> int:
 def _append(path: Path, body: dict) -> dict:
     with locked(path):
         verify(path)
-        rows = read(path)
+        rows = read(path, strict=True)
         body = {**body, "prev_hash": rows[-1]["hash"] if rows else GENESIS}
         row = {**body, "hash": _hash(body)}
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if _unterminated(path):           # never glue a row onto a partial line
+            raise RegistryError(f"{Path(path).name}: {UNTERMINATED}")
         with open(path, "a", encoding="utf-8", newline="\n") as fh:
             fh.write(json.dumps(row, sort_keys=True) + "\n")
         return row
@@ -168,7 +190,7 @@ def register(path: Path, *, signal_date: date, entry_date: date, symbol: str, di
     if entry_date <= signal_date:
         raise RegistryError("entry must be after the signal")
     with locked(path):
-        for r in read(path):
+        for r in read(path, strict=True):
             if r["type"] == "signal" and (r["symbol"], r["entry_date"], r["spec_hash"], r["horizon"]) == \
                     (symbol, entry_date.isoformat(), spec_hash, horizon):
                 raise RegistryError("this signal is already registered")
@@ -197,7 +219,7 @@ def register_structure(path: Path, *, day: date, symbol: str, expiry: str | None
     if now.date() != day:
         raise RegistryError("a session is registered on that session, never later")
     with locked(path):
-        for r in read(path):
+        for r in read(path, strict=True):
             if r["type"] in ("strategist", "missed") and (r["date"], r["spec_hash"]) == (day.isoformat(), spec_hash):
                 raise RegistryError(f"{day} already has an entry; it cannot be replaced")
         return _append(path, {"type": "strategist", "timestamp": now.isoformat(), "date": day.isoformat(), "symbol": symbol, "expiry": expiry, "spec_hash": spec_hash,
@@ -207,7 +229,7 @@ def register_structure(path: Path, *, day: date, symbol: str, expiry: str | None
 def record_entry(path: Path, *, registration: str, now: datetime, status: str, **fields) -> dict:
     """The paper entry of a registered trade. It must follow its registration, and only once."""
     with locked(path):
-        rows = read(path)
+        rows = read(path, strict=True)
         row = next((r for r in rows if r.get("hash") == registration and r["type"] == "strategist" and r["outcome"] == "trade"), None)
         if row is None:
             raise RegistryError("no registered trade to enter: a trade not registered before entry does not count")

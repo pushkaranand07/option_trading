@@ -166,7 +166,7 @@ def record(result: dict, path: Path | None = None, chains: Path | None = None, n
     plan = result.get("plan") or {}
     trade = bool(result.get("priced")) and plan.get("strategy") not in (None, "no_trade")
     with registry.locked(path):          # audit H3: read -> decide -> register as one step, so a racing run registers nothing
-        rows = registry.read(path)
+        rows = registry.read(path, strict=True)     # under the lock: an unterminated last line is refused, not hidden
         if any(r.get("date") == day.isoformat() for r in rows if r["type"] in ("strategist", "missed")):
             return None
         seen = [date.fromisoformat(r["date"]) for r in rows if r["type"] in ("strategist", "missed")]
