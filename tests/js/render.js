@@ -14,9 +14,11 @@ const ctx = {
   document: el, location: { search: "", hash: "" }, history: { replaceState() {} }, localStorage: { getItem: () => null, setItem() {} },
   fetch: never, setInterval: () => 0, setTimeout: () => 0, clearTimeout() {}, addEventListener() {}, matchMedia: () => el,
   getComputedStyle: () => ({ getPropertyValue: () => "" }), LightweightCharts: el, marked: { parse: (x) => x }, DOMPurify: { sanitize: (x) => x },
-  requestAnimationFrame: () => 0, ResizeObserver: function () { return el; }, alert() {}, confirm: () => false, window: null,
+  requestAnimationFrame: () => 0, Headers, ResizeObserver: function () { return el; }, alert() {}, confirm: () => false, window: null,
 };
 ctx.window = ctx;
+// RENDER_DROP=LightweightCharts,marked: run as if those libraries had failed to load (tests the page's fallbacks).
+for (const k of (process.env.RENDER_DROP || "").split(",").filter(Boolean)) delete ctx[k];
 vm.createContext(ctx);
 vm.runInContext(app, ctx, { filename: "app.js" });
 const input = fs.readFileSync(0, "utf8");

@@ -12,12 +12,20 @@ function store(k, v) {
     localStorage.setItem("pulse." + k, v);
   } catch { return null; }
 }
+// The page's only fetch. A request that changes anything (not GET) carries X-Pulse-Request: 1, which the server
+// requires: another website open in the browser cannot add it, so it cannot take or close trades through this server.
 async function api(path, opts) {
+  const method = (opts?.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {         // Headers keeps the caller's headers whether given as an object, a list or a Headers
+    const headers = new Headers(opts.headers); headers.set("X-Pulse-Request", "1");
+    opts = { ...opts, headers };
+  }
   const r = await fetch(path, opts);
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {                            // a detail may be an object (409: {message, ...}); the message is what is shown
-    const e = new Error((typeof body.detail === "object" ? body.detail?.message : body.detail) || `HTTP ${r.status}`);
-    e.status = r.status; e.detail = body.detail;
+    const msg = (typeof body.detail === "object" ? body.detail?.message : body.detail) || `HTTP ${r.status}`;
+    const e = new Error(body.error_id ? `${msg} (error id ${body.error_id}; the server log has the details)` : msg);
+    e.status = r.status; e.detail = body.detail; e.errorId = body.error_id;
     throw e;
   }
   return body;
@@ -41,6 +49,9 @@ const cls = (x) => (x > 0 ? "up" : x < 0 ? "down" : "muted");
 const sign = (x) => (x > 0 ? "+" : "");
 const pct = (x) => (x == null ? "—" : `${sign(x)}${x.toFixed(2)}%`);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Markdown from the AI as safe HTML; if marked or DOMPurify failed to load, the text is shown as it is, escaped.
+const mdHtml = (s) => (typeof marked !== "undefined" && typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(marked.parse(s || ""))
+  : `<pre class="report-raw">${esc(s)}</pre>`);
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const isIndex = (sym) => S.indices.some((i) => i.symbol === sym);
 const nameOf = (sym) => S.indices.find((i) => i.symbol === sym)?.name || sym;
@@ -57,10 +68,20 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => appl
 
 // ---------- status + quotes ----------
 const banner = (sel, text) => { const el = $(sel); if (el) { el.hidden = !text; el.textContent = text || ""; } };
-// The page-wide banners' text from /api/status (null: no banner).
+// The page-wide banners' text from /api/status (null: no banner). store_problem, monitor and degraded are optional:
+// an older server sends none of them.
 const bannerTexts = (st) => ({ calendar: st?.calendar_warning || null,
   v2: st?.v2?.fingerprint_problem ? `${ftName()} forward test: ${st.v2.fingerprint_problem}.` : null,
-  code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null });
+  code: st?.code?.stale ? `This server runs code from ${st.code.running.slice(0, 7)} (started ${st.code.started_at.replace("T", " ")}); the checkout is at ${st.code.repo.slice(0, 7)}. Restart the server to run the latest code.` : null,
+  store: st?.store_problem ? `Trade record problem: ${st.store_problem}` : null,     // the server's message is complete: what failed, any copy made, writes stopped
+  monitor: st?.monitor?.fail_count >= 3 ? `Auto-settle is failing: ${st.monitor.fail_count} checks in a row${st.monitor.last_error ? ` (last error: ${st.monitor.last_error})` : ""}. Open paper trades are not being closed at their target, stop or exit time until it recovers${st.monitor.last_ok_at ? `; it last worked at ${String(st.monitor.last_ok_at).replace("T", " ")}` : ""}.` : null,
+  degraded: degradedText(st?.degraded) });
+// The degraded notice: each part the server could not check, except the calendar and v2, which #calWarn and the v2
+// line already show (each warning once). A malformed list shows nothing rather than stopping every banner.
+function degradedText(list) {
+  const parts = (Array.isArray(list) ? list : []).filter((d) => d && typeof d === "object" && d.part && !["calendar", "v2"].includes(d.part));
+  return parts.length ? `Running with parts missing: ${parts.map((d) => `${d.part}${d.reason ? ` (${d.reason})` : ""}`).join("; ")}.` : null;
+}
 // The forward test's version as the server reports it (data keys keep the name "v2"; the test running is v3).
 const ftName = () => `v${S.status?.v2?.version || "3"}`;
 // Did today's answer count for the forward test: YES / NO / NOT YET (the server says why).
@@ -81,6 +102,9 @@ async function loadStatus() {
     banner("#calWarn", b.calendar);
     banner("#v2Warn", b.v2);
     banner("#codeWarn", b.code);
+    banner("#storeWarn", b.store);
+    banner("#monitorWarn", b.monitor);
+    banner("#degradedWarn", b.degraded);
     document.querySelectorAll(".v2-line").forEach((e) => (e.innerHTML = v2LineHtml()));
   } catch (e) { console.warn(e); }
 }
@@ -289,22 +313,32 @@ function renderHistory(p) {
 }
 
 // ---------- chart ----------
-const chart = LightweightCharts.createChart($("#chart"), {
-  autoSize: true,
-  layout: { background: { type: "solid", color: "transparent" }, fontFamily: "Inter, system-ui, sans-serif" },
-  rightPriceScale: { borderVisible: false },
-  timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
-  crosshair: { mode: 0 },
-});
-const candleSeries = chart.addCandlestickSeries({ borderVisible: false });
-const volSeries = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
-chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+// Why no chart can be drawn (null: the chart library loaded). Without it the page still runs, minus its charts.
+const chartProblem = () => (typeof LightweightCharts === "undefined" || !LightweightCharts?.createChart
+  ? "Chart unavailable: the chart library did not load. Prices, plans and the record still work; reload the page to retry." : null);
+// The main chart says why; the smaller charts only say "Chart unavailable", so the reason shows once.
+const chartOff = (el, brief) => { if (el) el.innerHTML = `<div class="notice">${esc(brief ? "Chart unavailable." : chartProblem())}</div>`; return null; };
 const lineOpts = { lineWidth: 1.5, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false };
-const ema9Series = chart.addLineSeries(lineOpts);
-const ema21Series = chart.addLineSeries(lineOpts);
+let chart = null, candleSeries = null, volSeries = null, ema9Series = null, ema21Series = null;
+if (chartProblem()) chartOff($("#chart"));
+else {
+  chart = LightweightCharts.createChart($("#chart"), {
+    autoSize: true,
+    layout: { background: { type: "solid", color: "transparent" }, fontFamily: "Inter, system-ui, sans-serif" },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+    crosshair: { mode: 0 },
+  });
+  candleSeries = chart.addCandlestickSeries({ borderVisible: false });
+  volSeries = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
+  chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+  ema9Series = chart.addLineSeries(lineOpts);
+  ema21Series = chart.addLineSeries(lineOpts);
+}
 let planLines = [];
 
 function applyChartTheme() {
+  if (!chart) return;
   const up = cssVar("--up"), down = cssVar("--down");
   chart.applyOptions({ layout: { textColor: cssVar("--muted") }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } } });
   candleSeries.applyOptions({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down });
@@ -324,6 +358,7 @@ function ema(values, n) { const k = 2 / (n + 1); let prev; return values.map((v)
 
 let lastBars = [], firstLoad = true, candleBusy = false;
 function drawBars(bars) {
+  if (!chart) return;
   const up = cssVar("--up"), down = cssVar("--down"), t = (b) => b.time + IST_OFFSET;
   candleSeries.setData(bars.map((b) => ({ time: t(b), open: b.open, high: b.high, low: b.low, close: b.close })));
   volSeries.setData(bars.map((b) => ({ time: t(b), value: b.volume, color: (b.close >= b.open ? up : down) + "55" })));
@@ -333,6 +368,7 @@ function drawBars(bars) {
 }
 
 function drawPlanLines() {
+  if (!chart) return;
   planLines.forEach((l) => candleSeries.removePriceLine(l)); planLines = [];
   const s = S.plan?.signal;
   if (!s || s.side === "WAIT" || S.plan.symbol !== S.sym) return;
@@ -341,7 +377,7 @@ function drawPlanLines() {
 }
 
 async function loadCandles() {
-  if (candleBusy) return; candleBusy = true;
+  if (candleBusy || !chart) return; candleBusy = true;
   const sym = S.sym, tf = S.tf;
   try {
     const r = await api(`/api/candles/${encodeURIComponent(sym)}?tf=${tf}&limit=${tf === "1D" ? 600 : 900}`);
@@ -369,16 +405,18 @@ async function loadOptions() {
   const hideChain = (msg) => { notice.hidden = false; notice.textContent = msg; $(".oc-scroll", $("#ocTable").closest(".pad")).hidden = true; $("#expirySel").closest("label").hidden = true; };
   $(".oc-scroll", $("#ocTable").closest(".pad")).hidden = false; $("#expirySel").closest("label").hidden = false;
   if (!isIndex(S.sym)) { hideChain("The live option chain is shown for indices. Pick NIFTY, BANKNIFTY or another index above — the trading costs below work for stocks too."); return; }
+  if (S.status?.dhan === false) { S.expiry = null; hideChain(NEEDS_DHAN); return; }     // no request that can only fail
   try {
     const exps = await api("/api/expiries/" + S.sym);
     S.expiry = S.expiry && exps.includes(S.expiry) ? S.expiry : exps[0];
     $("#expirySel").innerHTML = exps.map((x) => `<option ${x === S.expiry ? "selected" : ""}>${x}</option>`).join("");
     notice.hidden = true; loadChain();
-  } catch (e) { hideChain(e.message.includes("Dhan") ? "The live option chain needs a Dhan connection (DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN in .env). The trading costs below work without it." : e.message); }
+  } catch (e) { hideChain(e.message.includes("Dhan") ? NEEDS_DHAN : e.message); }
 }
+const NEEDS_DHAN = "The live option chain needs a Dhan connection (DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN in .env). The trading costs below work without it.";
 let chainBusy = false, chainCentered = null;
 async function loadChain() {
-  if (chainBusy || !S.expiry) return; chainBusy = true;
+  if (chainBusy || !S.expiry || S.status?.dhan === false) return; chainBusy = true;
   const sym = S.sym, exp = S.expiry;
   try {
     const c = await api(`/api/optionchain/${sym}?expiry=${exp}`);
@@ -422,7 +460,8 @@ $("#aiBtn").onclick = async () => {
     aiJobs[S.sym] = job; store("aiJobs", JSON.stringify(aiJobs)); pollAI(job, S.sym);
   } catch (e) { $("#aiNotice").hidden = false; $("#aiNotice").textContent = e.message; $("#aiBtn").disabled = false; }
 };
-const RATING_COLORS = { Buy: "--up", Overweight: "--up", Hold: "--warn", Underweight: "--down", Sell: "--down" };
+// A rating's verdict box tone (style.css .verdict.v-*: each fill with a text colour of at least 4.5:1 in both themes).
+const RATING_TONES = { Buy: "up", Overweight: "up", Hold: "warn", Underweight: "down", Sell: "down" };
 async function pollAI(jobId, sym) {
   if (S.aiJob === jobId) return; S.aiJob = jobId;
   while (S.aiJob === jobId) {
@@ -436,10 +475,10 @@ async function pollAI(jobId, sym) {
     $("#aiBtn").disabled = false; S.aiJob = null;
     if (job.status === "error") { $("#aiResult").innerHTML = `<div class="notice" style="margin:0">${esc(job.error)}</div>`; return; }
     const names = Object.keys(job.reports);
-    $("#aiResult").innerHTML = `<div class="verdict" style="background:${cssVar(RATING_COLORS[job.rating] || "--muted")}"><h2>${esc(job.rating)}</h2><div>${esc(nameOf(job.symbol))} · finished ${job.finished}</div></div>
+    $("#aiResult").innerHTML = `<div class="verdict v-${RATING_TONES[job.rating] || "muted"}"><h2>${esc(job.rating)}</h2><div>${esc(nameOf(job.symbol))} · finished ${job.finished}</div></div>
       <div class="report-tabs">${names.map((n, i) => `<button data-i="${i}" class="${i ? "" : "active"}">${esc(n)}</button>`).join("")}</div><div class="report" id="reportBody"></div>`;
     const show = (i) => {
-      $("#reportBody").innerHTML = DOMPurify.sanitize(marked.parse(job.reports[names[i]] || ""));
+      $("#reportBody").innerHTML = mdHtml(job.reports[names[i]] || "");
       document.querySelectorAll(".report-tabs button").forEach((b) => b.classList.toggle("active", +b.dataset.i === i));
     };
     $(".report-tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) show(+b.dataset.i); };
@@ -641,13 +680,16 @@ $("#jrHorizon").onclick = (e) => {
   document.querySelectorAll("#jrHorizon button").forEach((x) => x.classList.toggle("active", x === b));
   loadJournal();
 };
+// The tradebook's raw bytes; the server accepts only octet-stream, CSV or .xlsx bodies (415 otherwise).
+async function uploadJournal(f) {
+  const r = await api("/api/journal/upload?name=" + encodeURIComponent(f.name),
+    { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: await f.arrayBuffer() });
+  await loadJournalFiles(r.name);
+}
 $("#jrUpload").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
   const n = $("#jrNotice"); n.hidden = true;
-  try {
-    const r = await api("/api/journal/upload?name=" + encodeURIComponent(f.name), { method: "POST", body: await f.arrayBuffer() });
-    await loadJournalFiles(r.name);
-  } catch (err) { n.hidden = false; n.textContent = err.message; }
+  try { await uploadJournal(f); } catch (err) { n.hidden = false; n.textContent = err.message; }
   e.target.value = "";
 };
 const money = (x) => (x == null ? "—" : (x < 0 ? "−" : "") + "₹" + fmt0(Math.abs(x)));
@@ -752,8 +794,8 @@ function morningHtml(sym, e) {
     : ai.error ? `<div class="notice">AI view failed: ${esc(ai.error)}</div>`
     : `<div class="ai-line"><span class="badge ${/Buy|Overweight/.test(ai.rating) ? "up" : /Sell|Underweight/.test(ai.rating) ? "down" : "warn"}">${esc(ai.rating)}</span>
         <span class="small muted">AI agents' view from news, sentiment and the bull/bear debate (${ai.minutes} min)</span></div>
-       <details class="ai-more"><summary>Read the AI's reasoning</summary><div class="report">${DOMPurify.sanitize(marked.parse(ai.decision || ""))}</div>
-         ${ai.news ? `<h3>News</h3><div class="report">${DOMPurify.sanitize(marked.parse(ai.news))}</div>` : ""}</details>`;
+       <details class="ai-more"><summary>Read the AI's reasoning</summary><div class="report">${mdHtml(ai.decision || "")}</div>
+         ${ai.news ? `<h3>News</h3><div class="report">${mdHtml(ai.news)}</div>` : ""}</details>`;
   const rows = [
     t && ["Trend", `<b>${esc(t.label)}</b> — ${esc(t.explain)}`],
     em && [S.morning.session.trading ? "Expected range today" : "Expected range next session", `<b>${fmt0(em.day_low)} – ${fmt0(em.day_high)}</b> (±${pc(em.day_pct)} from the last close ${fmt(em.close)}; about 2 days in 3 stay inside)`],
@@ -896,6 +938,7 @@ class PlanOverlay {
 function planChart(sym) {
   if (planCharts.has(sym)) return planCharts.get(sym);
   const card = $(`.plan-card[data-sym="${sym}"]`), el = card && $(".plan-chart", card); if (!el) return null;
+  if (chartProblem()) return chartOff(el, true);
   const ch = LightweightCharts.createChart(el, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--muted"),
       fontFamily: "Inter, system-ui, sans-serif" }, grid: { vertLines: { visible: false }, horzLines: { color: cssVar("--grid") } },
     rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
@@ -1004,7 +1047,7 @@ function pcReadout(sym, bar, e9, e21, time) {
   const ch = bar.open ? (bar.close - bar.open) / bar.open * 100 : 0;
   const when = new Date(time * 1000).toLocaleString("en-IN", { timeZone: "UTC", weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
   el.innerHTML = `${esc(when)} &nbsp; O <b>${fmt(bar.open)}</b> H <b>${fmt(bar.high)}</b> L <b>${fmt(bar.low)}</b> C <b>${fmt(bar.close)}</b>
-    <span class="${cls(ch)}">${pct(ch)}</span>${pcOn("ema") && e9 != null ? ` &nbsp; <span style="color:var(--ema9)">EMA 9 ${fmt(e9)}</span> &nbsp; <span style="color:var(--ema21)">EMA 21 ${fmt(e21)}</span>` : ""}`;
+    <span class="${cls(ch)}">${pct(ch)}</span>${pcOn("ema") && e9 != null ? ` &nbsp; <span style="color:var(--ema9-text)">EMA 9 ${fmt(e9)}</span> &nbsp; <span style="color:var(--ema21-text)">EMA 21 ${fmt(e21)}</span>` : ""}`;
 }
 
 function pcDayStarts(bars) {
@@ -1139,6 +1182,11 @@ const STRAT_NAMES = { no_trade: "No trade", long_call: "Buy a call", long_put: "
   bear_put_spread: "Bear put spread", bull_put_spread: "Bull put spread", bear_call_spread: "Bear call spread", iron_condor: "Iron condor" };
 const lakh = (x) => (x == null ? "—" : fmtInt(Math.round(x)));
 const stratJobs = JSON.parse(store("stratJobs") || "{}");
+
+// Every 15 s, only on the Plan tab during the live session (outside it the chain does not move).
+function pollNseChains() {
+  if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym));
+}
 
 async function loadNseChain(sym, expiry) {
   const slot = $(`.plan-card[data-sym="${sym}"] .chain-slot`); if (!slot) return;
@@ -1459,6 +1507,7 @@ function renderTicket(sym) {
     </div></div>`;
   if (!d || d.error || !d.points?.length) return;
   const el = $(".ticket-chart", slot);
+  if (chartProblem()) return void chartOff(el, true);
   ticketChart = LightweightCharts.createChart(el, { autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--muted"),
       fontFamily: "Inter, system-ui, sans-serif" }, grid: { vertLines: { color: cssVar("--grid") }, horzLines: { color: cssVar("--grid") } },
     rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false }, crosshair: { mode: 0 } });
@@ -1896,5 +1945,5 @@ function aiListHtml(sym, res) {
   setInterval(loadStatus, 60000);
   setInterval(() => { if (S.tab === "record") loadRecord(); }, 15000);
   setInterval(() => { if (S.tab === "plan") { renderSession(); loadLive(); } }, 15000);
-  setInterval(() => { if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") (planEntries() || []).forEach(([sym]) => loadNseChain(sym)); }, 15000);
+  setInterval(pollNseChains, 15000);
 })();
