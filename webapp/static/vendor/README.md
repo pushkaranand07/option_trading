@@ -21,7 +21,7 @@ How each download was checked against a hash its CDN publishes:
   `sha256-RvxpU07AmPCVu80dmibWk9Oai57v9zQ1NnZbPdKMK98=`, 163,551 bytes.
 
 The file names carry the version, so a browser never mixes an old cached copy with a new one; the server adds
-`?v=<mtime>` only to `app.js` and `style.css`. To update a library: download the new version under a new versioned
+`?v=<mtime>` only to the page's own files (`js/main.js`, `style.css`, and each module through the import map). To update a library: download the new version under a new versioned
 name, check it against the CDN's published hash, update `index.html`, this table and the test's file list.
 
 The page still loads Inter from Google Fonts (`index.html`); without it the browser uses the system font stack.

@@ -9,12 +9,13 @@ import pytest
 import pytz
 
 from tests.test_take_honest_entry import chain, take, world  # noqa: F401  (world is a fixture)
+from tests.test_ui_regressions import app_source
 from tradingagents.dataflows.vendors.nse.calendar import NSECalendar
 from tradingagents.research import ai_settle, registry
 from webapp import ai_test, server, signals, trade_record as tr
 
 IST = pytz.timezone("Asia/Kolkata")
-APP = (server.STATIC / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 PAGE = (server.STATIC / "index.html").read_text(encoding="utf-8")
 LEGS = [{"action": "BUY", "type": "CE", "strike": 24350.0}]
 

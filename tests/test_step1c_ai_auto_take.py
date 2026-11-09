@@ -7,9 +7,10 @@ import time
 import pytest
 
 from tests.test_take_honest_entry import _q, chain, world  # noqa: F401  (world is a fixture)
-from webapp import ai_test, server, strategist as st, trade_record as tr
+from tests.test_ui_regressions import app_source
+from webapp import ai_test, strategist as st, trade_record as tr
 
-APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 
 
 @pytest.fixture

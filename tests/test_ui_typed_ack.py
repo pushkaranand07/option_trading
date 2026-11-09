@@ -1,12 +1,13 @@
 """The Plan tab's trades and labels. The typed word of docs/root_cause_v1.md item 4 and the UNTESTED label were removed by the
 user on 2026-11-04 (docs/PA_52, spec v2 ui_until_verdict). Reads the page source; not a browser test."""
 
-import re
 from pathlib import Path
 
 import pytest
 
-APP = (Path(__file__).resolve().parents[1] / "webapp" / "static" / "app.js").read_text(encoding="utf-8")
+from tests.test_ui_regressions import app_source
+
+APP = app_source()                              # the page's script: every module under webapp/static/js
 
 
 def _function(name: str) -> str:
