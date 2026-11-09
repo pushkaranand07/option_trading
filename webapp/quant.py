@@ -284,10 +284,11 @@ XLSX_MAX_RATIO = 100                     # deflate on real sheets is ~5-20:1; zi
 def check_xlsx_size(path: Path) -> None:
     """Refuse an .xlsx (a zip) that would unpack to more than 50 MB, or has an entry compressed more than 100:1,
     before anything parses it (audit L2: a 0.30 MB file expanded to 88 MB, 133 s and 422 MB of RAM). Reads only the
-    zip's directory. Other file types pass; a file that isn't a zip raises zipfile.BadZipFile for the caller."""
+    zip's directory. Decided by content, not by the name: pd.read_excel picks openpyxl for any zip, so a bomb named
+    .xls would get past a name check. A file that isn't a zip (a binary .xls is OLE, a .csv is text) passes."""
     import zipfile
 
-    if path.suffix.lower() != ".xlsx":
+    if not zipfile.is_zipfile(path):
         return
     too_big = (f"{path.name} is too large when unpacked to be a Dhan tradebook: export it again from Dhan and "
                "upload that file.")

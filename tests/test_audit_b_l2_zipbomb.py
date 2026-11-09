@@ -43,6 +43,30 @@ def test_a_zip_bomb_xlsx_is_refused_fast(journal_dir):
 
 
 @pytest.mark.unit
+def test_a_zip_bomb_named_xls_is_refused_fast(journal_dir):
+    """pd.read_excel picks openpyxl by content, so the check goes by content too, not by the name."""
+    _zip(journal_dir / "bomb.xls", {"[Content_Types].xml": b"<Types/>", "xl/worksheets/sheet1.xml": b"\0" * (30 * 1024 * 1024)})
+    started = time.perf_counter()
+    with pytest.raises(ValueError, match="too large when unpacked"):
+        quant.journal("bomb.xls")
+    assert time.perf_counter() - started < 1.0
+
+
+@pytest.mark.unit
+def test_a_genuine_non_zip_xls_reaches_the_normal_parser(journal_dir, monkeypatch):
+    from tradingagents.analytics import journal as jr
+
+    ole = journal_dir / "old.xls"
+    ole.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\0" * 2048)            # an OLE (binary .xls) header
+    quant.check_xlsx_size(ole)                                                     # not a zip: no check, no error
+    parsed = []
+    monkeypatch.setattr(jr, "read_tradebook", lambda path: parsed.append(path.name) or (_ for _ in ()).throw(ValueError("No header row")))
+    with pytest.raises(ValueError, match="No header row"):
+        quant.journal("old.xls")
+    assert parsed == ["old.xls"]
+
+
+@pytest.mark.unit
 def test_too_much_uncompressed_data_is_refused(journal_dir, monkeypatch):
     monkeypatch.setattr(quant, "XLSX_MAX_UNPACKED", 4096)               # a small limit; random bytes barely compress
     _zip(journal_dir / "big.xlsx", {"xl/worksheets/sheet1.xml": os.urandom(8192)})
