@@ -277,12 +277,12 @@ def _table(df: pd.DataFrame) -> list[dict]:
     return out
 
 
-XLSX_MAX_UNPACKED = 50 * 1024 * 1024     # a Dhan tradebook unpacks to well under a megabyte
+XLSX_MAX_UNPACKED = 8 * 1024 * 1024      # a Dhan tradebook unpacks to well under 1 MB; 20 MB took 43 s to parse
 XLSX_MAX_RATIO = 100                     # deflate on real sheets is ~5-20:1; zip bombs are 1000:1
 
 
 def check_xlsx_size(path: Path) -> None:
-    """Refuse an .xlsx (a zip) that would unpack to more than 50 MB, or has an entry compressed more than 100:1,
+    """Refuse an .xlsx (a zip) that would unpack to more than 8 MB, or has an entry compressed more than 100:1,
     before anything parses it (audit L2: a 0.30 MB file expanded to 88 MB, 133 s and 422 MB of RAM). Reads only the
     zip's directory. Decided by content, not by the name: pd.read_excel picks openpyxl for any zip, so a bomb named
     .xls would get past a name check. A file that isn't a zip (a binary .xls is OLE, a .csv is text) passes."""
