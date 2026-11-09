@@ -611,6 +611,8 @@ async def trades_refresh():
         result = await _call(refresh)
     except _store_corrupt() as exc:
         raise _store_unavailable(exc) from exc
+    except trade_record.TradeError as exc:            # as close and delete: the record's own message
+        raise HTTPException(400, str(exc)) from exc
     return {"ok": True, "result": result if isinstance(result, (dict, list, str, int, float, type(None))) else None}
 
 

@@ -70,6 +70,16 @@ def test_a_corrupt_store_is_503_and_a_vendor_failure_502(client, monkeypatch):
     assert r.status_code == 502 and r.json() == {"detail": "NSE request failed after retries (HTTP 403)"}
 
 
+@pytest.mark.unit
+def test_a_trade_error_from_refresh_is_400_with_its_message(client, monkeypatch):
+    def refuse():
+        raise tr.TradeError("No open trades to refresh.")
+
+    monkeypatch.setattr(tr, "refresh_open", refuse, raising=False)
+    r = client.post("/api/trades/refresh", headers=HEADER)
+    assert r.status_code == 400 and r.json() == {"detail": "No open trades to refresh."}
+
+
 @pytest.fixture
 def quiet_start(monkeypatch, tmp_path):
     monkeypatch.setattr(tr, "STORE", tmp_path / "trades.json")                 # never the real store
