@@ -181,7 +181,7 @@ As of **6 Nov 2026**, read from `reports/` (git-ignored, on the author's machine
   not as direction signals. Every direction or return idea tested so far failed (model suite v1 closed at 1,532
   trials).
 
-None of this is evidence of an edge. Five closed bets cannot tell skill from luck.
+None of this is evidence of an edge. Six closed bets cannot tell skill from luck.
 
 ## Known limitations
 
