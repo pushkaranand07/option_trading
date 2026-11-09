@@ -7,11 +7,12 @@ from pathlib import Path
 import pytest
 import pytz
 
+from tests.test_ui_regressions import app_source
 from tradingagents.research import registry
 from webapp import ai_test
 
 IST = pytz.timezone("Asia/Kolkata")
-APP = (Path(ai_test.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 MON = date(2027, 1, 4)
 
 

@@ -10,6 +10,7 @@ import pytz
 from fastapi import HTTPException
 
 from tests.test_strategist import CHAIN, _q
+from tests.test_ui_regressions import app_source
 from webapp import server, strategist as st, trade_record as tr
 
 IST = pytz.timezone("Asia/Kolkata")
@@ -176,7 +177,7 @@ def test_an_unknown_run_or_candidate_is_refused(world):
     assert r.status_code == 400 and "no trade #8" in r.json()["detail"]
 
 
-APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 
 
 def _js(name):

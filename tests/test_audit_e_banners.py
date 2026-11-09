@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from tests.test_ui_regressions import ROOT, pytestmark as _needs_node, render
+from tests.test_ui_regressions import ROOT, app_source, pytestmark as _needs_node, render
 
 pytestmark = _needs_node
 PAGE = (ROOT / "webapp" / "static" / "index.html").read_text(encoding="utf-8")
@@ -48,7 +48,7 @@ def test_an_older_server_without_the_new_keys_gives_no_new_banner():
 
 @pytest.mark.unit
 def test_every_banner_has_one_visible_alert_box_on_the_page():
-    app = (ROOT / "webapp" / "static" / "app.js").read_text(encoding="utf-8")
+    app = app_source()
     loader = app[app.index("async function loadStatus"):][:1500]
     wired = {key: el for el, key in re.findall(r'banner\("#(\w+)", b\.(\w+)\)', loader)}
     assert set(wired) == set(banners({})), "every banner text is put into an element when the status loads"

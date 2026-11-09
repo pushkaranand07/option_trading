@@ -5,9 +5,10 @@ its reason. The real start() runs with the LLM step replaced; the v2 registry is
 import pytest
 
 from tests.test_take_honest_entry import _q, chain
-from webapp import server, trade_record as tr
+from tests.test_ui_regressions import app_source
+from webapp import trade_record as tr
 
-APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 
 
 # The ``world`` and ``run_ai`` fixtures these tests use are in tests/fixtures_shared.py (shared with other modules).

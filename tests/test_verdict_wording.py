@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_ui_regressions import app_source
+
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 
@@ -31,7 +33,7 @@ def test_the_conditions_are_listed_and_the_plan_tab_is_conditioned():
     catalog = (DOCS / "data_catalog.md").read_text(encoding="utf-8")
     for word in ("D-1 timing", "futures only", "1.5x costs", "end-of-day features", "these 6 specs", "1,532 trials"):
         assert word in catalog, word
-    app = (ROOT / "webapp" / "static" / "app.js").read_text(encoding="utf-8")
+    app = app_source()
     assert "no edge in the project's tests" not in app and "under the conditions tested" in app
 
 

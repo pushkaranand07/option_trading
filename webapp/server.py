@@ -42,6 +42,7 @@ from webapp import (  # noqa: E402
     option_chain as nse_oc,
     planner,
     quant,
+    rules,
     signals,
     strategist,
     timeutil,
@@ -202,13 +203,22 @@ async def _symbol(symbol: str) -> str:
 
 @app.get("/")
 def index():
-    """The page, with its script and styles named by their current version (the files' modified time), and itself
-    never cached: after an update the browser loads the new app.js instead of running a cached one."""
+    """The page, with its scripts and styles named by their current version (the files' modified time), and itself
+    never cached: after an update the browser loads the new code instead of running a cached one.
+
+    The script is ES modules (static/js, entry main.js). main.js and style.css get ``?v=`` in their tags; the modules
+    main.js imports get theirs from an import map written into the page, which maps each module's plain URL (what a
+    relative import resolves to) to its versioned one, so a changed module is fetched afresh even when main.js is not."""
+    import json
+
     from fastapi.responses import HTMLResponse
 
     html = (STATIC / "index.html").read_text(encoding="utf-8")
-    for name in ("app.js", "style.css"):
+    for name in ("js/main.js", "style.css"):
         html = html.replace(f'/static/{name}"', f'/static/{name}?v={int((STATIC / name).stat().st_mtime)}"')
+    modules = {f"/static/js/{p.name}": f"/static/js/{p.name}?v={int(p.stat().st_mtime)}" for p in sorted((STATIC / "js").glob("*.js"))}
+    importmap = f'<script type="importmap">{json.dumps({"imports": modules})}</script>'
+    html = re.sub(r"<!-- importmap:[^>]*-->", lambda _m: importmap, html, count=1)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
@@ -216,6 +226,12 @@ def _optional(module, name: str):
     """A function another track adds (``trade_record.store_problem`` / ``monitor_status``), or one answering None
     while this server runs code without it."""
     return getattr(module, name, None) or (lambda: None)
+
+
+@app.get("/api/rules")
+def trading_rules():
+    """The trading rules the page shows and applies: budget card, exit time, money labels (webapp/rules.py)."""
+    return rules.rules()
 
 
 @app.get("/api/status")

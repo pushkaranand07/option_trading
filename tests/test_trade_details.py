@@ -8,9 +8,10 @@ import io
 import pytest
 
 from tests.test_take_honest_entry import chain, take
-from webapp import server, strategist as st, trade_record as tr
+from tests.test_ui_regressions import app_source
+from webapp import strategist as st, trade_record as tr
 
-APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+APP = app_source()                              # the page's script: every module under webapp/static/js
 
 
 def _js(name):

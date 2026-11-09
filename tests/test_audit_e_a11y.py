@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from tests.test_ui_regressions import ROOT, pytestmark as _needs_node, render
+from tests.test_ui_regressions import ROOT, app_source, pytestmark as _needs_node, render
 
 STATIC = ROOT / "webapp" / "static"
 CSS = (STATIC / "style.css").read_text(encoding="utf-8")
@@ -114,8 +114,8 @@ def test_the_nse_chain_is_not_polled_outside_the_live_session():
       S.tab = 'plan'; S.sym = 'NIFTY'; S.morning = { session: null, indices: { NIFTY: {} } };
       pollNseChains(); JSON.stringify(SENT)"""))
     assert out == []
-    app = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "setInterval(pollNseChains, 15000)" in app
+    polled = json.loads(render("JSON.stringify(poller.tasks.filter((t) => t.fn === pollNseChains).map((t) => [t.every, t.when()]))"))
+    assert polled == [[15000, True]]          # the page's scheduler calls it every 15 s; it decides itself whether to fetch
 
 
 # A rating's verdict box: one class per tone, each naming its fill and its text colour.
@@ -124,7 +124,7 @@ VERDICT = re.compile(r"\.verdict\.v-([\w-]+)\s*\{[^}]*background:\s*var\(--([\w-
 
 @pytest.mark.unit
 def test_every_rating_verdict_has_a_tone_class_whose_text_has_4_5_to_1_contrast_in_both_themes():
-    app = (STATIC / "app.js").read_text(encoding="utf-8")
+    app = app_source()
     tones = set(re.findall(r'"(\w+)"', re.search(r"const RATING_TONES = \{([^}]*)\}", app).group(1))) | {"muted"}   # unknown: muted
     rules = {tone: (bg, fg) for tone, bg, fg in VERDICT.findall(CSS)}
     assert tones <= set(rules), tones - set(rules)
