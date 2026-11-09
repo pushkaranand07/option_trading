@@ -60,10 +60,13 @@ def test_every_market_data_endpoint_is_allowed_and_logged_without_secrets(sent, 
 
 
 @pytest.mark.unit
-def test_the_escape_hatch_needs_the_explicit_switch(sent, monkeypatch):
+def test_there_is_no_override_account_calls_stay_blocked_even_with_the_old_switch(sent, monkeypatch):
+    # Gate 2 (2026-11): the user removed the DHAN_ACCOUNT_ACCESS escape hatch; account access needs a code change.
     monkeypatch.setenv("DHAN_ACCOUNT_ACCESS", "1")
-    g.request("GET", "/positions", token="t", client_id="c")
-    assert len(sent) == 1
+    for method, path in (("GET", "/positions"), ("POST", "/orders"), ("GET", "/fundlimit"), ("GET", "/profile")):
+        with pytest.raises(g.DhanAccountAccessBlocked):
+            g.request(method, path, token="t", client_id="c")
+    assert sent == []
 
 
 @pytest.mark.unit

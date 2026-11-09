@@ -3,8 +3,8 @@
 Every Dhan request goes through ``request``. It allows only the market-data endpoints below (quotes / LTP / OHLC,
 intraday and historical charts, option chain, expiry list, the public security master). Anything else (orders,
 trade book, positions, holdings, funds / margins, ledger, eDIS, kill switch, super / forever orders, profile, any
-unknown path or host) raises DhanAccountAccessBlocked BEFORE a request is made, unless DHAN_ACCOUNT_ACCESS=1 is set
-in the environment (read at call time; never set by this project). Each call is logged as one line (time, method,
+unknown path or host) raises DhanAccountAccessBlocked BEFORE a request is made. There is no override (the user
+removed the DHAN_ACCOUNT_ACCESS switch at Gate 2, 2026-11): account access needs a code change. Each call is logged as one line (time, method,
 endpoint, status; never the token or client id) to DHAN_CALL_LOG (default ``_audit/dhan_calls.log``), and calls are
 spaced at least MIN_INTERVAL seconds apart across all threads.
 """
@@ -25,7 +25,7 @@ API = "https://api.dhan.co/v2"
 ROOT = Path(__file__).resolve().parent.parent
 LOG = Path(os.getenv("DHAN_CALL_LOG") or ROOT / "_audit" / "dhan_calls.log")
 MIN_INTERVAL = 1.0
-# (method, host, path): the only requests allowed without DHAN_ACCOUNT_ACCESS=1.
+# (method, host, path): the only requests allowed. Account access needs a code change (Gate 2, 2026-11).
 ALLOWED = {
     ("POST", "api.dhan.co", "/v2/marketfeed/ltp"),
     ("POST", "api.dhan.co", "/v2/marketfeed/ohlc"),
@@ -79,7 +79,7 @@ def request(method: str, url_or_path: str, *, token: str = "", client_id: str = 
     """Send one Dhan request if it is allowed; ``token`` / ``client_id`` become Dhan's auth headers."""
     global _last
     m, host, path, url = _target(method, url_or_path)
-    if (m, host, path) not in ALLOWED and os.environ.get("DHAN_ACCOUNT_ACCESS") != "1":
+    if (m, host, path) not in ALLOWED:
         _log(m, host, path, "BLOCKED")
         raise DhanAccountAccessBlocked(f"Dhan {m} {host}{path} is not a market-data endpoint: blocked before sending")
     headers = dict(kwargs.pop("headers", None) or {})
