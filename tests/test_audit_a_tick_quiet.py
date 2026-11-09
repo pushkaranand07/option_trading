@@ -27,6 +27,7 @@ def damaged(tmp_path, monkeypatch):
 @pytest.mark.unit
 def test_a_closed_market_does_not_read_the_store_or_log(damaged, monkeypatch, caplog):
     monkeypatch.setattr(signals, "market_open", lambda *a: False)
+    monkeypatch.setattr(tr, "_clock", lambda: FROZEN)     # closed at 10:00 (before the once-a-day after-close pass)
     with caplog.at_level(logging.DEBUG, logger=tr.logger.name):
         assert tr._monitor_tick() is True
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]

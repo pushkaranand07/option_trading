@@ -948,6 +948,21 @@ def monitor_status() -> dict:
         return dict(_monitor)
 
 
+_after_close_day = None
+
+
+def _after_close_due() -> bool:
+    """True once per IST day, at the first closed-market tick from 15:31: the one read of the store outside market
+    hours, so a trade that expired after the close is settled the same evening (final diff review, audit 2026-11),
+    while a closed market otherwise reads nothing (a damaged store cannot flood the log at night)."""
+    global _after_close_day
+    now = _clock()
+    if (now.hour, now.minute) < (15, 31) or _after_close_day == now.date():
+        return False
+    _after_close_day = now.date()                         # marked before the read: once a day even if the read fails
+    return True
+
+
 def _monitor_tick() -> bool:
     """One check: while the market is open and a trade is open, apply the rules (refresh_open); with the market closed
     the file is not even read. A failure is counted and logged with its traceback, never raised, so the monitor keeps
@@ -961,6 +976,11 @@ def _monitor_tick() -> bool:
                 rows = _load()
             repair = _repair_range_trades(rows)          # in memory: a bug-closed condor counts as open (and is saved)
             if repair or any(t["status"] == "open" for t in rows):
+                refresh_open()
+        elif _after_close_due():                         # once a day after 15:30: settle what expired after the close
+            with _lock:
+                rows = _load()
+            if any(t.get("status") == "open" and _expired(t) for t in rows):
                 refresh_open()
     except Exception as exc:                               # a failed check must not stop the monitor: log and count it
         with _monitor_lock:

@@ -53,7 +53,12 @@ def test_a_good_check_resets_the_count(monkeypatch):
 
 @pytest.mark.unit
 def test_a_closed_market_checks_nothing_and_is_not_a_failure(monkeypatch):
+    from datetime import datetime
+
+    import pytz
+
     monkeypatch.setattr(signals, "market_open", lambda *a: False)
+    monkeypatch.setattr(tr, "_clock", lambda: pytz.timezone("Asia/Kolkata").localize(datetime(2026, 11, 9, 10, 0)))  # before 15:31
     monkeypatch.setattr(tr, "refresh_open", boom)
     assert tr._monitor_tick() is True and tr.monitor_status()["fail_count"] == 0
 
