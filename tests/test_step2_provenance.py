@@ -8,7 +8,7 @@ from datetime import date
 
 import pytest
 
-from tests.test_take_honest_entry import at, chain, take, world  # noqa: F401  (world is a fixture)
+from tests.test_take_honest_entry import at, chain, take
 from tradingagents.research import registry
 from webapp import ai_test, server, strategist as st, trade_record as tr
 

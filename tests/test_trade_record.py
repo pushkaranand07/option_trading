@@ -201,7 +201,8 @@ def test_a_condor_closed_by_the_old_directional_rule_is_reopened_once():
     t = tr.take(CONDOR, source="ai")
     rows = json.loads(tr.STORE.read_text(encoding="utf-8"))                     # as the old rule left it
     for r in rows:
-        r.pop("range"); r.update(index_target=22550, index_stop=22400, status="closed", reason="target reached", closed_at="x", net_pnl=-275.0)
+        r.pop("range")
+        r.update(index_target=22550, index_stop=22400, status="closed", reason="target reached", closed_at="x", net_pnl=-275.0)
         for leg in r["legs"]:
             leg["exit"] = leg["entry"]
     tr.STORE.write_text(json.dumps(rows), encoding="utf-8")

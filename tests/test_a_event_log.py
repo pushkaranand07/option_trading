@@ -3,8 +3,8 @@ the time, the row id, what happened and why. A day can then be reconstructed wit
 
 import pytest
 
-from tests.test_bug1_far_legs import CONDOR, NEAR, chain, condor  # noqa: F401  (condor is a fixture)
-from tests.test_take_honest_entry import take, world  # noqa: F401
+from tests.test_bug1_far_legs import NEAR, chain
+from tests.test_take_honest_entry import take
 from webapp import option_chain as oc, trade_record as tr
 
 

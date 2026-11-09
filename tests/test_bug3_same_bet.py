@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_take_honest_entry import chain, world  # noqa: F401  (world is a fixture)
+from tests.test_take_honest_entry import chain
 from webapp import strategist as st, trade_record as tr
 
 ROOT = Path(__file__).resolve().parents[1]

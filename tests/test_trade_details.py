@@ -7,7 +7,7 @@ import io
 
 import pytest
 
-from tests.test_take_honest_entry import chain, take, world  # noqa: F401  (world is a fixture)
+from tests.test_take_honest_entry import chain, take
 from webapp import server, strategist as st, trade_record as tr
 
 APP = (__import__("pathlib").Path(server.__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
