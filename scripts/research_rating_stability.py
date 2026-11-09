@@ -120,11 +120,10 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     if _market_open():
         raise SystemExit("The NSE market is open: this test runs only after the close (same input in every run).")
-    from dotenv import load_dotenv
-
+    import tradingagents
     from tradingagents.default_config import build_default_config
 
-    load_dotenv(ROOT / ".env")
+    tradingagents._load_env()                 # the repo .env, unless TRADINGAGENTS_NO_DOTENV=1
     dest = args.dest or ROOT / "reports" / "rating_stability" / datetime.now().strftime("%Y-%m-%d")
     dest.mkdir(parents=True, exist_ok=True)
     snapshot = dest / "memory_snapshot.md"
