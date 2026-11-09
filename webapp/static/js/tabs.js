@@ -5,9 +5,9 @@ import { loadJournalFiles } from "./journal.js";
 import { loadCosts, loadOptions } from "./options.js";
 import { loadMorning } from "./plan.js";
 import { loadRecord } from "./record.js";
+import { loadResearchTab } from "./research.js";
 import { loadRisk } from "./risk.js";
 import { S } from "./state.js";
-import { loadResearch } from "./strat.js";
 import { $, store } from "./util.js";
 
 // ---------- tabs ----------
@@ -35,7 +35,7 @@ export function showTab(tab, force = false) {
   if (tab === "options") { loadOptions(); loadCosts(); }
   if (tab === "ai") renderAI();
   if (tab === "map") loadMap();
-  if (tab === "research") loadResearch();
+  if (tab === "research") loadResearchTab();
   if (tab === "trades") loadJournalFiles();
   if (tab === "record") loadRecord();
 }
