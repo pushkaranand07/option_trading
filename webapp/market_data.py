@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import os
+import re
 import threading
 import time as _time
 from concurrent.futures import ThreadPoolExecutor
@@ -304,8 +305,15 @@ def equities() -> dict[str, tuple[int, str]]:
 
 # ---------- instruments ----------
 
+SYMBOL_RE = re.compile(r"[A-Z0-9][A-Z0-9&_-]{0,29}")   # NSE symbols: letters, digits, & _ - (e.g. M&M, BAJAJ-AUTO)
+
+
 def instrument(symbol: str) -> dict:
-    s = symbol.strip().upper()
+    """The instrument for a plain symbol. Anything else (path separators, dots, spaces, too long) is refused here,
+    because the symbol later names cache files (re-audit S1: a traversal symbol loaded an attacker's pickle)."""
+    s = (symbol or "").strip().upper()
+    if not SYMBOL_RE.fullmatch(s):
+        raise DataError(f"Not a valid symbol: {symbol[:40]!r}" if symbol else "Not a valid symbol")
     if s in INDICES:
         name, sid, seg, yahoo, lot, step = INDICES[s]
         return {"symbol": s, "name": name, "kind": "INDEX", "id": sid, "segment": seg, "yahoo": yahoo,
@@ -625,15 +633,29 @@ _good: dict[tuple[str, str], pd.DataFrame] = {}
 _good_saved: dict[tuple[str, str], float] = {}
 
 
+def _good_file(symbol: str, tf: str) -> Path | None:
+    """The cache file for a chart, or None when the name would not be a plain file inside LAST_GOOD_DIR. A second
+    wall behind instrument(): pickle files are only ever read from or written to the app's own cache folder."""
+    if not SYMBOL_RE.fullmatch(symbol or "") or tf not in TIMEFRAMES:
+        return None
+    root = LAST_GOOD_DIR.resolve()
+    f = (root / f"{symbol}_{tf}.pkl").resolve()
+    return f if f.parent == root else None
+
+
 def _remember(symbol: str, tf: str, df: pd.DataFrame) -> None:
     key = (symbol, tf)
     _good[key] = df
     if _time.monotonic() - _good_saved.get(key, -1e9) < 60:          # disk at most once a minute per chart
         return
     _good_saved[key] = _time.monotonic()
+    f = _good_file(symbol, tf)
+    if f is None:
+        logger.warning("candles cache: refused a file name for %r / %r", symbol, tf)
+        return
     try:
         LAST_GOOD_DIR.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(LAST_GOOD_DIR / f"{symbol}_{tf}.pkl")
+        df.to_pickle(f)
     except OSError:
         pass
 
@@ -641,9 +663,9 @@ def _remember(symbol: str, tf: str, df: pd.DataFrame) -> None:
 def _last_good(symbol: str, tf: str) -> tuple[pd.DataFrame, str] | None:
     df = _good.get((symbol, tf))
     if df is None:
-        f = LAST_GOOD_DIR / f"{symbol}_{tf}.pkl"
+        f = _good_file(symbol, tf)
         try:
-            df = pd.read_pickle(f) if f.exists() else None
+            df = pd.read_pickle(f) if f is not None and f.exists() else None
         except Exception:
             df = None
     if df is None or df.empty:
