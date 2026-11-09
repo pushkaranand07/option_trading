@@ -108,7 +108,8 @@ def _store(tmp_path, monkeypatch, rows):
 
 @pytest.mark.unit
 def test_one_pass_after_the_close_settles_trades_past_expiry(tmp_path, monkeypatch):
-    _store(tmp_path, monkeypatch, [{"id": "x", "status": "open", "expiry": "09-Nov-2026"}])
+    _store(tmp_path, monkeypatch, [{"id": "x", "status": "open", "expiry": "09-Nov-2026", "taken_at": "2026-11-09 10:00",
+                                    "symbol": "NIFTY", "legs": []}])
     monkeypatch.setattr(signals, "market_open", lambda *a: False)
     monkeypatch.setattr(tr, "_clock", lambda: IST.localize(datetime(2026, 11, 9, 16, 0)))
     calls = []
@@ -119,7 +120,8 @@ def test_one_pass_after_the_close_settles_trades_past_expiry(tmp_path, monkeypat
 
 @pytest.mark.unit
 def test_after_the_close_nothing_happens_without_an_expired_open_trade(tmp_path, monkeypatch):
-    _store(tmp_path, monkeypatch, [{"id": "x", "status": "open", "expiry": "17-Nov-2026"}])
+    _store(tmp_path, monkeypatch, [{"id": "x", "status": "open", "expiry": "17-Nov-2026", "taken_at": "2026-11-09 10:00",
+                                    "symbol": "NIFTY", "legs": []}])
     monkeypatch.setattr(signals, "market_open", lambda *a: False)
     monkeypatch.setattr(tr, "_clock", lambda: IST.localize(datetime(2026, 11, 9, 16, 0)))
     monkeypatch.setattr(tr, "refresh_open", lambda *a, **k: pytest.fail("nothing to settle"))

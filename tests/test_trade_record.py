@@ -73,7 +73,8 @@ def test_close_books_net_pnl_after_charges_and_updates_the_totals():
 
 
 @pytest.mark.unit
-def test_after_expiry_the_trade_settles_itself_at_intrinsic_value():
+def test_after_expiry_the_trade_settles_itself_at_intrinsic_value(monkeypatch):
+    monkeypatch.setattr(tr, "_daily_close", lambda symbol, day: 22650.0)   # the expiry-day close is known (re-audit S3)
     tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650})
     o = tr.refresh_open(lambda *a: pytest.fail("no chain after expiry"))
     c = o["closed"][0]
@@ -102,7 +103,8 @@ def test_ai_suggestions_settle_by_rule_and_are_scored_apart_from_your_trades():
 
 
 @pytest.mark.unit
-def test_ai_suggestion_settles_at_the_stop_and_at_expiry():
+def test_ai_suggestion_settles_at_the_stop_and_at_expiry(monkeypatch):
+    monkeypatch.setattr(tr, "_daily_close", lambda symbol, day: 22650.0)   # the expiry-day close is known (re-audit S3)
     tr.take(RESULT, source="ai")
     o = tr.refresh_open(chain(22750, _q(210, 209, 211), _q(145, 144, 146)))         # above the 22,720 stop
     lost = o["ai"]["closed"][0]

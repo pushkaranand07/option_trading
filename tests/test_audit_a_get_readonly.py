@@ -38,7 +38,8 @@ def test_overview_on_a_trade_at_its_target_writes_nothing_and_refresh_open_settl
 
 
 @pytest.mark.unit
-def test_overview_does_not_settle_an_expired_trade_or_save_flags():
+def test_overview_does_not_settle_an_expired_trade_or_save_flags(monkeypatch):
+    monkeypatch.setattr(tr, "_daily_close", lambda symbol, day: 22650.0)   # the expiry-day close is known (re-audit S3)
     tr.take(RESULT | {"expiry": "20-Oct-2026", "spot": 22650})
     before = files()
     o = tr.overview(lambda *a: pytest.fail("no chain after expiry"))

@@ -66,6 +66,7 @@ MESSAGES = {
     "reason_reached": "{kind} reached",
     "reason_range_broken": "range broken",
     "reason_expired": "expired",
+    "reason_expired_stale": "expired (the expiry-day close was unavailable: settled at the last price seen)",
     "reason_by_you": "closed by you",
     "range_bug_note": ("reopened 2026-11-04: it had been closed by a bug that read this range trade's single index target / stop "
                        "as a directional trade's"),
@@ -561,6 +562,7 @@ def mark(trade: dict, chain_fn=None) -> dict:
     view = {"spot": None, "legs": [], "pnl": None, "flags": [], "error": None, "as_of": None, "pending": []}
     if _expired(trade):
         view["flags"].append("expired")
+        view["settle_spot"] = _daily_close(trade["symbol"], _expiry_date(trade))   # re-audit S3: the expiry-day close
         return view
     try:
         ch = (chain_fn or oc.full_chain)(trade["symbol"], trade["expiry"])     # every strike: a held leg can be far from the money
@@ -623,6 +625,44 @@ def _live_mark(t: dict, chain_fn, live: bool) -> dict:
     return v
 
 
+def _row_problem(t) -> str | None:
+    """Why a row of trades.json cannot be used, or None. Checked per row so one bad row (valid JSON, wrong shape)
+    no longer takes down the whole record (re-audit S4); the row stays in the file, untouched."""
+    if not isinstance(t, dict) or not t.get("id") or t.get("status") not in ("open", "closed", "not_taken"):
+        return "no id or status"
+    if not isinstance(t.get("taken_at"), str):
+        return "no taken_at"
+    if t["status"] in ("open", "closed"):
+        if not t.get("symbol") or not isinstance(t.get("legs"), list):
+            return "no symbol or legs"
+        try:
+            datetime.strptime(t["expiry"], "%d-%b-%Y")
+        except (KeyError, TypeError, ValueError):
+            return f"bad expiry {t.get('expiry')!r}"
+    if t["status"] == "closed" and not isinstance(t.get("closed_at"), str):
+        return "no closed_at"
+    return None
+
+
+def _good_rows(trades: list) -> tuple[list[dict], list[str]]:
+    """(usable rows, ids of the rows set aside). Set-aside rows are logged once per id."""
+    good, bad = [], []
+    for t in trades:
+        why = _row_problem(t)
+        if why is None:
+            good.append(t)
+            continue
+        rid = str(t.get("id", "?")) if isinstance(t, dict) else "?"
+        bad.append(rid)
+        if rid not in _logged_bad_rows:
+            _logged_bad_rows.add(rid)
+            logger.error("trade record: row %s set aside (%s); it stays in trades.json untouched", rid, why)
+    return good, bad
+
+
+_logged_bad_rows: set[str] = set()
+
+
 def overview(chain_fn=None) -> dict:
     """Open trades with live marks, closed trades, totals — yours and the AI's separately, the AI's also by evidence
     score. Read only (GET /api/trades): nothing is saved or logged. An open trade the rules would close now shows it
@@ -634,6 +674,7 @@ def overview(chain_fn=None) -> dict:
             trades = _load()
         except StoreCorrupt as exc:                      # a read must not crash the page: an empty view that says why
             trades, problem = [], str(exc)
+    trades, bad = _good_rows(trades)                     # a malformed row is set aside and named (re-audit S4)
     _repair_range_trades(trades)                         # shown repaired; saved only by refresh_open()
     for t in trades:
         if t["status"] == "open":
@@ -641,7 +682,7 @@ def overview(chain_fn=None) -> dict:
             d = _settle_decision(t, v)
             v["would_settle"] = d[3] if d and d[0] == "settle" else None
             t["live"] = v
-    return _view(trades, problem)
+    return _view(trades, problem) | {"bad_rows": bad}
 
 
 def refresh_open(chain_fn=None) -> dict:
@@ -650,13 +691,14 @@ def refresh_open(chain_fn=None) -> dict:
     overview(). Raises StoreCorrupt (nothing written) when trades.json cannot be read."""
     live = exit_allowed() is None
     with _lock:                                          # snapshot; the chains are fetched outside the lock
-        snapshot = _load()
+        snapshot, _ = _good_rows(_load())                # malformed rows are never marked or settled (re-audit S4)
     _repair_range_trades(snapshot)                       # in memory, so a range trade is marked by its range
     views = {t["id"]: _live_mark(t, chain_fn, live) for t in snapshot if t["status"] == "open"}
     with _lock:                                          # read again and merge by id: rows changed meanwhile win
-        trades = _load()
-        changed = _repair_range_trades(trades)
-        for t in trades:
+        trades = _load()                                 # every row, malformed ones included, is written back
+        good, bad = _good_rows(trades)
+        changed = _repair_range_trades(good)
+        for t in good:
             if t["status"] != "open" or t["id"] not in views:   # closed, removed or taken meanwhile: next time
                 continue
             v = views[t["id"]]
@@ -666,7 +708,7 @@ def refresh_open(chain_fn=None) -> dict:
             changed |= _apply_mark(t, v)
         if changed:
             _save([{k: x for k, x in t.items() if k not in ("live", "v2", "outside_session", *BET_FIELDS)} for t in trades])
-    return _view(trades, None)
+    return _view(good, None) | {"bad_rows": bad}
 
 
 def _apply_mark(t: dict, v: dict) -> bool:
@@ -786,6 +828,9 @@ def history_csv() -> str:
     except StoreCorrupt as exc:                          # a read must not crash: the header and one row that says why
         w.writerow(["store problem", str(exc)] + [""] * (len(CSV_HEADER) - 2))
         return buf.getvalue()
+    rows, bad = _good_rows(rows)                         # a malformed row is listed by id, never crashes the export
+    for rid in bad:
+        w.writerow(["row set aside", rid] + [""] * (len(CSV_HEADER) - 2))
     for t in sorted(rows, key=lambda t: t.get("taken_at") or ""):
         ai = t.get("source") == "ai"
         known = lambda k, t=t: _cell(t[k]) if k in t else "unknown"  # noqa: E731
@@ -824,12 +869,37 @@ def _settle(t: dict, exits: list[float], spot: float | None, reason: str) -> dic
     return t
 
 
+def _expiry_date(trade: dict) -> date:
+    return datetime.strptime(trade["expiry"], "%d-%b-%Y").date()
+
+
+def _daily_close(symbol: str, day: date) -> float | None:
+    """The index (or stock) close on ``day`` from the app's daily bars, or None if they don't have that day."""
+    from webapp import market_data as md
+
+    try:
+        df, _ = md.candles(symbol, "1D")
+        rows = df[df.index.date == day]
+        return float(rows["close"].iloc[-1]) if not rows.empty else None
+    except Exception:                                    # no bars (offline, unknown symbol): the caller falls back
+        logger.warning("no daily close for %s on %s", symbol, day, exc_info=True)
+        return None
+
+
+def _expiry_spot(t: dict, settle_spot: float | None) -> tuple[float, str]:
+    """(spot, reason) for settling an expired trade: the expiry-day close when known (re-audit S3), else the last
+    index level seen, with a reason that says so, never a silent stale price."""
+    if settle_spot:
+        return settle_spot, MESSAGES["reason_expired"]
+    return t.get("last_spot") or t["spot_at_entry"], MESSAGES["reason_expired_stale"]
+
+
 def _settle_decision(t: dict, v: dict) -> tuple | None:
     """What the rules do with an open trade given its live view, without doing it: ("settle", exits, spot, reason),
     ("exit_pending", None, spot, hit) or None. The stop first if both are reached, then the target, else at expiry."""
     if "expired" in v["flags"]:
-        spot = t.get("last_spot") or t["spot_at_entry"]
-        return "settle", [_intrinsic(leg, spot) for leg in t["legs"]], spot, MESSAGES["reason_expired"]
+        spot, reason = _expiry_spot(t, v.get("settle_spot"))
+        return "settle", [_intrinsic(leg, spot) for leg in t["legs"]], spot, reason
     hit = "stop" if "stop" in v["flags"] else "target" if "target" in v["flags"] else None
     if hit and v["pnl"] is None and v.get("pending"):         # it should close, but a leg has no quote
         return "exit_pending", None, v["spot"], hit
@@ -889,6 +959,7 @@ def close(trade_id: str, chain_fn=None) -> dict:
         snap = find(_load())
         expired = _expired(snap)
     v = None
+    settle_spot = _daily_close(snap["symbol"], _expiry_date(snap)) if expired else None   # outside the lock (network)
     if not expired:
         if why := exit_allowed():
             raise TradeError(why)
@@ -899,9 +970,8 @@ def close(trade_id: str, chain_fn=None) -> dict:
         trades = _load()
         t = find(trades)
         if v is None:
-            spot = t.get("last_spot") or t["spot_at_entry"]
+            spot, reason = _expiry_spot(t, settle_spot)
             exits = [_intrinsic(leg, spot) for leg in t["legs"]]
-            reason = MESSAGES["reason_expired"]
         else:
             exits, spot = [x["now"] for x in v["legs"]], v["spot"]
             reason = (" + ".join(MESSAGES["reason_reached"].format(kind=a["kind"]) for a in t["alerts"])
@@ -973,13 +1043,13 @@ def _monitor_tick() -> bool:
     try:
         if signals.market_open():
             with _lock:
-                rows = _load()
+                rows, _ = _good_rows(_load())
             repair = _repair_range_trades(rows)          # in memory: a bug-closed condor counts as open (and is saved)
             if repair or any(t["status"] == "open" for t in rows):
                 refresh_open()
         elif _after_close_due():                         # once a day after 15:30: settle what expired after the close
             with _lock:
-                rows = _load()
+                rows, _ = _good_rows(_load())
             if any(t.get("status") == "open" and _expired(t) for t in rows):
                 refresh_open()
     except Exception as exc:                               # a failed check must not stop the monitor: log and count it
