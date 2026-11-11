@@ -297,7 +297,7 @@ export function drawPlanChartLines(sym) {
   if (pcOn("trade")) {
     const r = curRes(sym), a = r?.plan;
     if (a && a.strategy !== "no_trade") {
-      const who = `AI #${r.rank}`, lo = a.underlying_entry_low, hi = a.underlying_entry_high;
+      const who = r._label ? `Scan #${r.rank}` : `AI #${r.rank}`, lo = a.underlying_entry_low, hi = a.underlying_entry_high;
       if (lo && hi) {
         bands.push({ from: lo, to: hi, color: hexA(col.text, 0.07) });
         level(hi, col.text, `${who} entry ${fmt0(lo)} – ${fmt0(hi)}`, "dot"); level(lo, col.text, null, "dot");
