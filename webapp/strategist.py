@@ -548,8 +548,13 @@ bid) and set its index entry zone, target and stop by a fixed rule; you cannot c
 
 Rank exactly 8 candidates (all of them if fewer are offered), strongest first, by how well the WHOLE analysis supports
 each one:
-- direction: what most of the evidence agrees on (the agents' decision, news and sentiment, the trend, how the market
-  has moved today, today's intraday rule, OI walls, FII positioning);
+- direction: these are intraday-to-expiry option trades, so today's tape leads. The app reads it (today_tape: price vs
+  VWAP, EMA 9 vs EMA 21, price vs today's open). When it is "up" or "down", only candidates in that direction are
+  offered: rank them by how well the rest of the evidence supports them. When it is "mixed", both directions are
+  offered: prefer the side that today's moves, the daily trend and the OI walls support. The agents' research is a
+  multi-week portfolio view (trim, hedge, add on pullbacks): use it for news and event risk and to lower confidence,
+  never as a reason by itself to bet against today's tape or the daily trend. "Overbought" alone is not a reason to
+  fade a trend day;
 - the structure: a single bought CALL or PUT, a debit spread or a credit spread. None is preferred by default. A single
   bought option suits a clear, quick move the evidence expects to reach the target soon, with implied vol not rich vs
   the forecast; a spread suits a slower or capped move, rich implied vol, or heavy time decay close to expiry. When the
@@ -588,6 +593,18 @@ def today_moves(symbol: str) -> dict:
             "half_hours": [{"from": ts.strftime("%H:%M"), **{k: _num(r[k]) for k in ("open", "high", "low", "close")}} for ts, r in halves.iterrows()]}
 
 
+# Forward test v4 (docs/PA_54): which candidates' direction the AI may rank, by today's tape. A mixed tape offers both.
+TAPE_ALLOWS = {"up": ("bullish",), "down": ("bearish",)}
+
+
+def today_tape(symbol: str) -> dict:
+    """Today's tape for ``symbol`` from its 5-minute bars (webapp.signals.today_tape)."""
+    from webapp import market_data as md, signals
+
+    df, _ = md.candles(symbol, "5m")
+    return signals.today_tape(df)
+
+
 def candidates_for_ai(pool: list[dict]) -> tuple[list[dict], list[dict]]:
     """(the candidates as the AI sees them, the same candidates in that order). Numbered in strategy and strike order,
     not the rule's order, so the list does not suggest a ranking of its own."""
@@ -613,7 +630,8 @@ def ask_rank_llm(ctx: dict, candidates: list[dict]) -> RankedAnswer:
     return llm.invoke([("system", RANK_SYSTEM), ("user", user)])
 
 
-def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, built=None, moves=None, progress=None) -> dict:
+def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, built=None, moves=None, progress=None,
+              tape=None) -> dict:
     """The research, then the AI's ranked trades: each a full priced candidate with the AI's reason and confidence."""
     started = datetime.now()
     say = progress or (lambda stage: None)
@@ -631,10 +649,16 @@ def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, bui
         ctx["today_intraday"] = (moves or today_moves)(symbol)
     except Exception as exc:
         ctx["today_intraday"] = {"error": str(exc)[:200]}
+    try:                                                         # v4: today's tape sets which direction may be ranked
+        ctx["today_tape"] = (tape or today_tape)(symbol)
+    except Exception as exc:
+        ctx["today_tape"] = {"direction": "mixed", "why": f"error: {str(exc)[:200]}"}
     ctx["agents_research_now"] = {"rating": research.get("rating"), "final_decision": (research.get("decision") or "")[:3000],
                                   "news_report": (research.get("news") or "")[:3000], "market_report": (research.get("market") or "")[:1500],
                                   "investment_plan": (research.get("plan") or "")[:1500]} if research else {"error": agents_out.get("error")}
     pool = rank(symbol, expiry, top=10 ** 6, built=(ctx, ch))["candidates"]
+    allowed = TAPE_ALLOWS.get(ctx["today_tape"].get("direction"), ("bullish", "bearish"))
+    pool = [c for c in pool if c["plan"]["bias"] in allowed]     # a clear tape: only trades going its way
     shown, order = candidates_for_ai(pool)
     answer = (llm or ask_rank_llm)(ctx, shown) if order else RankedAnswer(
         market_read="No candidate trade has a live two-sided quote right now.", news_read="", bias="unclear", picks=[])
@@ -650,7 +674,7 @@ def ai_ranked(symbol: str, expiry: str | None = None, llm=None, agents=None, bui
         if len(trades) == TOP_AI:
             break
     return {"symbol": symbol, "expiry": ch["expiry"], "spot": ch["spot"], "lot": ch["lot"], "agents": agents_out,
-            "market_read": answer.market_read, "news_read": answer.news_read, "bias": answer.bias, "risks": answer.risks,
+            "tape": ctx["today_tape"], "market_read": answer.market_read, "news_read": answer.news_read, "bias": answer.bias, "risks": answer.risks,
             "trades": trades, "considered": len(order), "chain_summary": ch["summary"],
             "seconds": (datetime.now() - started).seconds, "asked_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
 

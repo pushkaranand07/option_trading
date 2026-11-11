@@ -1,4 +1,4 @@
-"""E-docs: the README describes the running forward test (v3), the server's real protections and operating rules,
+"""E-docs: the README describes the running forward test (v4), the server's real protections and operating rules,
 and .env.example lists every variable the web app reads."""
 
 import re
@@ -12,8 +12,9 @@ ENV = (ROOT / ".env.example").read_text(encoding="utf-8")
 
 
 @pytest.mark.unit
-def test_the_readme_names_forward_test_v3_and_its_registry():
-    assert "docs/ai_strategist_test_v3.json" in README and "reports/ai_test/v3/" in README and "9 Nov 2026" in README
+def test_the_readme_names_forward_test_v4_and_its_registry():
+    assert "docs/ai_strategist_test_v4.json" in README and "reports/ai_test/v4/" in README and "12 Nov 2026" in README
+    assert "Forward test of the AI strategist (v3)" not in README and "Forward test v3 registry" not in README
     assert "Forward test of the AI strategist (v2)" not in README and "Forward test v2 registry" not in README
 
 

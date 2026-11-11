@@ -211,7 +211,11 @@ export function aiListHtml(sym, res) {
   const name = NAMES[sym] || sym, v = S.view[sym], ag = res.agents || {};
   const research = ag.error ? `<div class="notice">The research agents failed (${esc(ag.error)}), so this ranking used the live data only, with no news.</div>`
     : `<div class="small muted">${res.mode === "quick" ? "Quick analysis" : "Complete analysis"} · research: ${esc(ag.source && ag.source !== "fresh" ? `${ag.source} at ${ag.at}` : "run fresh")} (${esc(ag.minutes ?? "—")} min)${ag.rating ? `, the agents' call <b>${esc(ag.rating)}</b>` : ""}. Then the AI ranked ${res.considered} live candidates.</div>`;
-  const read = `<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
+  const tp = res.tape?.direction, tapeLine = !tp ? "" : `<div class="small"><b>Aaj ka tape (${esc(res.tape.as_of || "—")}):</b> ${
+    tp === "up" ? `<b class="up">UP</b> (VWAP, EMA 9/21 aur open teeno ke upar), isliye AI ko sirf <b>bullish</b> trades diye gaye.`
+    : tp === "down" ? `<b class="down">DOWN</b> (VWAP, EMA 9/21 aur open teeno ke neeche), isliye AI ko sirf <b>bearish</b> trades diye gaye.`
+    : `<b>MIXED</b>${res.tape.why ? ` (${esc(res.tape.why)})` : ""}: dono direction ke trades diye gaye.`}</div>`;
+  const read = `${tapeLine}<p>${esc(res.market_read)}</p>${res.news_read ? `<p><b>News and agents:</b> ${esc(res.news_read)}</p>` : ""}
     ${res.risks?.length ? `<details class="evidence"><summary>Risks the AI sees</summary><ul class="plain">${res.risks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}`;
   const closedNote = (res.expired ? `<div class="notice">Yeh run expired hai (kisi aur din ka): sirf dekhne ke liye. Uske prices aaj ke nahi, isliye Take band hai. Analysis dobara chala.</div>` : "")
     + (res.market_closed ? `<div class="notice">Yeh run market band hone pe hua: prices last close ke hain, in pe asli order nahi lagta. Take band hai, aur AI record mein nahi gaya. 9:15 ke baad Quick analysis chala.</div>` : "");

@@ -1,8 +1,9 @@
-"""The AI strategist's forward test, version 3: write each trade to the registry before entry (docs/ai_strategist_test_v3.json, docs/PA_53).
+"""The AI strategist's forward test, version 4: write each trade to the registry before entry (docs/ai_strategist_test_v4.json, docs/PA_54).
 
-Version 1.1 (one suggestion a question) was closed by the user on 2026-11-04 with one trade registered, and version 2 on 2026-11-08 with
-two counted; their specs and registries stay on file, unedited, and are not settled or reported. Version 3 counts the AI's #1 of its
-ranked trades, ranked by a prompt with no default preference for spreads over single bought options. A Muhurat session never counts.
+Version 1.1 (one suggestion a question) was closed by the user on 2026-11-04 with one trade registered, version 2 on 2026-11-08 with
+two counted, and version 3 on 2026-11-11 with two counted; their specs and registries stay on file, unedited, and are not settled or
+reported. Version 4 counts the AI's #1 of its ranked trades; today's tape (VWAP, EMA 9/21, today's open) decides which direction's
+candidates it may rank. A Muhurat session never counts.
 
 One NIFTY question per session counts: the #1 of the first asked in the window. Order: the LLM answers; the structure is registered; only then is a
 fresh chain fetched, and the entry is that chain's bid and ask, so no entry price is older than its registration. The rule-based pick is
@@ -26,18 +27,18 @@ from tradingagents.research import registry
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "3"
-SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v3.json"
-SPEC_SHA256 = "173667b786bc50d8045013161aae1b9495fc0705b461c6f30cd418805b425bed"
-REGISTRY = ROOT / "reports" / "ai_test" / "v3" / "registry.jsonl"     # 2's stays in reports/ai_test/v2, 1.1's at reports/ai_test/registry.jsonl
-CHAINS = ROOT / "reports" / "ai_test" / "v3" / "chains"
+VERSION = "4"
+SPEC_FILE = ROOT / "docs" / "ai_strategist_test_v4.json"
+SPEC_SHA256 = "e612de0533c9c67d1632588543bb7a37c70323d03e7e9a13b2a79de729373776"
+REGISTRY = ROOT / "reports" / "ai_test" / "v4" / "registry.jsonl"     # 3's and 2's stay in reports/ai_test/v3 and v2, 1.1's at reports/ai_test/registry.jsonl
+CHAINS = ROOT / "reports" / "ai_test" / "v4" / "chains"
 IST = pytz.timezone("Asia/Kolkata")
 SYMBOL = "NIFTY"
 WINDOW = (time(9, 30), time(15, 0))
-# The spec's "starts" is a rule: "the first weekday session after this file is on main". Written 2026-11-08 (Sunday), so if it
-# reaches main before 09:30 on Monday 2026-11-09 that is the first counted session; merged later, this date must move with it.
-# (Version 2: PR #98, merged 2026-11-04, first session 2026-11-05.) Everything else reads this.
-FIRST_SESSION = date(2026, 11, 9)
+# The spec's "starts" is a rule: "the first weekday session after this file is on main". Written 2026-11-11 (Wednesday, in session), so if
+# it reaches main before 09:30 on Thursday 2026-11-12 that is the first counted session; merged later, this date must move with it.
+# (Version 3: first session 2026-11-09. Version 2: PR #98, merged 2026-11-04, first session 2026-11-05.) Everything else reads this.
+FIRST_SESSION = date(2026, 11, 12)
 
 
 def read_spec(path: Path | None = None) -> dict:
@@ -51,15 +52,18 @@ def read_spec(path: Path | None = None) -> dict:
 def prompt_fingerprint() -> str:
     """Hash of what the ranking LLM is told and how its list is built: the system prompt, the answer schema, the strategy menu, and the
     code that runs the research, builds the context and the candidates, and asks. The research agents' own prompts are not covered."""
-    from webapp import morning, strategist as st
+    from webapp import morning, signals, strategist as st
 
     def lf(text: str) -> str:
         return text.replace("\r\n", "\n")
 
+    # v4 adds today's tape (which direction may be ranked) and the indicator frame it reads. Keys carry the module, since
+    # strategist.today_tape and signals.today_tape share a name.
     code = (st.ask_rank_llm, st.ai_ranked, st.candidates_for_ai, st.today_moves, st.agents_view, st.today_research, st.build_context, st.rank, st._structures,
-            st._index_levels, st.trade_levels, st.price, st.check_structure, morning.ai_view)
+            st._index_levels, st.trade_levels, st.price, st.check_structure, morning.ai_view, st.today_tape, signals.today_tape, signals.intraday_frame)
     parts = {"system": lf(st.RANK_SYSTEM), "schema": st.RankedAnswer.model_json_schema(), "strategies": {k: v[0] for k, v in st.STRATEGIES.items()},
-             "top": st.TOP_AI, "code": {f.__name__: lf(inspect.getsource(f)) for f in code}}
+             "top": st.TOP_AI, "tape_allows": st.TAPE_ALLOWS,
+             "code": {f"{f.__module__}.{f.__name__}": lf(inspect.getsource(f)) for f in code}}
     return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()
 
 

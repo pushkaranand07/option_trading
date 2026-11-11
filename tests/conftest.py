@@ -62,8 +62,8 @@ def _no_real_reports(tmp_path_factory):
              (morning, "PLAN_DIR"): morning.PLAN_DIR, (strategist, "_runs_dir"): strategist._runs_dir,
              (dhan_guard, "LOG"): dhan_guard.LOG}
     trade_record.STORE = root / "trade_record" / "trades.json"
-    ai_test.REGISTRY = root / "ai_test" / "v3" / "registry.jsonl"
-    ai_test.CHAINS = root / "ai_test" / "v3" / "chains"
+    ai_test.REGISTRY = root / "ai_test" / "v4" / "registry.jsonl"
+    ai_test.CHAINS = root / "ai_test" / "v4" / "chains"
     quant.JOURNAL_DIR = root / "journal"
     morning.PLAN_DIR = root / "morning"
     strategist._runs_dir = lambda: root / "ai_runs"
