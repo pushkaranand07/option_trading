@@ -261,6 +261,29 @@ def _as_range_trade(t: dict) -> None:
         leg["target"] = leg["stop"] = None
 
 
+def unquoted_leg(plan: dict, ch: dict) -> dict | None:
+    """The first leg of ``plan`` with no live bid or ask in chain ``ch`` (or not on it at all), or None."""
+    rows = {r["strike"]: r for r in ch["rows"]}
+    for leg in plan["legs"]:
+        q = (rows.get(float(leg["strike"])) or {}).get(leg["option_type"].lower())
+        if not q or not q.get("bid") or not q.get("ask"):
+            return leg
+    return None
+
+
+def fresh_candidate(c: dict, ch: dict, today: date) -> dict:
+    """Candidate ``c`` of a run priced again from chain ``ch``: the same legs and index levels, with the chain's spot,
+    bid / ask prices, premiums at the target and stop, and charges. Shared by a Take and the Plan tab's live view
+    (webapp/live.py), so the card shows the price a Take would get."""
+    from webapp import strategist as st
+
+    sp = st.StrategyPlan(**c["plan"])
+    priced = st.price(sp, ch)
+    days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - today).days
+    return c | {"spot": ch["spot"], "priced": priced, "levels": st.trade_levels(sp, priced, ch, days),
+                "charges_per_lot": st.charges(priced, 1)}
+
+
 def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you", confirm: bool = False) -> dict:
     """Your Take on candidate ``candidate`` of AI run ``run_id``, priced here and now: the run must be today's
     (IST), the market open, the index inside the candidate's entry zone, and every leg quoted on both sides in a
@@ -292,16 +315,10 @@ def take_from_run(run_id: str, candidate: int, chain_fn=None, source: str = "you
     if in_zone is False:
         raise TradeError(MESSAGES["outside_entry_zone"].format(symbol=c["symbol"], spot=spot, lo=lo, hi=hi),
                          {"spot_at_take": spot, "in_entry_zone": False, "quote_age_s": age})
-    rows = {r["strike"]: r for r in ch["rows"]}
-    for leg in plan["legs"]:
-        q = (rows.get(float(leg["strike"])) or {}).get(leg["option_type"].lower())
-        if not q or not q.get("bid") or not q.get("ask"):
-            raise TradeError(MESSAGES["leg_unquoted"].format(strike=leg["strike"], type=leg["option_type"]),
-                             {"spot_at_take": spot, "in_entry_zone": in_zone, "quote_age_s": age})
-    sp = st.StrategyPlan(**plan)
-    priced = st.price(sp, ch)
-    days = (datetime.strptime(c["expiry"], "%d-%b-%Y").date() - signals.now_ist().date()).days
-    fresh = c | {"spot": spot, "priced": priced, "levels": st.trade_levels(sp, priced, ch, days), "charges_per_lot": st.charges(priced, 1)}
+    if leg := unquoted_leg(plan, ch):
+        raise TradeError(MESSAGES["leg_unquoted"].format(strike=leg["strike"], type=leg["option_type"]),
+                         {"spot_at_take": spot, "in_entry_zone": in_zone, "quote_age_s": age})
+    fresh = fresh_candidate(c, ch, signals.now_ist().date())
     shown = {(x["strike"], x["type"], x["action"]): x["price"] for x in c["priced"]["legs"]}
     return take(fresh, source=source, provenance=_provenance(run, run_id, candidate) | {"in_entry_zone": in_zone, "quote_age_s": age},
                 shown=shown, confirm=confirm)

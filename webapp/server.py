@@ -37,6 +37,7 @@ from webapp import (  # noqa: E402
     ai_test,
     build_info,
     latency,
+    live,
     market_data as md,
     morning,
     option_chain as nse_oc,
@@ -485,6 +486,13 @@ def strategy_latest(symbol: str):
     from another day (or older than run ids), so it is shown read-only."""
     run = strategist.latest_run(md.instrument(symbol)["symbol"])
     return run | {"expired": strategist.run_expired(run)} if run else {}
+
+
+@app.get("/api/strategy/live/{symbol}")
+def strategy_live(symbol: str):
+    """The last AI run's trades at NSE's prices now, each with where the index is against its entry zone, target and
+    stop (webapp/live.py). No LLM, nothing written; ``live: false`` with the reason when there is nothing live."""
+    return live.view(md.instrument(symbol)["symbol"])
 
 
 @app.get("/api/strategy/{job_id}")

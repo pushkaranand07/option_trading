@@ -7,7 +7,7 @@ import { renderNseChain } from "./nsechain.js";
 import { drawPlanChartLines } from "./planchart.js";
 import { NAMES, S } from "./state.js";
 import { loaded } from "./tabs.js";
-import { aiListHtml, legLevelsOk, legRole, stratHtml, takeKey } from "./tradeview.js";
+import { aiListHtml, legLevelsOk, legRole, stratHtml, takeKey, withLive } from "./tradeview.js";
 import { $, cssVar, istNow, store } from "./util.js";
 
 export const stratJobs = JSON.parse(store("stratJobs") || "{}");
@@ -23,8 +23,10 @@ export async function loadResearch(sym) {
 }
 export function renderStrat(sym) {
   const slot = $(`.plan-card[data-sym="${sym}"] .strat-slot`); if (!slot) return;
-  const st = S.strat[sym] || {}, res = st.result;
+  const st = S.strat[sym] || {}, res = liveResult(sym), lv = res?._live;
   const rs = S.research[sym] || {}, have = !!rs.source, busy = st.running ? "disabled" : "";
+  const liveNote = lv ? ` Prices and each trade's status are <b>live</b>: NSE ${esc(lv.as_of)}, ${esc(NAMES[sym] || sym)} ${fmt0(lv.spot)}${lv.spot_at_run != null ? ` (${fmt0(lv.spot_at_run)} at the run)` : ""}. No AI call; the AI's read is still the run's.`
+    : S.stratLive[sym]?.live === false && S.stratLive[sym].why && !res?.expired && !res?.market_closed ? ` Prices are the run's, not live: ${esc(S.stratLive[sym].why)}` : "";
   const researchLine = have ? `Today's research: <b>${esc(rs.source)}</b> at ${esc(rs.at)}${rs.rating ? `, the agents' call <b>${esc(rs.rating)}</b>` : ""}. A Quick analysis uses it with the live market.`
     : `No research yet today. Run the <b>Complete analysis</b> once (best before 9:15); after that, Quick analysis takes 1-2 minutes.`;
   const ask = `<div class="strat-ask strat-modes">
@@ -32,7 +34,7 @@ export function renderStrat(sym) {
       <button class="btn ${have ? "primary" : ""} strat-go" data-mode="quick" ${busy || (have ? "" : "disabled")}>Quick analysis</button>
       <span class="small muted">${st.running ? `<span class="spinner"></span> ${esc(STAGE[st.mode]?.[st.stage] || "Starting…")} — started ${esc(st.started || "")}` : researchLine}</span></div>
     <div class="small muted">Complete: news, yesterday's market, sentiment and the bull / bear debate, then the 8 trades (10-15 min, once a day). Quick: today's research plus the live chart, today's moves and the option chain, then the 8 trades (1-2 min).
-      ${res && !st.running ? `The 8 trades below are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.` : ""}</div>
+      ${res && !st.running ? `The 8 trades below and their order are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.` : ""}${res ? liveNote : ""}</div>
     <div class="small v2-line">${v2LineHtml()}</div>`;
   const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
@@ -68,7 +70,19 @@ export async function pollStrat(sym, job) {
     delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs));
   } catch { delete stratJobs[sym]; store("stratJobs", JSON.stringify(stratJobs)); S.strat[sym] = {}; }   // server restarted
   renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym);
+  loadLiveTrades(sym);                  // the run took about a minute: put NSE's prices of now on it straight away
 }
+
+// The run's trades at NSE's prices now (no AI call): asked for with every chain poll during the session, when a run
+// ends and when a saved run loads. A run that is expired or was made with the market closed stays as it is. A failed
+// request keeps the last answer, which withLive drops once it is two minutes old.
+export async function loadLiveTrades(sym) {
+  const res = S.strat[sym]?.result;
+  if (!res?.run_id || !res.trades?.length || res.expired || res.market_closed) return;
+  try { S.stratLive[sym] = { ...(await api("/api/strategy/live/" + encodeURIComponent(sym))), _got: Date.now() }; } catch { return; }
+  renderStrat(sym);
+}
+export const liveResult = (sym) => withLive(S.strat[sym]?.result, S.stratLive[sym]);
 Object.entries(stratJobs).forEach(([sym, job]) => pollStrat(sym, job));   // a result survives a page reload
 
 // The last run, saved on the server: its trades stay the same until the next run (reloads, restarts).
@@ -78,6 +92,7 @@ export async function loadLatestRun(sym) {
     const res = await api("/api/strategy/latest/" + encodeURIComponent(sym));
     if (!res.trades || S.strat[sym]?.result || S.strat[sym]?.running) return;
     S.strat[sym] = { result: res }; S.view[sym] = res.trades.length ? 0 : null; refreshStrat(sym);
+    loadLiveTrades(sym);
   } catch { /* no saved run */ }
 }
 
@@ -176,13 +191,14 @@ export async function takeTrade(sym) {
   try {
     const t = await takePost(sym, S.view[sym]);
     if (!t) { if (btn) btn.disabled = false; return; }
-    res._taken = t.id; S.takenRank[takeKey(res)] = true; renderStrat(sym); loaded.record = false;
+    const run = S.strat[sym].result.trades[S.view[sym]];             // the run's own trade: res may be its live copy
+    run._taken = t.id; S.takenRank[takeKey(res)] = true; renderStrat(sym); loaded.record = false;
   } catch (e) { alert(e.message); if (btn) btn.disabled = false; }
 }
 
 // ---------- the AI's ranked trades: which one the detail card shows ----------
 export function curRes(sym) {          // the trade shown in the detail card: one of the AI's ranked trades
   const v = S.view[sym];
-  return typeof v === "number" ? S.strat[sym]?.result?.trades?.[v] || null : null;
+  return typeof v === "number" ? liveResult(sym)?.trades?.[v] || null : null;      // at live prices when there are any
 }
 export function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym); }

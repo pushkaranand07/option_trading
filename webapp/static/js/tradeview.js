@@ -88,10 +88,11 @@ export function stratHtml(res, sym) {
         <div><span>Charges a lot, in and out (${COST_NOTE})</span><b>${res.charges_per_lot != null ? "≈ " + money(res.charges_per_lot) : "—"}</b></div></div></div>` : "";
   const kl = (a.key_levels || []).map((l) => `<li><b class="num">${fmt0(l.price)}</b> ${esc(l.label)}</li>`).join("");
   return `<div class="call ${a.strategy === "no_trade" ? "idle" : a.bias === "bearish" ? "go-down" : a.bias === "bullish" ? "go-up" : "idle"}">${head}
+      ${((ls) => (ls ? `<div class="rec-flag ${ls.tone} live-flag"><b>${ls.tag}.</b> ${ls.text}</div>` : ""))(liveStatus(res, sym))}
       ${story}${legs}<div class="ticket-slot"></div>${together}${econ}
       ${pr ? `<div class="take-row">${res._taken ? `<span class="badge up">Recorded ✓</span> <span class="small">Follow it on the <a href="#record">Trade Record</a> tab.</span>`
         : res._locked ? `<span class="small muted">Take band: ${esc(res._locked)}.</span>`
-        : `<button class="btn primary take-trade">Take this trade (dummy, 1 lot)</button> <span class="small muted">Records it on the Trade Record tab at the live price when you press it (the price shown here is from the run) and tracks its profit and loss. No real order.</span>`}</div>` : ""}
+        : `<button class="btn primary take-trade">Take this trade (dummy, 1 lot)</button> <span class="small muted">Records it on the Trade Record tab at the live price when you press it (the price shown here is ${res._status && res._status !== "unquoted" ? "NSE's latest and can still move" : "from the run"}) and tracks its profit and loss. No real order.</span>`}</div>` : ""}
       ${lv ? `<div class="small muted">Target and stop premiums are estimates for ${esc(name)} reaching those levels today (Black-Scholes from each option's live price and implied vol). Nearer expiry the options move more.</div>` : ""}
       ${(res.warnings || []).map((w) => `<div class="small warn-c">⚠ ${esc(w)}</div>`).join("")}</div>
     ${read}
@@ -118,6 +119,39 @@ export function ladder(a, spot, down) {
       ${pts.filter((p) => p[2] !== "entry").map(([v, t, c]) => `<div class="mark ${c}" style="left:${x(v)}%"><b>${fmt0(v)}</b><span>${t}</span></div>`).join("")}</div>
     <div class="ladder-ends small muted"><span>lower ${down ? "← profit" : "← loss"}</span><span>${down ? "loss →" : "profit →"} higher</span></div></div>`;
 }
+
+// ---------- live prices over a fixed run (GET /api/strategy/live, webapp/live.py) ----------
+// The run's trades, order, legs and index levels never change. While the market is open the server prices the same
+// legs again from NSE's chain (no AI call), and says where the index is against each trade's own levels. withLive
+// lays that over the run for display; a live answer for another run, or one older than LIVE_MAX_AGE, is ignored and
+// the run's own prices show.
+export const LIVE_MAX_AGE = 120000;      // ms: the same 120 s after which a Take refuses NSE's quotes as too old
+export function withLive(res, live, now = Date.now()) {
+  if (!res?.trades || !live?.live || live.run_id !== res.run_id || now - (live._got ?? now) > LIVE_MAX_AGE) return res;
+  return { ...res, spot: live.spot, _live: live, trades: res.trades.map((c, i) => {
+    const t = live.trades[i]; if (!t) return c;
+    const fresh = t.priced ? { priced: t.priced, levels: t.levels, charges_per_lot: t.charges_per_lot } : {};
+    return { ...c, ...fresh, spot: live.spot, _status: t.status, _run_prices: c.priced.legs.map((l) => l.price) };
+  }) };
+}
+
+// What the trade's status means, in the words the page uses for a warning: [colour, short tag, the sentence].
+export function liveStatus(c, sym) {
+  if (!c._status) return null;
+  const a = c.plan, name = esc(NAMES[sym] || sym), now = `${name} abhi <b>${fmt0(c.spot)}</b>`;
+  const zone = `${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}`, again = "Quick analysis dobara chala.";
+  const [tone, tag, text] = {
+    enter: ["up", "Zone mein", `${now}: entry zone ${zone} ke andar hai. Le sakta hai; price live hai.`],
+    ran: ["warn", "Nikal gaya", `${now}: entry zone ${zone} se aage nikal gaya. Peeche mat bhaag: wapas zone mein aaye tab le, ya ${again}`],
+    against: ["warn", "Ulta gaya", `${now}: entry zone ${zone} se ulta gaya, stop ${fmt0(a.underlying_stop)} ki taraf. Abhi mat le.`],
+    stop: ["down", "Stop toot gaya", `${now}: is trade ka stop ${fmt0(a.underlying_stop)} toot chuka. Yeh idea ab galat hai, mat le. ${again}`],
+    target: ["flat", "Target ho gaya", `${now}: target ${fmt0(a.underlying_target)} aa chuka. Move nikal gaya, ab mat le. ${again}`],
+    unquoted: ["warn", "Live quote nahi", `${now}, par is option ka live bid / ask nahi hai: neeche ke prices run ke hain.`],
+  }[c._status] || [];
+  return tag ? { tone, tag, text } : null;
+}
+
+const text1 = (html) => html.replace(/<[^>]+>/g, "");
 
 export const takeKey = (c) => `${c.symbol}|${c.expiry}|${c.priced.legs.map((l) => `${l.action}${l.strike}${l.type}`).join("|")}`;
 
@@ -158,10 +192,10 @@ export function tradeCard(c, i, sym, on, closed = false) {
     return `<div class="ai-leg"><span class="leg-tag ${l.action === "BUY" ? "buy" : "sell"}">${l.action}</span> <b>${esc(contractName(sym, c.expiry, l))}</b>
       <span>limit <b>${fmt(l.price)}</b></span> <span>${lvl}</span></div>`;
   }).join("");
-  const m = lotMoney(c.priced.debit, c.priced.outlay_per_lot);
+  const m = lotMoney(c.priced.debit, c.priced.outlay_per_lot), ls = liveStatus(c, sym);
   return `<div class="ai-trade ${on ? "on" : ""}" data-ai="${i}">
     <div class="ai-top"><b class="rk">#${c.rank}</b> <b>${esc(STRAT_NAMES[a.strategy])}</b>
-      <span class="badge ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</span><span class="small muted">AI confidence ${esc(a.confidence)}</span>
+      <span class="badge ${a.bias === "bearish" ? "down" : "up"}">${esc(a.bias)}</span>${ls ? `<span class="badge ${ls.tone}" title="${esc(text1(ls.text))}">${ls.tag}</span>` : ""}<span class="small muted">AI confidence ${esc(a.confidence)}</span>
       <span class="ai-take"><span class="small">1 lot <b>${rupee(m.v)}</b> <span class="muted">${m.label}</span></span> ${closed ? `<span class="small muted">market band</span>` : takeCell(c, `data-take="${i}"`)}</span></div>
     ${plainTradeHtml(c, sym)}
     <div class="ai-legs">${legs}</div>
@@ -206,10 +240,13 @@ export function budgetCardHtml(sym, res) {
     : `<div class="lv"><span>Exit</span><b>by hand</b><small>sell when ${esc(name)} reaches ${fmt0(a.underlying_target)} (profit) or ${fmt0(a.underlying_stop)} (stop)</small></div>`;
   const stale = res.market_closed || res.expired
     ? `<div class="notice">These are last-close prices, not live. Run Quick analysis after 9:15 AM before buying.</div>` : "";
-  return `<div class="budget-card">${head}${stale}
+  const ls = liveStatus(c, sym), was = c._run_prices?.[0];
+  const liveLine = ls ? `<div class="rec-flag ${ls.tone} live-flag"><b>${ls.tag}.</b> ${ls.text}</div>` : "";
+  const moved = was != null && was !== l.price ? ` · run ke time ₹${fmt(was)} tha` : "";
+  return `<div class="budget-card">${head}${stale}${liveLine}
     <div class="budget-order"><span class="leg-tag buy">BUY</span> <b>${esc(contractName(sym, c.expiry || res.expiry, l))}</b> <span class="muted">(1 lot = ${lot} qty)</span></div>
     <div class="levels">
-      <div class="lv"><span>Buy at</span><b>₹${fmt(l.price)} or less</b><small>you pay ${rupee(pay)} · ₹${fmt0(budget() - pay)} stays free</small></div>
+      <div class="lv"><span>Buy at${ls ? " (live)" : ""}</span><b>₹${fmt(l.price)} or less</b><small>you pay ${rupee(pay)} · ₹${fmt0(budget() - pay)} stays free${moved}</small></div>
       ${exits}
     </div>
     <div class="small">Buy only while ${esc(name)} is between <b>${fmt0(a.underlying_entry_low)}–${fmt0(a.underlying_entry_high)}</b>.
