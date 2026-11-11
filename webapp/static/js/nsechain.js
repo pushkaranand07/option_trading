@@ -4,7 +4,7 @@ import { cls, esc, fmt, fmt0, lakh, sign } from "./format.js";
 import { phase, planEntries } from "./plan.js";
 import { drawPlanChartLines } from "./planchart.js";
 import { NAMES, S, nameOf } from "./state.js";
-import { curRes, renderStrat } from "./strat.js";
+import { curRes, loadLiveTrades, renderStrat } from "./strat.js";
 import { $, PREVIEW_AT, istNow, store } from "./util.js";
 
 // ---------- Plan tab: NSE option chain and the AI strategist ----------
@@ -12,7 +12,7 @@ import { $, PREVIEW_AT, istNow, store } from "./util.js";
 // none; the server checks it and prices it at the bid / ask, per lot.
 // Every 15 s, only on the Plan tab during the live session (outside it the chain does not move).
 export function pollNseChains() {     // returns the loads, so the scheduler sees them pending and never overlaps a run
-  if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") return Promise.all((planEntries() || []).map(([sym]) => loadNseChain(sym)));
+  if (S.tab === "plan" && S.morning && phase(S.morning.session).key === "live") return Promise.all((planEntries() || []).map(([sym]) => loadNseChain(sym).then(() => loadLiveTrades(sym))));   // the AI's trades at the same chain's prices
 }
 
 export async function loadNseChain(sym, expiry) {
