@@ -58,6 +58,10 @@ h2 { font-size: 16px; font-weight: 700; }
 .chip b { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
 .chip span { font-size: 13px; font-weight: 600; }
 .chip.active { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
+.scan-pick { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; display: grid; gap: 8px; }
+.scan-pick .scan-open { margin-left: auto; }
+.scan-t td, .scan-t th { white-space: nowrap; }
+.linkish { background: none; border: 0; padding: 0; color: var(--brand); font-weight: 600; cursor: pointer; }
 .stock-chips { gap: 6px; padding: 6px 20px; align-items: center; }
 .stock-chips .chip { padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
 .stock-chips .lbl { flex: none; font-size: 12px; color: var(--muted); }
