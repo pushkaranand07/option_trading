@@ -147,3 +147,59 @@ def test_the_page_shows_each_pick_and_everything_scanned(fake):
     assert "Nothing is recorded" in page and json.loads(render("JSON.stringify(TABS.includes('scanner'))")) is True
     idle = text(render("S.foStocks = []; scannerHtml({})"))
     assert "Scan now" in idle and "Picks" not in idle
+
+
+# ---------------------------------------------------------------- "Open in Plan tab" (2026-11-11: it opened an empty Plan tab)
+
+@pytest.fixture
+def picked():
+    """A scan whose #1 is a real Plan-tab trade (strategist.rank's long call), asked today."""
+    from tests.test_strategist import CHAIN
+    ctx = {"spot": 22600, "days_to_expiry": 2, "expected_move": {"day_pct": 0.01}, "option_chain": {"summary": {}}}
+    cands = st.rank("NIFTY", built=(ctx, CHAIN | {"summary": {"atm_iv": 14.0}, "expiry": "27-Oct-2099"}), top=40)["candidates"]
+    call = json.loads(json.dumps(next(c for c in cands if c["plan"]["strategy"] == "long_call"), default=str))
+    row = {"symbol": "NIFTY", "tape": "up", "trade": call, "option": {"spread_pct": 1.0}}
+    return {"asked_at": "TODAY 15:10", "budget": 15000, "picks": [{"symbol": "NIFTY", "rank": 1, "why": "tape up, room to the wall",
+            "confidence": "medium", "row": row}], "scanned": [row], "market_read": "m", "left_out": ""}, call
+
+
+OPEN = "var r = ARGS[0]; r.asked_at = r.asked_at.replace('TODAY', istNow().date); S.scan = { result: r }; openInPlan('NIFTY'); "
+
+
+@pytest.mark.unit
+@needs_node
+def test_open_in_plan_shows_the_picks_trade_card_lines_and_chain_tag(picked):
+    res, call = picked
+    leg = call["levels"]["legs"][0]
+    got = json.loads(render(OPEN + """JSON.stringify({ view: S.view.NIFTY, label: curRes('NIFTY')._label, why: curRes('NIFTY').ai_why,
+      strike: curRes('NIFTY').levels.legs[0].strike, locked: curRes('NIFTY')._locked, marks: (S.nse.NIFTY = { expiry: '27-Oct-2099' }, legsAt('NIFTY')) })""", res))
+    assert got["view"] == "scan" and got["label"] == "Scanner pick #1 · scan at 15:10" and got["why"] == "tape up, room to the wall"
+    assert got["strike"] == leg["strike"] and got["marks"] == {f"{leg['strike']:g}CE": "BUY"}            # the BUY tag on the chain
+    assert "record nahi hota" in got["locked"]
+    card = text(render(OPEN + "stratHtml(curRes('NIFTY'), 'NIFTY')", res))
+    assert "Scanner pick #1 · scan at 15:10 · expiry 27-Oct-2099" in card and "Why the AI picked it in the scan: tape up, room to the wall" in card
+    assert f"NIFTY 27 OCT {int(leg['strike'])} CALL" in card and "Take band: scanner ka trade record nahi hota" in card and "Take this trade" not in card
+
+
+@pytest.mark.unit
+@needs_node
+def test_the_banner_shows_nses_ask_now_and_an_old_scan_is_flagged(picked):
+    res, call = picked
+    leg = call["levels"]["legs"][0]
+    nse = {"expiry": "27-Oct-2099", "rows": [{"strike": leg["strike"], "ce": {"ask": leg["price"] + 3}}]}
+    banner = text(render(OPEN + "S.nse.NIFTY = ARGS[1]; scanBannerHtml('NIFTY', curRes('NIFTY'), true)", res, nse))
+    assert "From the Scanner" in banner and f"@ ₹{leg['price']:,.2f} at the scan" in banner and f"NSE abhi ₹{leg['price'] + 3:,.2f} (+3.00)" in banner
+    assert "Hide card" in banner and "another day" not in banner
+    old = text(render("var r = ARGS[0]; r.asked_at = '2026-01-02 15:10'; S.scan = { result: r }; openInPlan('NIFTY'); "
+                      "scanBannerHtml('NIFTY', curRes('NIFTY'), false) + stratHtml(curRes('NIFTY'), 'NIFTY')", res))
+    assert "This scan is from another day" in old and "Take band: scan kisi aur din ka hai" in old and "Show card" in old
+
+
+@pytest.mark.unit
+@needs_node
+def test_a_saved_ai_run_does_not_replace_the_pick_and_a_name_without_a_pick_just_opens(picked):
+    res, _ = picked
+    src = render("loadLatestRun.toString()")
+    assert 'if (S.view[sym] !== "scan")' in src
+    none = json.loads(render(("scrollTo = () => {}; " + OPEN).replace("openInPlan('NIFTY')", "openInPlan('TCS')") + "JSON.stringify([S.view.TCS ?? null, S.scanPick.TCS ?? null])", res))
+    assert none == [None, None]

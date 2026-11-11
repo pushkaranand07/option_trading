@@ -36,12 +36,16 @@ export function renderStrat(sym) {
     <div class="small muted">Complete: news, yesterday's market, sentiment and the bull / bear debate, then the 8 trades (10-15 min, once a day). Quick: today's research plus the live chart, today's moves and the option chain, then the 8 trades (1-2 min).
       ${res && !st.running ? `The 8 trades below and their order are fixed from the run at <b>${esc(res.asked_at.slice(-5))}</b>; they change only when you run again.` : ""}${res ? liveNote : ""}</div>
     <div class="small v2-line">${v2LineHtml()}</div>`;
-  const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null;
+  const v = S.view[sym], cand = typeof v === "number" ? res?.trades?.[v] : null, scan = S.scanPick[sym];
   slot.innerHTML = ask + (st.error ? `<div class="notice">${esc(st.error)}</div>` : "")
+    + (scan ? scanBannerHtml(sym, scan, v === "scan") : "")
+    + (v === "scan" && scan ? stratHtml(scan, sym) : "")
     + (res ? aiListHtml(sym, res) : "")
     + (cand ? stratHtml(Object.assign(cand, { _locked: res.expired ? "run expired" : res.market_closed ? "market band" : null }), sym) : "");
   slot.querySelectorAll(".ai-trade").forEach((r) => (r.onclick = () => { S.view[sym] = S.view[sym] === +r.dataset.ai ? null : +r.dataset.ai; S.ticket[sym] = null; refreshStrat(sym); }));
   slot.querySelectorAll(".strat-go").forEach((b) => (b.onclick = () => startStrat(sym, b.dataset.mode)));
+  if ($(".scan-show", slot)) $(".scan-show", slot).onclick = () => { S.view[sym] = S.view[sym] === "scan" ? null : "scan"; S.ticket[sym] = null; refreshStrat(sym); };
+  if ($(".scan-drop", slot)) $(".scan-drop", slot).onclick = () => { delete S.scanPick[sym]; if (S.view[sym] === "scan") S.view[sym] = null; S.ticket[sym] = null; refreshStrat(sym); };
   slot.querySelectorAll("[data-leg]").forEach((b) => (b.onclick = () => openTicket(sym, +b.dataset.leg)));
   if ($(".take-trade", slot)) $(".take-trade", slot).onclick = () => takeTrade(sym);
   slot.querySelectorAll(".rank-take").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); takeRanked(sym, +b.dataset.take, b); }));
@@ -91,7 +95,9 @@ export async function loadLatestRun(sym) {
   try {
     const res = await api("/api/strategy/latest/" + encodeURIComponent(sym));
     if (!res.trades || S.strat[sym]?.result || S.strat[sym]?.running) return;
-    S.strat[sym] = { result: res }; S.view[sym] = res.trades.length ? 0 : null; refreshStrat(sym);
+    S.strat[sym] = { result: res };
+    if (S.view[sym] !== "scan") S.view[sym] = res.trades.length ? 0 : null;      // a pick opened from the Scanner stays shown
+    refreshStrat(sym);
     loadLiveTrades(sym);
   } catch { /* no saved run */ }
 }
@@ -199,6 +205,17 @@ export async function takeTrade(sym) {
 // ---------- the AI's ranked trades: which one the detail card shows ----------
 export function curRes(sym) {          // the trade shown in the detail card: one of the AI's ranked trades
   const v = S.view[sym];
+  if (v === "scan") return S.scanPick[sym] || null;                                 // opened from the Scanner tab
   return typeof v === "number" ? liveResult(sym)?.trades?.[v] || null : null;      // at live prices when there are any
+}
+// The Scanner's pick for this instrument: where it came from, its price then and NSE's ask now (the chain on this tab,
+// refreshed every 15 s), and buttons to show or hide its card.
+export function scanBannerHtml(sym, t, on) {
+  const l = t.levels.legs[0], q = S.nse[sym]?.expiry === t.expiry ? S.nse[sym].rows.find((r) => r.strike === l.strike)?.[l.type.toLowerCase()] : null;
+  const now = q?.ask ? ` · NSE abhi <b>₹${fmt(q.ask)}</b> (${q.ask > l.price ? "+" : ""}${fmt(q.ask - l.price)})` : "";
+  return `<div class="scan-banner ${on ? "on" : ""}"><span class="badge flat">From the Scanner</span>
+    <span><b>${esc(t._label)}</b>: ${l.action} ${esc(contractName(sym, t.expiry, l))} @ ₹${fmt(l.price)} at the scan${now}</span>
+    ${t._scanOld ? `<span class="small warn-c">⚠ This scan is from another day: its prices are not today's.</span>` : ""}
+    <span class="scan-banner-btns"><button class="btn small-btn scan-show">${on ? "Hide card" : "Show card"}</button><button class="btn small-btn scan-drop" title="Remove">✕</button></span></div>`;
 }
 export function refreshStrat(sym) { renderStrat(sym); renderNseChain(sym); drawPlanChartLines(sym); }

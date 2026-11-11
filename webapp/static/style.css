@@ -60,6 +60,9 @@ h2 { font-size: 16px; font-weight: 700; }
 .chip.active { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
 .scan-pick { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; display: grid; gap: 8px; }
 .scan-pick .scan-open { margin-left: auto; }
+.scan-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; margin: 0 0 12px; border: 1px dashed var(--border); border-radius: 10px; font-size: 14px; }
+.scan-banner.on { border: 1px solid var(--brand); }
+.scan-banner-btns { margin-left: auto; display: flex; gap: 6px; }
 .scan-t td, .scan-t th { white-space: nowrap; }
 .linkish { background: none; border: 0; padding: 0; color: var(--brand); font-weight: 600; cursor: pointer; }
 .stock-chips { gap: 6px; padding: 6px 20px; align-items: center; }

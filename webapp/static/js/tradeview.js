@@ -39,13 +39,13 @@ export function evidenceHtml(e) {
 export function stratHtml(res, sym) {
   const a = res.plan, pr = res.priced, lv = res.levels;
   const biasCls = { bullish: "up", bearish: "down", neutral: "flat", unclear: "warn" }[a.bias];
-  const head = `<div class="strat-head"><div><div class="ask">AI's trade #${res.rank} · expiry ${esc(res.expiry)}</div>
+  const head = `<div class="strat-head"><div><div class="ask">${esc(res._label || `AI's trade #${res.rank}`)} · expiry ${esc(res.expiry)}</div>
       <div class="what"><b>${esc(STRAT_NAMES[a.strategy])}</b> ${a.strategy !== "no_trade" ? `— ${esc(res.strategy_text)}` : ""}</div></div>
     <div><span class="badge ${biasCls}">${esc(a.bias)}</span> <span class="badge flat">AI confidence ${esc(a.confidence)}</span></div></div>
     ${evidenceHtml(res.evidence)}
     ${res.retried ? `<div class="small muted">The AI's first answer was refused (${esc(res.retried.join("; "))}); this is its corrected answer.</div>` : ""}
     ${res.ai_record ? `<div class="small muted">Saved to the AI track record on the <a href="#record">Trade Record</a> tab, which settles it at its target, stop or expiry.</div>` : ""}`;
-  const read = res.ai_why ? `<p><b>Why the AI ranks it #${res.rank}:</b> ${esc(res.ai_why)}</p>` : `<p>${esc(a.market_read)}</p>`;
+  const read = res.ai_why ? `<p><b>Why the AI ${res._label ? "picked it in the scan" : `ranks it #${res.rank}`}:</b> ${esc(res.ai_why)}</p>` : `<p>${esc(a.market_read)}</p>`;
   if (res.rejected) return `<div class="call stop">${head}<b>The proposal was refused by the safety checks:</b><ul>${res.rejected.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     <div class="small">Pulse only shows defined-risk trades (no naked option selling). Ask again, or skip.</div></div>${read}`;
   const name = NAMES[sym] || sym, down = a.underlying_target != null && a.underlying_stop != null && a.underlying_target < a.underlying_stop;

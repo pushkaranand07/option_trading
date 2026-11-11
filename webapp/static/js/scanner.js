@@ -6,8 +6,9 @@ import { contractName, esc, fmt, fmt0, rupee } from "./format.js";
 import { selectSymbol } from "./instrument.js";
 import { budget } from "./rules.js";
 import { S } from "./state.js";
+import { refreshStrat } from "./strat.js";
 import { showTab } from "./tabs.js";
-import { $, store } from "./util.js";
+import { $, istNow, store } from "./util.js";
 
 const SCAN_STAGE = { screen: "Step 1 of 3: checking every index and stock — today's trend and an option you can afford",
   build: "Step 2 of 3: pricing the best few trades", ai: "Step 3 of 3: the AI is ordering them (about a minute)" };
@@ -94,5 +95,22 @@ export function renderScanner() {
   const el = $("#scannerBody"); if (!el) return;
   el.innerHTML = scannerHtml(S.scan || {});
   $(".scan-go", el).onclick = startScan;
-  el.querySelectorAll(".scan-open").forEach((b) => (b.onclick = () => { selectSymbol(b.dataset.sym); showTab("plan"); }));
+  el.querySelectorAll(".scan-open").forEach((b) => (b.onclick = () => openInPlan(b.dataset.sym)));
+}
+
+// "Open in Plan tab": the Plan tab shows this pick's trade (card, chart lines, BUY tag on the chain, ticket), not an
+// empty page. A name from the table that was not a pick just opens its Plan tab.
+export function scanTrade(res, sym) {
+  const p = (res?.picks || []).find((x) => x.symbol === sym && x.row?.trade);
+  if (!p) return null;
+  const old = res.asked_at.slice(0, 10) !== istNow().date;
+  return { ...p.row.trade, symbol: sym, rank: p.rank, ai_why: p.why, plan: { ...p.row.trade.plan, confidence: p.confidence || p.row.trade.plan.confidence },
+    _label: `Scanner pick #${p.rank} · scan at ${res.asked_at.slice(-5)}`, _scanAt: res.asked_at, _scanOld: old,
+    _locked: old ? "scan kisi aur din ka hai" : "scanner ka trade record nahi hota; Quick analysis chala ke uska trade Take kar" };
+}
+export function openInPlan(sym) {
+  const t = scanTrade(S.scan?.result, sym);
+  if (t) { S.scanPick[sym] = t; S.view[sym] = "scan"; S.ticket[sym] = null; }
+  selectSymbol(sym); showTab("plan");
+  refreshStrat(sym);                    // the same instrument already open: show the pick now
 }
