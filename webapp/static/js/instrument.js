@@ -22,8 +22,16 @@ export function renderChips() {
     return `<button class="chip ${s === S.sym ? "active" : ""}" data-sym="${esc(s)}"><b>${esc(nameOf(s))}</b>
       <span class="num">${q ? fmt(q.ltp) : "—"}</span> ${q ? `<span class="${cls(q.change)} small">${pct(q.change_pct)}</span>` : ""}</button>`;
   }).join("");
+  $("#stockChips").hidden = !S.foStocks.length;
+  $("#stockChips").innerHTML = stockChipsHtml();
 }
-$("#chips").onclick = (e) => {
+// The F&O stocks offered beside the indices (/api/status fo_stocks): names only, so the quotes poll stays the indices
+// plus the instrument on screen. A tap selects the stock like a search pick; the Plan tab then shows its NSE chain.
+export function stockChipsHtml() {
+  return `<span class="lbl">F&amp;O stocks</span>` + S.foStocks.map((s) =>
+    `<button class="chip ${s.symbol === S.sym ? "active" : ""}" data-sym="${esc(s.symbol)}" title="${esc(s.name)}">${esc(s.symbol)}</button>`).join("");
+}
+$("#chips").onclick = $("#stockChips").onclick = (e) => {
   const b = e.target.closest(".chip"); if (!b) return;
   selectSymbol(b.dataset.sym);
   if (!INSTRUMENT_TABS.includes(S.tab) && S.tab !== "plan") showTab("today");   // from Map, Research or My Trades: open its page

@@ -126,12 +126,23 @@ def shape(raw: dict, lot: int, strikes_each_side: int = 15) -> dict:
                         "atm_iv": atm_iv}}
 
 
-def lot_size(symbol: str) -> int:
-    """Current lot: indices from Dhan's scrip master (fallback table), stocks from the NSE store's latest session."""
+def lot_size(symbol: str, expiry: str | None = None) -> int:
+    """Current lot: indices from Dhan's scrip master (fallback table). A stock: the scrip master's lot for ``expiry``
+    (NSE's spelling, ``23-Nov-2026``; a lot under revision differs by month), else the NSE store's latest session,
+    else the scrip master's nearest expiry. The store alone knows about 30 stocks; the scrip master lists every
+    stock with options."""
     from webapp import market_data as md
 
     if symbol in md.INDICES:
         return int(md.index_lots().get(symbol) or md.INDICES[symbol][4])
+    by_expiry = md.stock_lots().get(symbol) or {}
+    if expiry:
+        try:
+            key = datetime.strptime(expiry, "%d-%b-%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            key = None
+        if key in by_expiry:
+            return int(by_expiry[key])
     try:
         from datetime import timedelta
 
@@ -141,7 +152,9 @@ def lot_size(symbol: str) -> int:
             return int(fo.sort_values("trade_date")["lot_size"].iloc[-1])
     except Exception:
         pass
-    raise ChainError(f"Lot size for {symbol} is not known (not in the NSE F&O store).")
+    if by_expiry:
+        return int(by_expiry[min(by_expiry)])
+    raise ChainError(f"Lot size for {symbol} is not known (no options in Dhan's scrip master or the NSE F&O store).")
 
 
 def contract(identifier: str, client=None) -> dict:
@@ -213,6 +226,6 @@ def _raw_chain(symbol: str, expiry: str, client) -> dict:
 def _chain(symbol: str, expiry: str, exps: list[str], lot: int | None, client, strikes_each_side: int = 15) -> dict:
     raw = _raw_chain(symbol, expiry, client)
     if lot is None:
-        lot = lot_size(symbol)
+        lot = lot_size(symbol, expiry)
     return shape(raw, int(lot), strikes_each_side) | {"symbol": symbol, "expiry": expiry, "expiries": exps,
                                                       "fetched": timeutil.now_ist().strftime("%H:%M:%S")}

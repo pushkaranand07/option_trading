@@ -1,7 +1,7 @@
 // The page's one shared state object and the instrument names.
 import { store } from "./util.js";
 
-export const S = { sym: (new URLSearchParams(location.search).get("sym") || store("sym") || "NIFTY").toUpperCase(), tf: "5m", indices: [], quotes: {}, status: {}, plan: null, expiry: null, aiJob: null,
+export const S = { sym: (new URLSearchParams(location.search).get("sym") || store("sym") || "NIFTY").toUpperCase(), tf: "5m", indices: [], foStocks: [], quotes: {}, status: {}, plan: null, expiry: null, aiJob: null,
   tab: "today",
   jrHorizon: "all",                       // My Trades
   morning: null, live: {}, extraCtx: {},  // Plan tab
