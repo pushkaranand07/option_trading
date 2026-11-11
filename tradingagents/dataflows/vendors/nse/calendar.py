@@ -201,14 +201,20 @@ def _saved_holidays_path():
 
 
 def _save_holidays(holidays: dict[date, str]) -> None:
-    """Keep a good list for the days NSE cannot give one. A failure to save never stops the calendar."""
+    """Keep a good list for the days NSE cannot give one. A failure to save never stops the calendar.
+
+    Through ``replace_file``: each save writes its own uniquely named temp file. A fixed name
+    (holidays_last_good.tmp) made two saves at once collide, and on Windows failed with WinError 32 (2026-11-11)."""
+    from pathlib import Path
+
+    from tradingagents.dataflows.files import replace_file
+
+    text = json.dumps({"saved_at": now_ist().replace(tzinfo=None).isoformat(timespec="seconds"),
+                       "holidays": {d.strftime("%d-%b-%Y"): n for d, n in sorted(holidays.items())}})
     try:
         path = _saved_holidays_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"saved_at": now_ist().replace(tzinfo=None).isoformat(timespec="seconds"),
-                                   "holidays": {d.strftime("%d-%b-%Y"): n for d, n in sorted(holidays.items())}}), encoding="utf-8")
-        tmp.replace(path)
+        replace_file(path, lambda tmp: Path(tmp).write_text(text, encoding="utf-8"))
     except OSError as exc:
         logger.warning("could not save the NSE holiday list: %s", exc)
 
