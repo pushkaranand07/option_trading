@@ -156,6 +156,7 @@ def start_refresh_ahead(tick: float = 0.25) -> None:
         from webapp import signals
 
         index_lots()                                         # parse the scrip master before the first request
+        stock_lots()
         open_checked, is_open = -1e9, False
         while True:
             if _time.monotonic() - open_checked > 30:
@@ -273,6 +274,49 @@ def index_lots() -> dict[str, int]:
         return {}
 
 
+def load_stock_lots(path: Path) -> dict[str, dict[str, int]]:
+    """NSE stock options from a scrip-master file: symbol -> {expiry "YYYY-MM-DD": lot size}. Per expiry, because
+    when the exchange revises a lot the old and the new one trade side by side in different months (on 2026-11-11
+    HDFCBANK was 650 for Nov and Dec, 750 for Jan). A symbol can hold a hyphen (BAJAJ-AUTO-Nov2026-6800-CE)."""
+    seen: dict[str, dict[str, dict[int, int]]] = {}
+    with path.open(newline="", encoding="utf-8", errors="replace") as f:
+        for row in csv.DictReader(f):
+            if row.get("SEM_INSTRUMENT_NAME") != "OPTSTK" or row.get("SEM_EXM_EXCH_ID") != "NSE":
+                continue
+            parts = (row.get("SEM_TRADING_SYMBOL") or "").strip().upper().rsplit("-", 3)
+            expiry = (row.get("SEM_EXPIRY_DATE") or "")[:10]
+            try:
+                lot = int(float(row.get("SEM_LOT_UNITS") or 0))
+            except ValueError:
+                continue
+            if len(parts) == 4 and parts[0] and len(expiry) == 10 and lot > 0:
+                counts = seen.setdefault(parts[0], {}).setdefault(expiry, {})
+                counts[lot] = counts.get(lot, 0) + 1
+    return {sym: {exp: max(c, key=c.get) for exp, c in by_exp.items()} for sym, by_exp in seen.items()}
+
+
+def stock_lots() -> dict[str, dict[str, int]]:
+    """Every NSE stock with options and its lot size per expiry, refreshed daily like ``index_lots`` (the same
+    scrip-master file, no broker login); {} when the file cannot be fetched."""
+    try:
+        return _cache.get("stock_lots", 3600, lambda: _parsed_scrip_master("stock_lots", load_stock_lots))
+    except Exception:
+        return {}
+
+
+# The stocks offered beside the indices in the header (user's choice, 2026-11-11: Hindustan Petroleum, Jio Financial
+# and up to 20 liquid F&O names to work on later). Only a shortcut list: any stock in ``stock_lots`` works through the
+# search box the same way. /api/status drops a name that no longer has options.
+FO_STOCKS = ["HINDPETRO", "JIOFIN", "RELIANCE", "HDFCBANK", "ICICIBANK", "SBIN", "AXISBANK", "KOTAKBANK", "INFY", "TCS",
+             "BHARTIARTL", "ITC", "LT", "TATASTEEL", "BAJFINANCE", "MARUTI", "M&M", "BPCL", "ONGC", "NTPC"]
+
+
+def fo_stocks() -> list[dict]:
+    """The header's stock shortcuts that have options today, with the company name when it is known."""
+    lots, names = stock_lots(), equities()
+    return [{"symbol": s, "name": names[s][1] if s in names else s} for s in FO_STOCKS if not lots or s in lots]
+
+
 def _load_scrip_master() -> dict[str, tuple[int, str]]:
     """NSE cash-market equities: trading symbol -> (security id, company name). Refreshed daily."""
     path = _scrip_master_path()
@@ -319,6 +363,8 @@ def instrument(symbol: str) -> dict:
         return {"symbol": s, "name": name, "kind": "INDEX", "id": sid, "segment": seg, "yahoo": yahoo,
                 "lot": index_lots().get(s, lot), "step": step, "has_options": True}
     eq = equities().get(s)
+    # has_options stays False for a stock: it gates the Options tab's Dhan chain, which serves indices only. A stock's
+    # NSE chain (the Plan tab) needs no flag; its lot comes from option_chain.lot_size.
     return {"symbol": s, "name": eq[1] if eq else s, "kind": "EQUITY", "id": eq[0] if eq else None,
             "segment": "NSE_EQ", "yahoo": f"{s}.NS", "lot": None, "step": None, "has_options": False}
 
