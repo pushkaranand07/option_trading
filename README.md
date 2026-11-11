@@ -6,8 +6,8 @@ paper trades only and places no orders. It is not financial advice and must not 
 Current numbers, as of 6 Nov 2026 unless stated, from the repository's own data (see [Current results](#current-results)):
 
 - **Research models:** no edge found under the stated conditions, **1,532 trials** ([docs/models_v1_refit_report.md](docs/models_v1_refit_report.md)).
-- **Forward test of the AI strategist (v3):** started 9 Nov 2026 with 0 counted trades so far, after v2 was closed
-  on 8 Nov with 2 counted trades. The test needs at least 50 settled trades before any number is reported, and its stop date is **1 Nov 2027**.
+- **Forward test of the AI strategist (v4):** starts 12 Nov 2026 with 0 counted trades so far, after v3 was closed
+  on 11 Nov with 2 counted trades (and v2 on 8 Nov with 2). The test needs at least 50 settled trades before any number is reported, and its stop date is **1 Nov 2027**.
 - **Paper record, AI #1:** 4 bets closed, 1 won and 3 lost. **Your picks:** 2 bets closed, 2 won. Both samples are far
   too small to show skill or its absence.
 
@@ -43,7 +43,7 @@ NSE live option chain ──► candidates priced at bid / ask ──► one LLM
 News, fundamentals ──► multi-agent research (once a day) ───────┘                                   │
                                                                                                      ▼
                                Trade Record (reports/trade_record/trades.json, events.log) ◄── monitor (60 s)
-                               Forward test v3 registry (reports/ai_test/v3/registry.jsonl, hash-chained)
+                               Forward test v4 registry (reports/ai_test/v4/registry.jsonl, hash-chained)
 ```
 
 Key files:
@@ -54,7 +54,7 @@ Key files:
 | [webapp/strategist.py](webapp/strategist.py) | Candidate structures, pricing, target / stop levels, the ranking prompt and call |
 | [webapp/trade_record.py](webapp/trade_record.py) | Paper trades: entry and exit gates, marking, settling, bets, stats, CSV |
 | [webapp/option_chain.py](webapp/option_chain.py) | NSE option chain (display window and full chain) |
-| [webapp/ai_test.py](webapp/ai_test.py) | Forward test v3: registration before entry, prompt fingerprint |
+| [webapp/ai_test.py](webapp/ai_test.py) | Forward test v4: registration before entry, prompt fingerprint |
 | [webapp/dhan_guard.py](webapp/dhan_guard.py) | The one door to Dhan: market data only, account endpoints blocked |
 | [webapp/build_info.py](webapp/build_info.py) | The running commit; the page warns when the server runs older code |
 | [webapp/static/js/main.js](webapp/static/js/main.js) | The page: ES modules under `webapp/static/js/` (plain JS, no build step), one scheduler for its polling |
@@ -149,10 +149,13 @@ Market Map, research paper ledger, option quotes).
   price is kept beside the filled one. A refused Take is listed with its reason and never counted.
 - **Provenance:** every trade row stores its run, candidate, mode, research source, AI rank, quote age, the commit the
   server was running and when the server started. Rows entered while the market was closed are shown but not counted.
-- **Forward test v3** ([docs/ai_strategist_test_v3.json](docs/ai_strategist_test_v3.json), frozen; registry
-  `reports/ai_test/v3/`; started 9 Nov 2026). It replaced v2
-  ([docs/ai_strategist_test_v2.json](docs/ai_strategist_test_v2.json)), closed on 8 Nov 2026 with 2 counted trades,
-  because the AI's #1 was a spread in all 27 saved runs; v3 lets single bought calls and puts compete with spreads.
+- **Forward test v4** ([docs/ai_strategist_test_v4.json](docs/ai_strategist_test_v4.json), frozen; registry
+  `reports/ai_test/v4/`; starts 12 Nov 2026). Today's tape (price vs VWAP, EMA 9 vs EMA 21, price vs today's open)
+  decides which direction's trades the AI may rank; the research agents' multi-week rating no longer sets it
+  ([docs/PA_54](docs/PA_54-ai-test-v4-tape-direction.md)). It replaced v3
+  ([docs/ai_strategist_test_v3.json](docs/ai_strategist_test_v3.json), started 9 Nov 2026, closed 11 Nov with 2
+  counted trades), which let single bought calls and puts compete with spreads and had replaced v2
+  ([docs/ai_strategist_test_v2.json](docs/ai_strategist_test_v2.json), closed 8 Nov 2026 with 2 counted trades).
   - What counts: the AI's #1 from the first answer of each session, 09:30–15:00 IST, NIFTY.
   - Registered before entry in an append-only, hash-chained registry. A changed prompt or model (the fingerprint)
     stops a run from counting.
@@ -173,7 +176,9 @@ As of **6 Nov 2026**, read from `reports/` (git-ignored, on the author's machine
 | AI #1 (paper) | 12 | 5 (1 open) | 1 / 3 | ₹934.70 | ₹4,842.50 |
 | My picks (paper) | 11 | 3 (1 open) | 2 / 0 | ₹17,058.47 | ₹243.75 |
 
-- **Forward test v3:** started 9 Nov 2026. No performance figure is allowed before the stop date.
+- **Forward test v4:** starts 12 Nov 2026. No performance figure is allowed before the stop date.
+- **Forward test v3 (closed 11 Nov 2026):** 2 counted trades (9 and 11 Nov), both bear call spreads. They stay on
+  file and are not settled or reported.
 - **Forward test v2 (closed 8 Nov 2026):** 2 counted trades (5 and 6 Nov), both bull call spreads on the 9 Nov
   expiry. They stay on file and are not settled or reported.
 - **Research:** GARCH volatility forecasts beat historical volatility out of sample on 31 of 31 symbols, and the

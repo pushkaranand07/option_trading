@@ -168,7 +168,7 @@ def test_power_table_in_the_spec_is_complete():
 
 
 @pytest.mark.unit
-def test_version_3_supersedes_2_unedited_and_keeps_its_stop_and_interim_check():
+def test_version_4_supersedes_3_unedited_and_keeps_its_stop_and_interim_check():
     import hashlib
 
     def sha(name):
@@ -176,19 +176,23 @@ def test_version_3_supersedes_2_unedited_and_keeps_its_stop_and_interim_check():
         return d, hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
 
     spec = ai_test.read_spec()
+    v3, v3_sha = sha("ai_strategist_test_v3.json")
     v2, v2_sha = sha("ai_strategist_test_v2.json")
     v11, v11_sha = sha("ai_strategist_test_v1_1.json")
-    assert v2_sha == spec["supersedes"]["sha256"] == "30dbdfecc54475ab412c1a00556126807d834944c6469ef6d24f04127f697392"   # v2 unedited
+    assert v3_sha == spec["supersedes"]["sha256"] == "173667b786bc50d8045013161aae1b9495fc0705b461c6f30cd418805b425bed"   # v3 unedited
+    assert v2_sha == v3["supersedes"]["sha256"] == "30dbdfecc54475ab412c1a00556126807d834944c6469ef6d24f04127f697392"   # v2 unedited
     assert v11_sha == v2["supersedes"]["sha256"] == "4a7c59bb62dc60703b6acd0926a8c3fa1bf3e39e43b542754874cc038f986dc9"   # 1.1 unedited
-    assert spec["version_number"] == ai_test.VERSION == "3" and spec["supersedes"]["trades_counted_under_it"] == 2
-    assert spec["version"]["prompt_sha256"] != v2["version"]["prompt_sha256"] and spec["version"]["model"] == v2["version"]["model"]
-    assert spec["stop"] == v2["stop"] and spec["interim_check"] == v2["interim_check"] and spec["power"] == v2["power"]
-    assert ai_test.REGISTRY.parent.name == "v3" and "#1" in spec["forward_test"]["frequency"] and "Muhurat" in spec["forward_test"]["frequency"]
+    assert spec["version_number"] == ai_test.VERSION == "4" and spec["supersedes"]["trades_counted_under_it"] == 2
+    assert spec["version"]["prompt_sha256"] != v3["version"]["prompt_sha256"] and spec["version"]["model"] == v3["version"]["model"]
+    assert spec["stop"] == v3["stop"] and spec["interim_check"] == v3["interim_check"] and spec["power"] == v3["power"]
+    assert spec["forward_test"]["frequency"] == v3["forward_test"]["frequency"]
+    assert spec["forward_test"]["baselines"] == v3["forward_test"]["baselines"] and spec["forward_test"]["pass"] == v3["forward_test"]["pass"]
+    assert ai_test.REGISTRY.parent.name == "v4" and "#1" in spec["forward_test"]["frequency"] and "Muhurat" in spec["forward_test"]["frequency"]
     assert "no large edge detected" in spec["stop"]["if_lower_bound_is_below_0"] and "in writing" in spec["stop"]["if_above_0_and_under_500_trades"]
 
 
 @pytest.mark.unit
-def test_the_v3_prompt_has_no_default_preference_for_spreads():
+def test_the_prompt_keeps_v3s_no_default_preference_for_spreads():
     from webapp import strategist as st
 
     assert "None is preferred by default" in st.RANK_SYSTEM and "rank a single bought option #1" in st.RANK_SYSTEM

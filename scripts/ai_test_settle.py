@@ -1,8 +1,8 @@
-"""Settle the AI strategist's forward test, version 3, and report what the spec allows (docs/ai_strategist_test_v3.json, docs/PA_50-53).
+"""Settle the AI strategist's forward test, version 4, and report what the spec allows (docs/ai_strategist_test_v4.json, docs/PA_50-54).
 
     python scripts/ai_test_settle.py --mode interim|stop --settlements <json> --sessions <json> [--registry <file> --chains <folder> --spec-hash <hash>]
 
-The registry, chains and spec hash default to version 3's. Rows before its first counted session (webapp.ai_test.FIRST_SESSION,
+The registry, chains and spec hash default to version 4's. Rows before its first counted session (webapp.ai_test.FIRST_SESSION,
 from the spec's "starts" rule) are left out. It prints JSON and writes no file.
 
 Real rows: the interim count (questions, entries, voids, missed days; no price, no return) is cleared for the real registry
@@ -27,7 +27,7 @@ from webapp import ai_test  # noqa: E402
 
 REAL_RUN_APPROVED = False
 REAL_INTERIM_APPROVED = True
-REAL_REGISTRY = ai_test.REGISTRY          # version 3's; 2's (reports/ai_test/v2) and 1.1's (reports/ai_test/registry.jsonl) are closed and never settled
+REAL_REGISTRY = ai_test.REGISTRY          # version 4's; 3's and 2's (reports/ai_test/v3, v2) and 1.1's (reports/ai_test/registry.jsonl) are closed and never settled
 
 
 def run(registry_path: Path, chains: Path, settlements: dict[date, float], sessions: set[date], spec_hash: str, mode: str = "interim", today: date | None = None, stop: date | None = None) -> dict:

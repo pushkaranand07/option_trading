@@ -117,7 +117,7 @@ def test_v2_counting_a_different_trade_or_a_pre_start_day_is_not_counted(prov):
               [{"action": "BUY", "type": "CE", "strike": 22700.0, "price": 55.0}])
     v2 = tr.overview(lambda *a: chain())["ai"]["open"][0]["v2"]
     assert v2["registered_that_day"] and not v2["same_trade"] and not v2["counted"]
-    assert tr._v2_link({"source": "ai", "taken_at": "2026-11-06 12:58", "strategy": "x", "legs": []}, {})["note"] == "before v3 started (2026-11-09)"
+    assert tr._v2_link({"source": "ai", "taken_at": "2026-11-06 12:58", "strategy": "x", "legs": []}, {})["note"] == "before v4 started (2026-11-12)"
 
 
 @pytest.mark.unit

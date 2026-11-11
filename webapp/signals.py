@@ -130,6 +130,30 @@ def intraday_frame(bars: pd.DataFrame, daily: pd.DataFrame | None = None) -> pd.
 TREND_WORDS = {1: "uptrend", -1: "downtrend", 0: "sideways"}
 
 
+def today_tape(bars: pd.DataFrame) -> dict:
+    """Which way today's session is moving, from the last 5-minute bar of today: "up" when price is above VWAP, EMA 9
+    is above EMA 21 and price is above today's open; "down" when all three point the other way; else "mixed".
+
+    The intraday rule's own momentum check (RSI 50-70) is left out on purpose: on a strong trend day RSI runs above 70
+    and the rule says WAIT all morning (BANKNIFTY 2026-11-11, +2.3%), which left the AI's direction to the research
+    agents' multi-week rating alone. Forward test v4 uses this to choose which direction's trades the AI may rank.
+    Untested as a signal: it only stops a trade against what the day is visibly doing."""
+    if bars is None or bars.empty:
+        return {"direction": "mixed", "why": "no intraday bars"}
+    f = intraday_frame(bars)
+    today = f[f.index.date == f.index[-1].date()]
+    if len(today) < 3:
+        return {"direction": "mixed", "why": "fewer than 3 bars today", "as_of": f.index[-1].strftime("%H:%M")}
+    x = today.iloc[-1]
+    c = float(x["close"])
+    up = [c > x["vwap"], x["ema9"] > x["ema21"], c > x["day_open"]]
+    down = [c < x["vwap"], x["ema9"] < x["ema21"], c < x["day_open"]]
+    direction = "up" if all(up) else "down" if all(down) else "mixed"
+    return {"direction": direction, "as_of": today.index[-1].strftime("%H:%M"), "price": r2(c), "vwap": r2(x["vwap"]),
+            "ema9": r2(x["ema9"]), "ema21": r2(x["ema21"]), "day_open": r2(x["day_open"]),
+            "checks": {"above_vwap": bool(up[0]), "ema9_above_ema21": bool(up[1]), "above_open": bool(up[2])}}
+
+
 def intraday_signal(bars: pd.DataFrame, daily: pd.DataFrame | None = None, target_r: float = 1.0) -> dict:
     if len(bars) < 60:
         return {"side": "WAIT", "summary": "Not enough intraday data yet.", "checks": []}

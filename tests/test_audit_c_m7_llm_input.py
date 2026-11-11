@@ -11,7 +11,7 @@ import pytest
 
 from webapp import ai_test, strategist as st
 
-V3_FINGERPRINT = "5a5fdbb32e977360b8ed0c9fa45107bbd7ddc315299b825d168f79d4fbc89bd4"
+V4_FINGERPRINT = "0698d1cae660b037fefc6289875f8028a7d20301614dc56b87f94658187fdf95"
 CTX = {"instrument": "NIFTY", "spot": 24350.5, "when": "2026-11-12 10:00", "nested": {"a": [1, 2]}}
 CANDS = [{"n": 1, "strategy": "long_call", "legs": [{"strike": 24400.0}], "max_loss_per_lot": 9100.0}]
 
@@ -85,7 +85,7 @@ def test_start_saves_the_input_under_the_runs_own_id(fake_llm, monkeypatch):
 
 @pytest.mark.unit
 def test_the_fingerprint_is_unchanged():
-    assert ai_test.prompt_fingerprint() == V3_FINGERPRINT
+    assert ai_test.prompt_fingerprint() == V4_FINGERPRINT
 
 
 @pytest.mark.unit

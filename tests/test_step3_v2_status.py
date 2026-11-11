@@ -75,8 +75,8 @@ def test_a_fingerprint_mismatch_means_no(reg, monkeypatch):
 def test_weekends_and_days_before_the_first_session(reg):
     assert ai_test.today_status(t((2026, 11, 14), 11))["state"] == "NO SESSION"
     s = ai_test.today_status(t((2026, 11, 6), 11))
-    assert s["state"] == "NO" and "before v3" in s["reason"]
-    assert date(2026, 11, 9) == ai_test.FIRST_SESSION and tr.FIRST_SESSION is ai_test.FIRST_SESSION    # one definition
+    assert s["state"] == "NO" and "before v4" in s["reason"]
+    assert date(2026, 11, 12) == ai_test.FIRST_SESSION and tr.FIRST_SESSION is ai_test.FIRST_SESSION    # one definition
 
 
 @pytest.fixture
