@@ -7,11 +7,12 @@ import { loadMorning } from "./plan.js";
 import { loadRecord } from "./record.js";
 import { loadResearchTab } from "./research.js";
 import { loadRisk } from "./risk.js";
+import { loadScanner } from "./scanner.js";
 import { S } from "./state.js";
 import { $, store } from "./util.js";
 
 // ---------- tabs ----------
-export const TABS = ["plan", "record", "today", "risk", "options", "ai", "map", "research", "trades"];
+export const TABS = ["plan", "scanner", "record", "today", "risk", "options", "ai", "map", "research", "trades"];
 export const INSTRUMENT_TABS = ["today", "risk", "options", "ai"];
 export const loaded = {};
 
@@ -30,6 +31,7 @@ export function showTab(tab, force = false) {
   if (!force && !changed && loaded[key]) return;
   loaded[key] = true;
   if (tab === "plan") loadMorning();
+  if (tab === "scanner") loadScanner();
   if (tab === "today") loadCandles();
   if (tab === "risk") loadRisk();
   if (tab === "options") { loadOptions(); loadCosts(); }

@@ -44,6 +44,7 @@ from webapp import (  # noqa: E402
     planner,
     quant,
     rules,
+    scanner,
     signals,
     strategist,
     timeutil,
@@ -502,6 +503,33 @@ def strategy_status(job_id: str):
     if not job:
         raise HTTPException(404, "Unknown job")
     return job
+
+
+# ---------- Scanner tab: which instrument to trade options in today (webapp/scanner.py) ----------
+
+class ScanRequest(BaseModel):
+    budget: float = Field(default=15000, gt=0, le=10_000_000)
+
+
+@app.post("/api/scan")
+def scan_start(req: ScanRequest):
+    """Screen the indices and the header's F&O stocks, build the top few trades, and let the AI order them (about a
+    minute and a half, in the background). Display only: nothing is recorded."""
+    return {"job": scanner.start(req.budget)}
+
+
+@app.get("/api/scan/latest")
+def scan_latest():
+    """The last scan (an empty object if none)."""
+    return scanner.latest() or {}
+
+
+@app.get("/api/scan/{job_id}")
+def scan_status(job_id: str):
+    j = scanner.job(job_id)
+    if not j:
+        raise HTTPException(404, "Unknown job")
+    return j
 
 
 # ---------- quant layer: risk, spreads, research, market map, trade journal ----------

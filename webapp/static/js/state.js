@@ -5,7 +5,7 @@ export const S = { sym: (new URLSearchParams(location.search).get("sym") || stor
   tab: "today",
   jrHorizon: "all",                       // My Trades
   morning: null, live: {}, extraCtx: {},  // Plan tab
-  nse: {}, nseExp: {}, nseView: store("nseView") || "oi", strat: {}, stratLive: {}, research: {}, ticket: {}, view: {}, takenRank: {},
+  nse: {}, nseExp: {}, nseView: store("nseView") || "oi", strat: {}, stratLive: {}, scan: null, research: {}, ticket: {}, view: {}, takenRank: {},
   openDetail: new Set(), recView: store("recView") === "ai" ? "ai" : "you",
   recDay: {},                             // a calendar day picked in a view: its sections show that day's trades only
   recMonth: {},                           // the month shown in each view's calendar, "YYYY-MM"; default: this month
