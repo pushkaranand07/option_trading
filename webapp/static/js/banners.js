@@ -35,6 +35,7 @@ export async function loadStatus() {
   try {
     S.status = await api("/api/status");
     S.indices = S.status.indices;
+    S.foStocks = S.status.fo_stocks || [];
     const mp = $("#marketPill");
     const mh = S.status.muhurat?.state === "open";
     mp.textContent = S.status.market_open ? "● Market open" : mh ? "● Muhurat open" : "Market closed";

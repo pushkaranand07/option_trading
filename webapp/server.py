@@ -274,6 +274,7 @@ def status():
         "store_problem": part("store_problem", _optional(trade_record, "store_problem")),
         "monitor": part("monitor", _optional(trade_record, "monitor_status")),
         "indices": [{"symbol": k, "name": v[0]} for k, v in md.INDICES.items()],
+        "fo_stocks": part("fo_stocks", md.fo_stocks, []),                  # the header's stock shortcuts
         "degraded": degraded,
     }
 

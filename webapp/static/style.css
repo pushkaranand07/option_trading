@@ -58,6 +58,9 @@ h2 { font-size: 16px; font-weight: 700; }
 .chip b { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
 .chip span { font-size: 13px; font-weight: 600; }
 .chip.active { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
+.stock-chips { gap: 6px; padding: 6px 20px; align-items: center; }
+.stock-chips .chip { padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.stock-chips .lbl { flex: none; font-size: 12px; color: var(--muted); }
 
 /* page */
 .page { max-width: 1280px; margin: 0 auto; padding: 20px 20px 40px; display: flex; flex-direction: column; gap: 16px; }
